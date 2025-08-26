@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_logger::tracing::info;
 use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
@@ -58,8 +57,7 @@ pub fn SearchPage() -> Element {
                         return;
                     };
 
-                    info!("scroll to: {}, height: {}", size.height - offset.y, client.size.height);
-                    if size.height - offset.y - client.size.height < 1. && let Some(next_page_token) = next_page_token() {
+                    if size.height - offset.y - client.size.height < 10. && let Some(next_page_token) = next_page_token() {
                         page_token.set(next_page_token);
                     }
                 },
