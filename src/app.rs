@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_logger::tracing;
-use futures::StreamExt as _;
+use futures_util::StreamExt as _;
 use serde::Deserialize;
 use tauri_sys::{core::invoke_result, event::listen};
 

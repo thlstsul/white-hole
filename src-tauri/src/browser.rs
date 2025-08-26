@@ -566,8 +566,7 @@ impl Browser {
         .auto_resize()
         .transparent(true)
         .zoom_hotkeys_enabled(false)
-        // .devtools(cfg!(debug_assertions))
-        .devtools(true)
+        .devtools(cfg!(debug_assertions))
     }
 
     async fn create_tab(&self, url: &Url, _active: bool) -> Result<(), FrameworkError> {
