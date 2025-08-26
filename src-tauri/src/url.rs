@@ -2,6 +2,8 @@ use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use publicsuffix::{List, Psl as _};
 use url::{Host, Url};
 
+const ALLOWED_SCHEMES: [&str; 5] = ["http", "https", "file", "data", "ftp"];
+
 pub fn encode(keyword: &str) -> String {
     utf8_percent_encode(keyword, NON_ALPHANUMERIC).to_string()
 }
@@ -20,7 +22,9 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
     }
 
     // 1. 尝试直接解析为URL
-    if let Ok(url) = Url::parse(input) {
+    if let Ok(url) = Url::parse(input)
+        && ALLOWED_SCHEMES.contains(&url.scheme())
+    {
         return Some(url);
     }
 
