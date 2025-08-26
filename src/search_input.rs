@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::{api::search, app::Browser};
 
 #[component]
-pub fn SearchInput(keyword: Signal<String>, onstart: EventHandler) -> Element {
+pub fn SearchInput(keyword: Signal<String>) -> Element {
     let mut input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
 
     let _ = use_resource(move || async move {
@@ -57,7 +57,6 @@ pub fn SearchInput(keyword: Signal<String>, onstart: EventHandler) -> Element {
                 onkeypress: keypress,
                 autocomplete: "off",
                 onmounted: move |element| input_element.set(Some(element.data())),
-                onmousedown: move|_| onstart(()),
             }
         }
     }
