@@ -89,7 +89,7 @@ pub fn SearchPage() -> Element {
                                 LogTime { last_time }
                             }
 
-                            Star { checked: use_signal(move || log.star), log_id: log.id }
+                            Star { checked: log.star, log_id: log.id }
                         }
                     }
                 }
@@ -126,7 +126,9 @@ fn LogTime(last_time: OffsetDateTime) -> Element {
 }
 
 #[component]
-fn Star(log_id: i64, checked: Signal<bool>) -> Element {
+fn Star(log_id: i64, checked: bool) -> Element {
+    let mut checked = use_signal(use_reactive!(|checked| checked));
+
     rsx! {
         label {
             class: "swap",
