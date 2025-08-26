@@ -1,0 +1,59 @@
+<svg
+    width="2048"
+    height="2048"
+    xmlns="http://www.w3.org/2000/svg"
+    version="1.1"
+>
+ <g>
+  <title>Layer 1</title>
+  <rect
+            fill="#ffffff"
+            stroke="#ffffff"
+            x="0"
+            y="0"
+            width="2048"
+            height="2048"
+            id="svg_2"
+            rx="200"
+        />
+  <rect
+            id="svg_1"
+            height="1848"
+            width="1848"
+            rx="200"
+            y="100"
+            x="100"
+            stroke="#292525"
+            fill="#292525"
+        />
+  <g id="svg_27" stroke-width="0">
+   <circle
+                id="svg_20"
+                stroke-width="100"
+                stroke="#ffffff"
+                fill="#292525"
+                r="500"
+                cy="1024"
+                cx="1024"
+            />
+   <circle
+                id="svg_6"
+                stroke-width="100"
+                stroke="#ffffff"
+                fill="#292525"
+                r="300"
+                cy="1024"
+                cx="1024"
+            />
+   <circle
+                id="svg_9"
+                stroke-width="100"
+                stroke="#ffffff"
+                fill="#292525"
+                r="100"
+                cy="1024"
+                cx="1024"
+            />
+  </g>
+ </g>
+</svg>

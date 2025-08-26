@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "@tauri-apps/plugin-notification": "^2.3.1",
+    "@tauri-apps/plugin-window-state": "^2.4.0",
+    "daisyui": "^5.0.43",
+    "tailwindcss": "^4.1.11"
+  }
+}
