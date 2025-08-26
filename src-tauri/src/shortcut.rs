@@ -19,7 +19,7 @@ use tauri::{
 
 use crate::{
     browser::BrowserExt,
-    error::{SetupError, StateError},
+    error::{SetupError, TabError},
 };
 
 pub fn setup(app: &mut App) -> std::result::Result<(), SetupError> {
@@ -68,7 +68,7 @@ pub fn setup(app: &mut App) -> std::result::Result<(), SetupError> {
                     if state_changed {
                         browser.state_changed(None).await?;
                     }
-                    Ok::<(), StateError>(())
+                    Ok::<(), TabError>(())
                 });
             })
             .build(),

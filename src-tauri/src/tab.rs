@@ -126,16 +126,16 @@ impl Tab {
         self.history_states[self.index as usize]
     }
 
-    pub fn insert_history(&mut self, id: i64) {
+    pub fn insert_history(&mut self, id: i64) -> i32 {
         if self.index < 0 {
-            self.index = 0;
             self.history_states.push(id);
-            return;
+            self.index = (self.history_states.len() - 1) as i32;
+            return self.index;
         }
 
         let i = self.index as usize;
         if id == self.history_states[i] {
-            return;
+            return self.index;
         }
 
         if i != self.history_states.len() - 1 {
@@ -143,15 +143,17 @@ impl Tab {
         }
         self.history_states.push(id);
         self.index += 1;
+        self.index
     }
 
-    pub fn replace_history(&mut self, id: i64) {
+    pub fn replace_history(&mut self, id: i64) -> i32 {
         if self.index < 0 {
-            self.index = 0;
             self.history_states.push(id);
+            self.index = (self.history_states.len() - 1) as i32;
         } else {
             self.history_states[self.index as usize] = id;
         }
+        self.index
     }
 
     pub fn can_back(&self) -> bool {
@@ -228,26 +230,19 @@ impl TabIndex {
     }
 }
 
-pub struct TabMap {
-    label_tab: HashMap<String, Tab>,
-    // TODO 便于搜索整个TabMap
-    history_id_index: HashMap<i64, (String, i32)>,
-}
+pub struct TabMap(HashMap<String, Tab>);
 
 impl TabMap {
     pub fn new() -> Self {
-        Self {
-            label_tab: HashMap::new(),
-            history_id_index: HashMap::new(),
-        }
+        Self(HashMap::new())
     }
 
     pub async fn insert(&self, label: String, tab: Tab) {
-        self.label_tab.upsert_async(label, tab).await;
+        self.0.upsert_async(label, tab).await;
     }
 
     pub async fn close(&self, label: &str) -> Result<(), FrameworkError> {
-        let Some((_, tab)) = self.label_tab.remove_async(label).await else {
+        let Some((_, tab)) = self.0.remove_async(label).await else {
             return Ok(());
         };
 
@@ -257,7 +252,7 @@ impl TabMap {
 
     pub async fn any_open(&self, id: i64) -> Option<String> {
         let mut label = None;
-        self.label_tab
+        self.0
             .any_async(|l, tab| {
                 let is = id == tab.get_current_id();
                 if is {
@@ -269,25 +264,8 @@ impl TabMap {
         label
     }
 
-    pub async fn any_open_by_url(&self, url: &Url) -> Option<String> {
-        let mut label = None;
-        self.label_tab
-            .any_async(|l, tab| {
-                let Ok(tab_url) = tab.url() else {
-                    return false;
-                };
-                let is = url == &tab_url;
-                if is {
-                    let _ = label.insert(l.to_owned());
-                }
-                is
-            })
-            .await;
-        label
-    }
-
     pub async fn top(&self, label: &str, window: &Window) -> Result<(), FrameworkError> {
-        self.label_tab
+        self.0
             .read_async(label, |_, tab| tab.reparent(window))
             .await
             .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
@@ -295,7 +273,7 @@ impl TabMap {
     }
 
     pub async fn set_size(&self, size: LogicalSize<f64>) {
-        self.label_tab
+        self.0
             .scan_async(|_, tab| {
                 let _ = tab.set_size(size);
             })
@@ -303,62 +281,54 @@ impl TabMap {
     }
 
     pub async fn set_title(&self, label: &str, title: String) {
-        self.label_tab
+        self.0
             .update_async(label, |_, tab| tab.set_title(title))
             .await;
     }
 
     pub async fn set_icon(&self, label: &str, icon_url: String) {
-        self.label_tab
+        self.0
             .update_async(label, |_, tab| tab.set_icon_url(icon_url))
             .await;
     }
 
     pub async fn set_loading(&self, label: &str, loading: bool) {
-        self.label_tab
+        self.0
             .update_async(label, |_, tab| tab.set_loading(loading))
             .await;
     }
 
     pub async fn insert_history(&self, label: &str, id: i64) {
-        self.label_tab
+        self.0
             .update_async(label, |_, tab| tab.insert_history(id))
             .await;
     }
 
     pub async fn replace_history(&self, label: &str, id: i64) {
-        self.label_tab
+        self.0
             .update_async(label, |_, tab| tab.replace_history(id))
             .await;
     }
 
     pub async fn back(&self, label: &str) {
-        self.label_tab
-            .update_async(label, |_, tab| tab.back())
-            .await;
+        self.0.update_async(label, |_, tab| tab.back()).await;
     }
 
     pub async fn forward(&self, label: &str) {
-        self.label_tab
-            .update_async(label, |_, tab| tab.forward())
-            .await;
+        self.0.update_async(label, |_, tab| tab.forward()).await;
     }
 
     pub async fn go(&self, label: &str, index: i32) {
-        self.label_tab
-            .update_async(label, |_, tab| tab.go(index))
-            .await;
+        self.0.update_async(label, |_, tab| tab.go(index)).await;
     }
 
     pub async fn reload(&self, label: &str) {
-        self.label_tab
-            .update_async(label, |_, tab| tab.reload())
-            .await;
+        self.0.update_async(label, |_, tab| tab.reload()).await;
     }
 
     pub async fn get_state(&self, label: &str) -> Result<BrowserState, FrameworkError> {
         let state = self
-            .label_tab
+            .0
             .read_async(label, |_, tab| {
                 Ok(BrowserState {
                     icon_url: tab.icon_url().to_owned(),
@@ -377,13 +347,13 @@ impl TabMap {
     }
 
     pub async fn next(&self, label: &str) -> Option<String> {
-        if self.label_tab.len() < 2 {
+        if self.0.len() < 2 {
             return None;
         }
 
         let mut rtn = None::<String>;
         let mut max = label.to_owned();
-        self.label_tab
+        self.0
             .scan_async(|l, _| {
                 if l.as_str() < label {
                     if rtn.is_none() {
@@ -409,12 +379,12 @@ impl TabMap {
     }
 
     pub async fn near(&self, label: &str) -> Option<String> {
-        if self.label_tab.len() < 2 {
+        if self.0.len() < 2 {
             return None;
         }
 
         let mut rtn = None::<String>;
-        self.label_tab
+        self.0
             .scan_async(|l, _| {
                 if l.as_str() > label {
                     if rtn.is_none() {

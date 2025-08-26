@@ -85,7 +85,7 @@ pub async fn get_url(pool: &SqlitePool, id: i64) -> Option<String> {
 }
 
 #[cached(key = "String", convert = r#"{ String::from(url) }"#, option = true)]
-async fn get_id(pool: &SqlitePool, url: &str) -> Option<i64> {
+pub async fn get_id(pool: &SqlitePool, url: &str) -> Option<i64> {
     sqlx::query!(
         r#"select id as "id!" from navigation_log where url = ?"#,
         url

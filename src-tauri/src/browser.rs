@@ -3,7 +3,7 @@ use crate::{
     error::*,
     get_db_url,
     icon::get_icon_data_url,
-    log::{NavigationLog, QueryLogResponse, get_url, query_log, save_log, update_log_star},
+    log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
     page::PageToken,
     public_suffix::get_public_suffix_cached,
     shortcut::{self, GlobalShortcutExt},
@@ -328,7 +328,7 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn close_tab(&self) -> Result<(), FrameworkError> {
+    pub async fn close_tab(&self) -> Result<(), TabError> {
         let label = self.label.get().await;
         self.tabs.close(&label).await?;
         self.label.set(String::new()).await;
@@ -341,7 +341,9 @@ impl Browser {
     }
 
     pub async fn open_tab_by_url(&self, url: &Url, _active: bool) -> Result<(), TabError> {
-        if let Some(label) = self.tabs.any_open_by_url(url).await {
+        if let Some(id) = get_id(&self.db, url.as_str()).await
+            && let Some(label) = self.tabs.any_open(id).await
+        {
             self.switch_tab(&label).await?;
         } else {
             self.create_tab(url, true).await?;
@@ -352,13 +354,13 @@ impl Browser {
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
         if let Some(label) = self.tabs.any_open(id).await {
             self.switch_tab(&label).await?;
-        } else if let Some(url) = self.get_url(id).await {
+        } else if let Some(url) = get_url(&self.db, id).await {
             self.create_tab(&Url::parse(&url)?, true).await?;
         }
         Ok(())
     }
 
-    pub async fn next_tab(&self) -> Result<bool, FrameworkError> {
+    pub async fn next_tab(&self) -> Result<bool, TabError> {
         let label = self.label.get().await;
         let mut is_switch = false;
         if let Some(next_label) = self.tabs.next(&label).await {
@@ -576,10 +578,6 @@ impl Browser {
         self.label.set(label.clone()).await;
         self.tabs.insert(label, tab).await;
         Ok(())
-    }
-
-    async fn get_url(&self, id: i64) -> Option<String> {
-        get_url(&self.db, id).await
     }
 
     async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
