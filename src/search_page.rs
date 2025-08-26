@@ -15,14 +15,16 @@ pub fn SearchPage() -> Element {
     let mut next_page_token = use_signal(|| None);
     let mut main_element = use_signal(|| None);
     let mut logs = use_signal(Vec::new);
-    let kw = use_memo(move || {
+
+    use_effect(move || {
+        // 输入关键字进行检索时，重置页码
+        let _ = keyword.read();
         page_token.set(PageToken::default());
         next_page_token.set(None);
-        keyword().trim().to_string()
     });
 
     let _ = use_resource(move || async move {
-        let Ok(response) = query_navigation_log(kw(), page_token()).await else {
+        let Ok(response) = query_navigation_log(keyword(), page_token()).await else {
             return;
         };
 
