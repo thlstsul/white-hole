@@ -122,11 +122,11 @@ impl Tab {
         self.loading = loading;
     }
 
-    pub fn get_current_id(&self) -> i64 {
-        if self.index < 0 {
-            return -1;
-        }
-        self.history_states[self.index as usize]
+    pub fn index(&self, id: i64) -> Option<usize> {
+        self.history_states
+            .iter()
+            .enumerate()
+            .find_map(|(i, item)| if *item == id { Some(i) } else { None })
     }
 
     pub fn insert_history(&mut self, id: i64) -> i32 {
@@ -197,12 +197,14 @@ impl Tab {
         }
     }
 
-    pub fn go(&mut self, index: i32) {
-        if self
-            .webview
-            .eval(format!("history.go({})", self.index - index))
-            .inspect_err(|e| error!("{e}"))
-            .is_ok()
+    pub fn go(&mut self, index: usize) {
+        let index = index as i32;
+        if self.index != index
+            && self
+                .webview
+                .eval(format!("history.go({})", self.index - index))
+                .inspect_err(|e| error!("{e}"))
+                .is_ok()
         {
             self.index = index;
         }
@@ -253,15 +255,17 @@ impl TabMap {
         Ok(())
     }
 
-    pub async fn any_open(&self, id: i64) -> Option<String> {
+    /// return id 所在 (label, index)
+    pub async fn any_open(&self, id: i64) -> Option<(String, usize)> {
         let mut label = None;
         self.0
             .any_async(|l, tab| {
-                let is = id == tab.get_current_id();
-                if is {
-                    let _ = label.insert(l.to_owned());
-                }
-                is
+                let Some(index) = tab.index(id) else {
+                    return false;
+                };
+
+                label = Some((l.to_owned(), index));
+                true
             })
             .await;
         label
@@ -321,7 +325,7 @@ impl TabMap {
         self.0.update_async(label, |_, tab| tab.forward()).await;
     }
 
-    pub async fn go(&self, label: &str, index: i32) {
+    pub async fn go(&self, label: &str, index: usize) {
         self.0.update_async(label, |_, tab| tab.go(index)).await;
     }
 

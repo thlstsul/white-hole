@@ -116,7 +116,7 @@ pub async fn forward(browser: State<'_, Browser>, mainview: Webview) -> Result<(
 pub async fn go(
     browser: State<'_, Browser>,
     mainview: Webview,
-    index: i32,
+    index: usize,
 ) -> Result<(), FrameworkError> {
     if !mainview.is_main() {
         return Ok(());
@@ -342,8 +342,9 @@ impl Browser {
 
     pub async fn open_tab_by_url(&self, url: &Url, _active: bool) -> Result<(), TabError> {
         if let Some(id) = get_id(&self.db, url.as_str()).await
-            && let Some(label) = self.tabs.any_open(id).await
+            && let Some((label, index)) = self.tabs.any_open(id).await
         {
+            self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
         } else {
             self.create_tab(url, true).await?;
@@ -352,7 +353,8 @@ impl Browser {
     }
 
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
-        if let Some(label) = self.tabs.any_open(id).await {
+        if let Some((label, index)) = self.tabs.any_open(id).await {
+            self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
         } else if let Some(url) = get_url(&self.db, id).await {
             self.create_tab(&Url::parse(&url)?, true).await?;
@@ -485,7 +487,7 @@ impl Browser {
         self.tabs.forward(&label).await;
     }
 
-    pub async fn go(&self, index: i32) {
+    pub async fn go(&self, index: usize) {
         if self.is_focused.get().await {
             return;
         }
