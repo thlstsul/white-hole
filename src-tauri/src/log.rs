@@ -46,9 +46,11 @@ pub async fn save_log(
 
     let id = if let Some(id) = id {
         if !title.is_empty() && icon_id != -1 {
-            let pool = pool.clone();
-            async_runtime::spawn(async move {
-                let _ = sqlx::query!(
+            async_runtime::spawn({
+                let pool = pool.clone();
+
+                async move {
+                    let _ = sqlx::query!(
                     "update navigation_log set title = ?, icon_id = ?, times = times + 1, last_time = datetime('now', 'localtime') where id = ?",
                     title,
                     icon_id,
@@ -56,6 +58,7 @@ pub async fn save_log(
                 )
                 .execute(&pool)
                 .await.inspect_err(|e| error!("update navigation log failed: {e}"));
+                }
             });
         }
 

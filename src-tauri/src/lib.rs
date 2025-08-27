@@ -63,18 +63,20 @@ pub fn run() -> Result<(), FrameworkError> {
                 return;
             }
 
-            let url = args[1].clone();
-            async_runtime::spawn(async move {
-                let browser = window.browser();
-                let url = url::parse_keyword(None, &url).await.expect("非法链接");
-                browser
-                    .open_tab_by_url(&url, true)
-                    .await
-                    .expect("打开链接失败");
-                browser
-                    .state_changed(None)
-                    .await
-                    .expect("浏览器状态同步失败");
+            async_runtime::spawn({
+                let url = args[1].clone();
+                async move {
+                    let browser = window.browser();
+                    let url = url::parse_keyword(None, &url).await.expect("非法链接");
+                    browser
+                        .open_tab_by_url(&url, true)
+                        .await
+                        .expect("打开链接失败");
+                    browser
+                        .state_changed(None)
+                        .await
+                        .expect("浏览器状态同步失败");
+                }
             });
         }));
 
@@ -109,10 +111,13 @@ pub fn run() -> Result<(), FrameworkError> {
             start_dragging
         ])
         .on_window_event(|window, event| {
-            let w = window.clone();
-            let e = event.clone();
-            async_runtime::spawn(async move {
-                let _ = Browser::on_window_event(&w, &e).await;
+            async_runtime::spawn({
+                let w = window.clone();
+                let e = event.clone();
+
+                async move {
+                    let _ = Browser::on_window_event(&w, &e).await;
+                }
             });
         })
         .run(tauri::generate_context!())?;

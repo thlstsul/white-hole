@@ -51,11 +51,14 @@ impl Tab {
                 .devtools(true)
                 .zoom_hotkeys_enabled(true)
                 .on_new_window(move |url, _| {
-                    let url = url.clone();
-                    let app_handle = app_handle.clone();
-                    async_runtime::spawn(async move {
-                        if let Err(e) = Browser::on_new_window(&app_handle, &url).await {
-                            error!("{e}");
+                    async_runtime::spawn({
+                        let url = url.clone();
+                        let app_handle = app_handle.clone();
+
+                        async move {
+                            if let Err(e) = Browser::on_new_window(&app_handle, &url).await {
+                                error!("{e}");
+                            }
                         }
                     });
                     NewWindowResponse::Deny

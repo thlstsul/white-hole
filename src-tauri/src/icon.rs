@@ -21,10 +21,12 @@ pub async fn get_icon_data_url(pool: &SqlitePool, url: &str) -> Result<String, I
         return Ok(record.data_url);
     }
 
-    let pool = pool.clone();
-    let url = url.to_owned();
-    async_runtime::spawn(async move {
-        let get_date_url = GET_DATA_URL.get_or_init(|| {
+    async_runtime::spawn({
+        let pool = pool.clone();
+        let url = url.to_owned();
+
+        async move {
+            let get_date_url = GET_DATA_URL.get_or_init(|| {
             let Ok(client) = reqwest::Client::builder()
                 .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0")
                 .build() else {
@@ -32,15 +34,16 @@ pub async fn get_icon_data_url(pool: &SqlitePool, url: &str) -> Result<String, I
                 };
             GetDataUrl::with_client(client)
         });
-        let Ok(data_url) = get_date_url
-            .fetch(&url)
-            .await
-            .map(|data_url| data_url.to_string())
-        else {
-            return;
-        };
+            let Ok(data_url) = get_date_url
+                .fetch(&url)
+                .await
+                .map(|data_url| data_url.to_string())
+            else {
+                return;
+            };
 
-        let _ = upsert_data_url(&pool, &url, &data_url).await;
+            let _ = upsert_data_url(&pool, &url, &data_url).await;
+        }
     });
 
     Err(IconError::Fetching)

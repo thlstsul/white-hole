@@ -39,36 +39,39 @@ pub fn setup(app: &mut App) -> std::result::Result<(), SetupError> {
                     return;
                 }
 
-                let app_handle = app_handle.clone();
-                let shortcut = *shortcut;
-                async_runtime::spawn(async move {
-                    let browser = app_handle.browser();
-                    let mut state_changed = false;
-                    if shortcut.matches(Modifiers::ALT, Code::ArrowLeft) {
-                        browser.back().await;
+                async_runtime::spawn({
+                    let app_handle = app_handle.clone();
+                    let shortcut = *shortcut;
+
+                    async move {
+                        let browser = app_handle.browser();
+                        let mut state_changed = false;
+                        if shortcut.matches(Modifiers::ALT, Code::ArrowLeft) {
+                            browser.back().await;
+                        }
+                        if shortcut.matches(Modifiers::ALT, Code::ArrowRight) {
+                            browser.forward().await;
+                        }
+                        if shortcut.matches(Modifiers::CONTROL, Code::KeyT)
+                            || shortcut.matches(Modifiers::CONTROL, Code::KeyL)
+                        {
+                            state_changed = browser.focus().await?;
+                        }
+                        if shortcut.matches(Modifiers::CONTROL, Code::KeyW) {
+                            browser.close_tab().await?;
+                            state_changed = true;
+                        }
+                        if shortcut.matches(Modifiers::CONTROL, Code::Tab) {
+                            state_changed = browser.next_tab().await?;
+                        }
+                        if shortcut.matches(Modifiers::empty(), Code::Escape) {
+                            state_changed = browser.blur().await?;
+                        }
+                        if state_changed {
+                            browser.state_changed(None).await?;
+                        }
+                        Ok::<(), TabError>(())
                     }
-                    if shortcut.matches(Modifiers::ALT, Code::ArrowRight) {
-                        browser.forward().await;
-                    }
-                    if shortcut.matches(Modifiers::CONTROL, Code::KeyT)
-                        || shortcut.matches(Modifiers::CONTROL, Code::KeyL)
-                    {
-                        state_changed = browser.focus().await?;
-                    }
-                    if shortcut.matches(Modifiers::CONTROL, Code::KeyW) {
-                        browser.close_tab().await?;
-                        state_changed = true;
-                    }
-                    if shortcut.matches(Modifiers::CONTROL, Code::Tab) {
-                        state_changed = browser.next_tab().await?;
-                    }
-                    if shortcut.matches(Modifiers::empty(), Code::Escape) {
-                        state_changed = browser.blur().await?;
-                    }
-                    if state_changed {
-                        browser.state_changed(None).await?;
-                    }
-                    Ok::<(), TabError>(())
                 });
             })
             .build(),
