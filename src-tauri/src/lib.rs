@@ -114,7 +114,8 @@ pub fn run() -> Result<(), FrameworkError> {
 fn setup_log() -> tauri_plugin_log::Builder {
     use ::log::LevelFilter;
 
-    let time_format = format_description!("[[[year]-[month]-[day]][[[hour]:[minute]:[second]]");
+    let time_format =
+        format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]");
 
     if cfg!(debug_assertions) {
         use colored::Colorize as _;
