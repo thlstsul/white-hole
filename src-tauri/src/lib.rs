@@ -18,6 +18,7 @@ mod shortcut;
 mod state;
 mod tab;
 mod task;
+mod update;
 mod url;
 
 pub const DB_NAME: &str = "white-hole.db";
@@ -32,6 +33,7 @@ pub fn get_db_url(app: &App) -> Result<&String, FrameworkError> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), FrameworkError> {
     let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -86,6 +88,12 @@ pub fn run() -> Result<(), FrameworkError> {
     builder
         .setup(|app| {
             Browser::setup(app)?;
+            async_runtime::spawn({
+                let app_handle = app.handle().clone();
+                async move {
+                    update::update(app_handle).await.expect("检查更新失败");
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
