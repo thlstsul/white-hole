@@ -29,6 +29,15 @@
       "wix": {
         "language": "zh-CN"
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ2RTJENDA4NjEwMTE0OTMKUldTVEZBRmhDTlRpMXBFOHVIc3FBRGJlQytuQjNOOFhKSzk3VlJ3L3FOa0RLNkRPaExGd1BLakEK",
+      "endpoints": [
+        "https://github.com/thlstsul/white-hole/releases/latest/download/latest.json"
+      ]
     }
   }
 }
