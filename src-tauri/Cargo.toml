@@ -11,8 +11,12 @@ name = "white_hole_lib"
 
 [dependencies]
 cached = { version = "0.56.0", features = ["async"] }
+colored = "3.0.0"
 delay_timer = "0.11.6"
 error_set = "0.8.5"
+fern = { version = "0.7", features = ["colored"] }
+get-data-url = "0.2"
+log = "0.4.27"
 percent-encoding = "2.3.1"
 publicsuffix = { version = "2.3.0", features = ["std"] }
 reqwest = "0.12.22"
@@ -20,15 +24,13 @@ scc = "2.3.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "time"] }
-tauri = { version = "2.8.1", features = ["unstable", "devtools"] }
+tauri = { version = "2.8.1", features = ["devtools", "unstable"] }
+tauri-plugin-log = "2.6.0"
+tauri-plugin-notification = { version = "2", features = ["windows7-compat"] }
 time = { version = "0.3.41", features = ["macros", "serde", "std"] }
+tokio = { version = "1", features = ["fs"] }
 url = "2.5.4"
 uuid = { version = "1", features = ["js", "serde", "v7"] }
-get-data-url = "0.2"
-tauri-plugin-notification = { version = "2", features = ["windows7-compat"] }
-tauri-plugin-log = "2.6.0"
-log = "0.4.27"
-tokio = { version = "1", features = ["fs"] }
 
 [build-dependencies]
 tauri-build = { version = "2.4.0", features = [] }

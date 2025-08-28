@@ -1,9 +1,9 @@
 use std::sync::OnceLock;
 
-use ::log::LevelFilter;
 use browser::*;
 use tauri::{App, Manager, State, Webview, Window, async_runtime, command};
-use tauri_plugin_log::{Target, TargetKind};
+use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
+use time::macros::format_description;
 
 use crate::error::{FrameworkError, StateError};
 
@@ -33,20 +33,7 @@ pub fn get_db_url(app: &App) -> Result<&String, FrameworkError> {
 pub fn run() -> Result<(), FrameworkError> {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(if cfg!(debug_assertions) {
-                    LevelFilter::Debug
-                } else {
-                    LevelFilter::Error
-                })
-                .targets([
-                    Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir { file_name: None }),
-                    Target::new(TargetKind::Webview),
-                ])
-                .build(),
-        );
+        .plugin(setup_log().build());
 
     #[cfg(desktop)]
     {
@@ -122,6 +109,82 @@ pub fn run() -> Result<(), FrameworkError> {
         })
         .run(tauri::generate_context!())?;
     Ok(())
+}
+
+fn setup_log() -> tauri_plugin_log::Builder {
+    use ::log::LevelFilter;
+
+    let time_format = format_description!("[[[year]-[month]-[day]][[[hour]:[minute]:[second]]");
+
+    if cfg!(debug_assertions) {
+        use colored::Colorize as _;
+        use fern::colors::{Color, ColoredLevelConfig};
+
+        let level_colors = ColoredLevelConfig::new()
+            .error(Color::Red)
+            .warn(Color::Yellow)
+            .info(Color::Green)
+            .debug(Color::Blue)
+            .trace(Color::Magenta);
+
+        tauri_plugin_log::Builder::new()
+            .level(LevelFilter::Debug)
+            .targets([
+                Target::new(TargetKind::Stdout),
+                Target::new(TargetKind::LogDir { file_name: None }),
+                Target::new(TargetKind::Webview),
+            ])
+            .format(move |out, message, record| {
+                // 获取当前时间并格式化为字符串
+                let now = TimezoneStrategy::UseLocal.get_now();
+                let now = now.format(time_format).unwrap_or_default().dimmed();
+
+                // 创建带颜色的日志级别显示
+                let level_colored = level_colors.color(record.level());
+
+                let location = if let (Some(file), Some(line)) = (record.file(), record.line()) {
+                    format!("{}:{}", file, line).cyan()
+                } else {
+                    "".cyan()
+                };
+
+                // 输出带颜色的日志信息
+                out.finish(format_args!(
+                    "{} [{}] {} - {}",
+                    now,
+                    level_colored,
+                    location,
+                    message.to_string().white()
+                ));
+            })
+    } else {
+        tauri_plugin_log::Builder::new()
+            .level(LevelFilter::Error)
+            .targets([
+                Target::new(TargetKind::Stdout),
+                Target::new(TargetKind::LogDir { file_name: None }),
+                Target::new(TargetKind::Webview),
+            ])
+            .format(move |out, message, record| {
+                // 获取当前时间并格式化为字符串
+                let now = TimezoneStrategy::UseLocal.get_now();
+                let now = now.format(time_format).unwrap_or_default();
+
+                let location = if let (Some(file), Some(line)) = (record.file(), record.line()) {
+                    format!("{}:{}", file, line)
+                } else {
+                    String::new()
+                };
+
+                out.finish(format_args!(
+                    "{} [{}] {} - {}",
+                    now,
+                    record.level(),
+                    location,
+                    message
+                ));
+            })
+    }
 }
 
 #[command]
