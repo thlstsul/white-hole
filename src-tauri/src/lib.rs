@@ -1,13 +1,14 @@
 use std::sync::OnceLock;
 
-use browser::*;
-use tauri::{App, Manager, State, Webview, Window, async_runtime, command};
+use command::*;
+use tauri::{App, Manager, Webview, async_runtime};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use time::macros::format_description;
 
-use crate::error::{FrameworkError, StateError};
+use crate::{browser::Browser, error::FrameworkError};
 
 mod browser;
+mod command;
 mod error;
 mod icon;
 mod log;
@@ -53,6 +54,8 @@ pub fn run() -> Result<(), FrameworkError> {
             async_runtime::spawn({
                 let url = args[1].clone();
                 async move {
+                    use crate::browser::BrowserExt as _;
+
                     let browser = window.browser();
                     let url = url::parse_keyword(None, &url).await.expect("非法链接");
                     browser
@@ -186,50 +189,6 @@ fn setup_log() -> tauri_plugin_log::Builder {
                 ));
             })
     }
-}
-
-#[command]
-fn minimize(window: Window, mainview: Webview) {
-    if !mainview.is_main() {
-        return;
-    }
-    let _ = window.minimize();
-}
-
-#[command]
-async fn maximize(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
-    if !mainview.is_main() {
-        return Ok(());
-    }
-
-    browser.maximize()?;
-    browser.state_changed(None).await
-}
-
-#[command]
-async fn unmaximize(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
-    if !mainview.is_main() {
-        return Ok(());
-    }
-
-    browser.unmaximize()?;
-    browser.state_changed(None).await
-}
-
-#[command]
-fn close(window: Window, mainview: Webview) {
-    if !mainview.is_main() {
-        return;
-    }
-    let _ = window.close();
-}
-
-#[command]
-fn start_dragging(window: Window, mainview: Webview) {
-    if !mainview.is_main() {
-        return;
-    }
-    let _ = window.start_dragging();
 }
 
 pub trait IsMainView {
