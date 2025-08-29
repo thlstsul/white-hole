@@ -1,11 +1,14 @@
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use publicsuffix::{List, Psl as _};
 use url::{Host, Url};
 
 const ALLOWED_SCHEMES: [&str; 5] = ["http", "https", "file", "data", "ftp"];
 
+/// 参考：https://url.spec.whatwg.org/#fragment-percent-encode-set
+const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+
 pub fn encode(keyword: &str) -> String {
-    utf8_percent_encode(keyword, NON_ALPHANUMERIC).to_string()
+    utf8_percent_encode(keyword, FRAGMENT).to_string()
 }
 
 pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option<Url> {
