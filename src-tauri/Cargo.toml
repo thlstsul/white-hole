@@ -16,7 +16,6 @@ delay_timer = "0.11.6"
 error_set = "0.8.5"
 fern = { version = "0.7", features = ["colored"] }
 get-data-url = "0.2"
-http-downloader = "0.3"
 log = "0.4.27"
 percent-encoding = "2.3.1"
 publicsuffix = { version = "2.3.0", features = ["std"] }
@@ -41,6 +40,3 @@ global-hotkey = { version = "0.7", features = ["serde"] }
 tauri-plugin-single-instance = "2.3"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
-
-[patch.crates-io]
-http-downloader = { branch = "custome", git = "https://github.com/thlstsul/http-downloader" }
