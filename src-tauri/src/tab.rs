@@ -418,9 +418,11 @@ async fn on_document_title_changed(webview: Webview, title: String) -> Result<()
     let browser = webview.browser();
     browser.change_tab_title(label, title).await;
 
+    let state = browser.get_state(None).await?;
     if browser.is_current_tab(label).await {
-        browser.state_changed(None).await?;
+        browser.state_changed(Some(state.clone())).await?;
     }
+    browser.save_navigation_log(state.into()).await?;
 
     Ok(())
 }

@@ -67,7 +67,7 @@ pub async fn save_log(
         let result = sqlx::query!(
             "insert into navigation_log (url, title, icon_id, star, times, last_time) values (?, ?, ?, false, 0, datetime('now', 'localtime'))",
             url,
-            title,
+            "",
             icon_id
         )
         .execute(pool)

@@ -186,10 +186,7 @@ impl Browser {
         loading: bool,
     ) -> Result<(), StateError> {
         self.tabs.set_loading(label, loading).await;
-        self.push_history_state(label).await
-    }
 
-    pub async fn push_history_state(&self, label: &str) -> Result<(), StateError> {
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
@@ -199,6 +196,21 @@ impl Browser {
             // 非http协议的空白页面，关闭当前tab
             self.tabs.close(label).await?;
             return Ok(());
+        }
+
+        if loading {
+            let log: NavigationLog = state.into();
+            let id = self.save_navigation_log(log).await?;
+            self.tabs.insert_history(label, id).await;
+        }
+
+        Ok(())
+    }
+
+    pub async fn push_history_state(&self, label: &str) -> Result<(), StateError> {
+        let state = self.get_state(Some(label)).await?;
+        if self.is_current_tab(label).await {
+            self.state_changed(Some(state.clone())).await?;
         }
 
         let log: NavigationLog = state.into();
