@@ -3,6 +3,7 @@ use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
     api::{PageToken, open_tab, query_navigation_log, update_star},
+    app::Browser,
     search_input::SearchInput,
 };
 
@@ -10,7 +11,7 @@ const DEFAULT_ICON: Asset = asset!("/assets/default_icon.svg");
 
 #[component]
 pub fn SearchPage() -> Element {
-    let keyword = use_signal(String::new);
+    let mut keyword = use_signal(String::new);
     let mut page_token = use_signal(PageToken::default);
     let mut next_page_token = use_signal(|| None);
     let mut main_element = use_signal(|| None);
@@ -39,6 +40,13 @@ pub fn SearchPage() -> Element {
     rsx! {
         div {
             class: "max-h-screen flex flex-col",
+            onkeydown: move |e| {
+                if e.key() == Key::Tab {
+                    e.prevent_default();
+                    let browser = use_context::<Browser>();
+                    keyword.set(browser.url.read().to_string());
+                }
+            },
 
             header {
                 SearchInput {

@@ -58,6 +58,15 @@ pub fn SearchInput(keyword: Signal<String>) -> Element {
                 autocomplete: "off",
                 onmounted: move |element| input_element.set(Some(element.data())),
             }
+
+            kbd {
+                class: "kbd kbd-sm",
+                "CTRL",
+            }
+            kbd {
+                class: "kbd kbd-sm",
+                "L",
+            }
         }
     }
 }
