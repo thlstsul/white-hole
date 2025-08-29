@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use ::log::error;
 use command::*;
 use tauri::{App, Manager, Webview, async_runtime};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
@@ -81,7 +82,9 @@ pub fn run() -> Result<(), FrameworkError> {
             async_runtime::spawn({
                 let app_handle = app.handle().clone();
                 async move {
-                    update::update(app_handle).await.expect("检查更新失败");
+                    if let Err(e) = update::update(app_handle).await {
+                        error!("检查更新失败: {}", e);
+                    }
                 }
             });
             Ok(())
