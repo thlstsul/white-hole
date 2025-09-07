@@ -126,7 +126,7 @@ pub async fn query_log(
     if is_empty {
         query_builder.push("order by a.last_time desc ");
     } else {
-        query_builder.push("order by a.last_time desc, a.times desc ");
+        query_builder.push("order by a.last_time desc, a.times desc, length(a.url) ");
     }
 
     query_builder.push(page_token.as_limit_sql());

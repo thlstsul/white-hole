@@ -6,14 +6,15 @@ error_set! {
     ParseError = {
         Url(url::ParseError),
     };
-    LogError = {
-        Execute(sqlx::Error),
-    };
     FrameworkError = {
         Tauri(tauri::Error),
     };
     ShortcutError = {
         Shortcut(crate::shortcut::Error),
+    };
+    DatabaseError = {
+        Execute(sqlx::Error),
+        Migrate(sqlx::migrate::MigrateError),
     };
     SetupError = {
         DbConnect(sqlx::Error),
@@ -23,7 +24,7 @@ error_set! {
     TabError = StateError || FrameworkError || ParseError;
     StateError = {
         NoMainView
-    } || FrameworkError || LogError || IconError;
+    } || FrameworkError || DatabaseError || IconError;
     WindowError = {
         WindowState(tauri_plugin_window_state::Error),
     } || ShortcutError || FrameworkError || StateError;
@@ -34,4 +35,10 @@ error_set! {
     };
 }
 
-impl_serialize![ParseError, LogError, FrameworkError, TabError, StateError];
+impl_serialize![
+    ParseError,
+    DatabaseError,
+    FrameworkError,
+    TabError,
+    StateError
+];

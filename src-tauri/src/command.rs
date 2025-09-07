@@ -4,7 +4,7 @@ use tauri::{State, Webview, Window, command};
 use crate::{
     IsMainView as _,
     browser::Browser,
-    error::{FrameworkError, LogError, StateError, TabError},
+    error::{DatabaseError, FrameworkError, StateError, TabError},
     log::QueryLogResponse,
     page::PageToken,
     state::BrowserState,
@@ -167,13 +167,24 @@ pub async fn reload(browser: State<'_, Browser>, mainview: Webview) -> Result<()
     Ok(())
 }
 
+#[command]
+pub async fn incognito(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
+    if !mainview.is_main() {
+        return Ok(());
+    }
+
+    browser.incognito().await?;
+    browser.state_changed(None).await?;
+    Ok(())
+}
+
 #[command(rename_all = "snake_case")]
 pub async fn query_navigation_log(
     browser: State<'_, Browser>,
     mainview: Webview,
     keyword: String,
     page_token: PageToken,
-) -> Result<QueryLogResponse, LogError> {
+) -> Result<QueryLogResponse, DatabaseError> {
     if !mainview.is_main() {
         return Ok(QueryLogResponse::default());
     }
@@ -186,7 +197,7 @@ pub async fn update_star(
     browser: State<'_, Browser>,
     mainview: Webview,
     id: i64,
-) -> Result<(), LogError> {
+) -> Result<(), DatabaseError> {
     if !mainview.is_main() {
         return Ok(());
     }

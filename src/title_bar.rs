@@ -24,7 +24,7 @@ pub fn TitleBar() -> Element {
             class: "title-bar navbar min-h-10 h-10",
             onmousedown: start_dragging,
 
-            Navigator {}
+            Navigator { class: "flex-none" }
             TitleBarContent {}
             WindowDecoration { class: "fixed top-0 right-0" }
         }

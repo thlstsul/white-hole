@@ -1,8 +1,6 @@
-use std::sync::OnceLock;
-
 use ::log::error;
 use command::*;
-use tauri::{App, Manager, Webview, async_runtime};
+use tauri::{Manager, Webview, async_runtime};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use time::macros::format_description;
 
@@ -10,6 +8,7 @@ use crate::{browser::Browser, error::FrameworkError};
 
 mod browser;
 mod command;
+mod database;
 mod error;
 mod icon;
 mod log;
@@ -22,15 +21,6 @@ mod tab;
 mod task;
 mod update;
 mod url;
-
-pub const DB_NAME: &str = "white-hole.db";
-pub static DB_URL: OnceLock<String> = OnceLock::new();
-
-pub fn get_db_url(app: &App) -> Result<&String, FrameworkError> {
-    let data_path = app.path().app_local_data_dir()?;
-    let db_path = data_path.join(DB_NAME);
-    Ok(DB_URL.get_or_init(|| format!("sqlite:{}", db_path.to_string_lossy())))
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), FrameworkError> {
@@ -99,6 +89,7 @@ pub fn run() -> Result<(), FrameworkError> {
             forward,
             go,
             reload,
+            incognito,
             query_navigation_log,
             update_star,
             push_history_state,

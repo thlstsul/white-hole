@@ -5,19 +5,13 @@ use crate::app::Browser;
 
 #[component]
 pub fn WindowDecoration(#[props(default)] class: String) -> Element {
-    let maximized = use_context::<Browser>().maximized;
-
     rsx! {
         div {
             class: "window-decoration join {class}",
             onmousedown: |e| e.stop_propagation(),
 
             Minimize { class: "join-item" }
-            if maximized() {
-                Unmaximize { class: "join-item" }
-            } else {
-                Maximize { class: "join-item" }
-            }
+            MaximizeOr { class: "join-item" }
             Close { class: "join-item" }
         }
     }
@@ -67,6 +61,19 @@ fn Close(#[props(default)] class: String) -> Element {
                     d: "M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12z",
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn MaximizeOr(#[props(default)] class: String) -> Element {
+    let maximized = use_context::<Browser>().maximized;
+
+    rsx! {
+        if maximized() {
+            Unmaximize { class: "join-item" }
+        } else {
+            Maximize { class: "join-item" }
         }
     }
 }

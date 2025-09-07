@@ -1,21 +1,18 @@
 use crate::{
-    DB_NAME, IsMainView,
+    IsMainView,
+    database::{DB_NAME, Database},
     error::*,
-    get_db_url,
     icon::get_icon_data_url,
     log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
     page::PageToken,
     public_suffix::get_public_suffix_cached,
     shortcut::{self, GlobalShortcutExt},
-    state::{BrowserState, Focused},
+    state::{Boolean, BrowserState},
     tab::{Tab, TabIndex, TabMap},
     task,
     url::parse_keyword,
 };
-use sqlx::{
-    SqlitePool,
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::{
     App, AppHandle, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder,
     WebviewUrl, Window, WindowEvent, Wry, async_runtime, window::Color,
@@ -23,12 +20,13 @@ use tauri::{
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
 pub struct Browser {
-    db: SqlitePool,
+    db: Database,
     window: Window,
     mainview: Webview,
     label: TabIndex,
     tabs: TabMap,
-    is_focused: Focused,
+    is_focused: Boolean,
+    incognito: Boolean,
 }
 
 impl Browser {
@@ -64,7 +62,7 @@ impl Browser {
                 window.inner_size()?,
             )?;
 
-            let db = SqlitePool::connect(get_db_url(app)?).await?;
+            let db = Database::new(app).await?;
 
             let state = Browser {
                 db,
@@ -72,7 +70,8 @@ impl Browser {
                 mainview,
                 label: TabIndex::new(),
                 tabs: TabMap::new(),
-                is_focused: Focused::new(),
+                is_focused: Boolean::default(),
+                incognito: Boolean::default(),
             };
             app.manage(state);
 
@@ -136,8 +135,10 @@ impl Browser {
     }
 
     pub async fn open_tab_by_url(&self, url: &Url, _active: bool) -> Result<(), TabError> {
-        if let Some(id) = get_id(&self.db, url.as_str()).await
-            && let Some((label, index)) = self.tabs.any_open(id).await
+        let pool = self.db.get().await;
+        let incognito = self.incognito.get().await;
+        if let Some(id) = get_id(&pool, url.as_str()).await
+            && let Some((label, index)) = self.tabs.any_open(id, incognito).await
         {
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
@@ -148,10 +149,12 @@ impl Browser {
     }
 
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
-        if let Some((label, index)) = self.tabs.any_open(id).await {
+        let incognito = self.incognito.get().await;
+        if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
+            // TODO history 还是不准确
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
-        } else if let Some(url) = get_url(&self.db, id).await {
+        } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             self.create_tab(&Url::parse(&url)?, true).await?;
         }
         Ok(())
@@ -234,7 +237,8 @@ impl Browser {
     }
 
     pub async fn parse_keyword(&self, keyword: &str) -> Option<Url> {
-        let public_suffix = get_public_suffix_cached(&self.db).await.ok();
+        let pool = self.db.get().await;
+        let public_suffix = get_public_suffix_cached(&pool).await.ok();
         parse_keyword(public_suffix, keyword).await
     }
 
@@ -320,40 +324,58 @@ impl Browser {
         self.tabs.reload(&label).await;
     }
 
-    pub async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, LogError> {
-        Ok(save_log(&self.db, log).await?)
+    pub async fn incognito(&self) -> Result<(), StateError> {
+        if self.incognito.get().await {
+            // 退出无痕模式
+            self.tabs.close_incognito().await?;
+            self.db.close_memory().await?;
+            self.incognito.set(false).await;
+        } else {
+            // 进入无痕模式
+            self.incognito.set(true).await;
+            self.db.migrate_memory().await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
+        let pool = self.db.get().await;
+        Ok(save_log(&pool, log).await?)
     }
 
     pub async fn query_navigation_log(
         &self,
         keyword: String,
         page_token: PageToken,
-    ) -> Result<QueryLogResponse, LogError> {
-        Ok(query_log(&self.db, &keyword, page_token).await?)
+    ) -> Result<QueryLogResponse, DatabaseError> {
+        let pool = self.db.get().await;
+        Ok(query_log(&pool, &keyword, page_token).await?)
     }
 
-    pub async fn update_star(&self, id: i64) -> Result<(), LogError> {
-        update_log_star(&self.db, id).await?;
+    pub async fn update_star(&self, id: i64) -> Result<(), DatabaseError> {
+        let pool = self.db.get().await;
+        update_log_star(&pool, id).await?;
         Ok(())
     }
 
     pub async fn get_state(&self, the_label: Option<&str>) -> Result<BrowserState, StateError> {
-        let maximized = self.window.is_maximized()?;
         let label = self.label.get().await;
-        let focus = self.is_focused.get().await;
-
         let mut state = self
             .tabs
             .get_state(the_label.unwrap_or(label.as_str()))
             .await
             .unwrap_or(BrowserState::default());
+
         if !state.icon_url.is_empty()
             && let Ok(icon_url) = self.get_icon_data_url(&state.icon_url).await
         {
             state.icon_url = icon_url;
         }
-        state.maximized = maximized;
-        state.focus = focus;
+        state.maximized = self.window.is_maximized()?;
+        state.focus = self.is_focused.get().await;
+        state.incognito = self.incognito.get().await;
+
         Ok(state)
     }
 
@@ -381,7 +403,7 @@ impl Browser {
     }
 
     async fn create_tab(&self, url: &Url, _active: bool) -> Result<(), FrameworkError> {
-        let tab = Tab::new(&self.window, url)?;
+        let tab = Tab::new(&self.window, url, self.incognito.get().await)?;
         self.is_focused.set(false).await;
         let label = tab.label().to_string();
         self.label.set(label.clone()).await;
@@ -397,7 +419,8 @@ impl Browser {
     }
 
     async fn get_icon_data_url(&self, url: &str) -> Result<String, IconError> {
-        get_icon_data_url(&self.db, url).await
+        let pool = self.db.get().await;
+        get_icon_data_url(&pool, url).await
     }
 }
 

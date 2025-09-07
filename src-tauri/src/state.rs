@@ -11,6 +11,7 @@ pub struct BrowserState {
     pub can_back: bool,
     pub can_forward: bool,
     pub focus: bool,
+    pub incognito: bool,
 }
 
 impl Default for BrowserState {
@@ -24,15 +25,18 @@ impl Default for BrowserState {
             can_back: false,
             can_forward: false,
             focus: false,
+            incognito: false,
         }
     }
 }
 
-pub struct Focused(RwLock<bool>);
+#[derive(Default)]
+pub struct Boolean(RwLock<bool>);
 
-impl Focused {
-    pub fn new() -> Self {
-        Self(RwLock::new(false))
+impl Boolean {
+    #[allow(dead_code)]
+    pub fn new(b: bool) -> Self {
+        Self(RwLock::new(b))
     }
 
     pub async fn set(&self, value: bool) -> bool {

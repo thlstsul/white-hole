@@ -18,11 +18,12 @@ use crate::{
 };
 
 pub struct Tab {
+    webview: Webview,
     label: String,
     title: String,
     icon_url: String,
-    webview: Webview,
     loading: bool,
+    incognito: bool,
     index: i32,
     history_states: Vec<i64>,
 }
@@ -36,7 +37,7 @@ impl Deref for Tab {
 }
 
 impl Tab {
-    pub fn new(window: &Window, url: &Url) -> Result<Self, FrameworkError> {
+    pub fn new(window: &Window, url: &Url, incognito: bool) -> Result<Self, FrameworkError> {
         let mut size = window
             .inner_size()?
             .to_logical::<f64>(window.scale_factor()?);
@@ -48,6 +49,8 @@ impl Tab {
 
         let webview = window.add_child(
             tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
+                .initialization_script(include_str!("webview_init_script.js"))
+                .incognito(incognito)
                 .devtools(true)
                 .zoom_hotkeys_enabled(true)
                 .on_new_window(move |url, _| {
@@ -77,18 +80,18 @@ impl Tab {
                             error!("{e}");
                         }
                     });
-                })
-                .initialization_script(include_str!("webview_init_script.js")),
+                }),
             LogicalPosition::new(0., Webview::TITLE_HEIGHT),
             size,
         )?;
 
         Ok(Self {
-            label,
             webview,
+            label,
             title: String::new(),
             icon_url: String::new(),
             loading: true,
+            incognito,
             index: -1,
             history_states: Vec::new(),
         })
@@ -120,6 +123,10 @@ impl Tab {
 
     pub fn set_loading(&mut self, loading: bool) {
         self.loading = loading;
+    }
+
+    pub fn incognito(&self) -> bool {
+        self.incognito
     }
 
     pub fn index(&self, id: i64) -> Option<usize> {
@@ -255,11 +262,30 @@ impl TabMap {
         Ok(())
     }
 
+    pub async fn close_incognito(&self) -> Result<(), FrameworkError> {
+        let mut labels = Vec::new();
+        self.0
+            .scan_async(|l, tab| {
+                if tab.incognito() {
+                    labels.push(l.to_owned());
+                }
+            })
+            .await;
+        for label in labels {
+            self.close(&label).await?;
+        }
+        Ok(())
+    }
+
     /// return id 所在 (label, index)
-    pub async fn any_open(&self, id: i64) -> Option<(String, usize)> {
+    pub async fn any_open(&self, id: i64, incognito: bool) -> Option<(String, usize)> {
         let mut label = None;
         self.0
             .any_async(|l, tab| {
+                if tab.incognito() != incognito {
+                    return false;
+                }
+
                 let Some(index) = tab.index(id) else {
                     return false;
                 };

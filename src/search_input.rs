@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::{api::search, app::Browser};
 
 #[component]
-pub fn SearchInput(keyword: Signal<String>) -> Element {
+pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> Element {
     let mut input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
 
     let _ = use_resource(move || async move {
@@ -24,7 +24,7 @@ pub fn SearchInput(keyword: Signal<String>) -> Element {
 
     rsx! {
         label {
-            class: "url input input-ghost input-neutral w-full",
+            class: "url input input-ghost input-neutral w-full {class}",
 
             svg {
                 class: "h-[1em] opacity-50",

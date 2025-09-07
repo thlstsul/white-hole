@@ -5,6 +5,7 @@ use crate::{
     api::{PageToken, open_tab, query_navigation_log, update_star},
     app::Browser,
     search_input::SearchInput,
+    settings::Settings,
 };
 
 const DEFAULT_ICON: Asset = asset!("/assets/default_icon.svg");
@@ -18,8 +19,8 @@ pub fn SearchPage() -> Element {
     let mut logs = use_signal(Vec::new);
 
     use_effect(move || {
-        // 输入关键字进行检索时，重置页码
-        let _ = keyword.read();
+        // 输入关键字进行检索、切换模式时，重置页码
+        let _ = (keyword.read(), use_context::<Browser>().incognito);
         page_token.set(PageToken::default());
         next_page_token.set(None);
     });
@@ -49,8 +50,13 @@ pub fn SearchPage() -> Element {
             },
 
             header {
-                SearchInput {
-                    keyword,
+                div {
+                    class: "w-full join",
+                    SearchInput {
+                        class: "join-item",
+                        keyword,
+                    }
+                    Settings { class: "join-item" }
                 }
             }
             main {

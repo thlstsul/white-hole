@@ -20,6 +20,7 @@ pub fn App() -> Element {
     let can_back = use_memo(move || browser_state.read().can_back);
     let can_forward = use_memo(move || browser_state.read().can_forward);
     let focus = use_memo(move || browser_state.read().focus);
+    let incognito = use_memo(move || browser_state.read().incognito);
     use_context_provider(|| Browser {
         icon_url,
         title,
@@ -29,6 +30,7 @@ pub fn App() -> Element {
         focus,
         can_back,
         can_forward,
+        incognito,
     });
 
     spawn(async move {
@@ -76,6 +78,7 @@ struct BrowserState {
     can_back: bool,
     can_forward: bool,
     focus: bool,
+    incognito: bool,
 }
 
 #[derive(Clone)]
@@ -85,7 +88,8 @@ pub struct Browser {
     pub url: Memo<String>,
     pub maximized: Memo<bool>,
     pub loading: Memo<bool>,
-    pub focus: Memo<bool>,
     pub can_back: Memo<bool>,
     pub can_forward: Memo<bool>,
+    pub focus: Memo<bool>,
+    pub incognito: Memo<bool>,
 }

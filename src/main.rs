@@ -3,6 +3,7 @@ mod app;
 mod navigation;
 mod search_input;
 mod search_page;
+mod settings;
 mod title_bar;
 mod url;
 mod window_decoration;
