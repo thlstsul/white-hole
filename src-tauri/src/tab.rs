@@ -441,6 +441,8 @@ impl TabMap {
 
 async fn on_document_title_changed(webview: Webview, title: String) -> Result<(), StateError> {
     let label = webview.label();
+    info!("{label} webview title changed: {title}");
+
     let browser = webview.browser();
     browser.change_tab_title(label, title).await;
 

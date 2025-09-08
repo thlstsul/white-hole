@@ -202,7 +202,8 @@ impl Browser {
         }
 
         if loading {
-            let log: NavigationLog = state.into();
+            let mut log: NavigationLog = state.into();
+            log.title = "".to_string();
             let id = self.save_navigation_log(log).await?;
             self.tabs.insert_history(label, id).await;
         }
