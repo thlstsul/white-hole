@@ -151,7 +151,6 @@ impl Browser {
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
         let incognito = self.incognito.get().await;
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
-            // TODO history 还是不准确
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {

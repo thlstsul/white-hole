@@ -209,7 +209,7 @@ impl Tab {
         if self.index != index
             && self
                 .webview
-                .eval(format!("history.go({})", self.index - index))
+                .eval(format!("history.go({})", index - self.index))
                 .inspect_err(|e| error!("{e}"))
                 .is_ok()
         {
