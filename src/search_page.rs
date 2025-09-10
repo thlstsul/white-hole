@@ -17,6 +17,7 @@ pub fn SearchPage() -> Element {
     let mut next_page_token = use_signal(|| None);
     let mut main_element = use_signal(|| None);
     let mut logs = use_signal(Vec::new);
+    let mut focus_log = use_signal(|| None);
 
     use_effect(move || {
         // 输入关键字进行检索、切换模式时，重置页码
@@ -41,11 +42,17 @@ pub fn SearchPage() -> Element {
     rsx! {
         div {
             class: "max-h-screen flex flex-col",
-            onkeydown: move |e| {
-                if e.key() == Key::Tab {
+            onkeydown: move |e| async move {
+                let Some(focus_log) = focus_log() else {
+                    return;
+                };
+
+                if e.key() == Key::Enter {
                     e.prevent_default();
-                    let browser = use_context::<Browser>();
-                    keyword.set(browser.url.read().to_string());
+                    let _ = open_tab(focus_log.id).await;
+                } else if e.key() == Key::ArrowRight {
+                    e.prevent_default();
+                    keyword.set(focus_log.url.clone());
                 }
             },
 
@@ -85,10 +92,12 @@ pub fn SearchPage() -> Element {
                             class: "list-row",
                             Icon { url: log.icon_url.clone() }
                             div {
+                                tabindex: "0",
                                 class: "list-col-grow",
                                 onclick: move |_| async move {
                                     let _ = open_tab(log.id).await;
                                 },
+                                onfocus: move |_| focus_log.set(Some(log.clone())),
 
                                 div {
                                     "{log.title}"
@@ -146,7 +155,9 @@ fn Star(log_id: i64, checked: bool) -> Element {
     rsx! {
         label {
             class: "swap",
+
             input {
+                tabindex: "-1",
                 r#type: "checkbox",
                 checked,
                 onchange: move |_| async move {

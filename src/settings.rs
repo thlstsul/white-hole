@@ -9,7 +9,6 @@ pub fn Settings(#[props(default)] class: String) -> Element {
         div {
             class: "dropdown dropdown-hover dropdown-end",
             div {
-                tabindex: "0",
                 role: "button",
                 class: "btn btn-square btn-ghost {class}",
 
@@ -33,7 +32,6 @@ pub fn Settings(#[props(default)] class: String) -> Element {
                 }
             }
             ul {
-                tabindex: "0",
                 class: "menu dropdown-content bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
 
                 IncognitoItem {}
