@@ -97,7 +97,7 @@ pub fn SearchPage() -> Element {
                                 onclick: move |_| async move {
                                     let _ = open_tab(log.id).await;
                                 },
-                                onfocus: move |_| focus_log.set(Some(log.clone())),
+                                onfocus: move |_| focus_log.set(Some(FocusLog { id: log.id, url: log.url.clone() })),
 
                                 div {
                                     "{log.title}"
@@ -119,6 +119,12 @@ pub fn SearchPage() -> Element {
             }
         }
     }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct FocusLog {
+    id: i64,
+    url: String,
 }
 
 #[component]
