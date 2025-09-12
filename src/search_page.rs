@@ -88,16 +88,17 @@ pub fn SearchPage() -> Element {
 
                     for log in logs() {
                         li {
+                            tabindex: "0",
                             key: "{log.id}",
                             class: "list-row",
+                            onfocus: move |_| focus_log.set(Some(FocusLog { id: log.id, url: log.url.clone() })),
+                            onclick: move |_| async move {
+                                let _ = open_tab(log.id).await;
+                            },
+
                             Icon { url: log.icon_url.clone() }
                             div {
-                                tabindex: "0",
                                 class: "list-col-grow",
-                                onclick: move |_| async move {
-                                    let _ = open_tab(log.id).await;
-                                },
-                                onfocus: move |_| focus_log.set(Some(FocusLog { id: log.id, url: log.url.clone() })),
 
                                 div {
                                     "{log.title}"
@@ -161,6 +162,7 @@ fn Star(log_id: i64, checked: bool) -> Element {
     rsx! {
         label {
             class: "swap",
+            onclick: move |e| e.stop_propagation(),
 
             input {
                 tabindex: "-1",
