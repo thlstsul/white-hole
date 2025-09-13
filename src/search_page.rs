@@ -91,10 +91,10 @@ pub fn SearchPage() -> Element {
                             tabindex: "0",
                             key: "{log.id}",
                             class: "list-row",
+                            onfocus: move |_| focus_log.set(Some(FocusLog { id: log.id, url: log.url.clone() })),
                             onclick: move |_| async move {
                                 let _ = open_tab(log.id).await;
                             },
-                            onfocus: move |_| focus_log.set(Some(FocusLog { id: log.id, url: log.url.clone() })),
 
                             Icon { url: log.icon_url.clone() }
                             div {
