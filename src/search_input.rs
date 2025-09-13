@@ -20,10 +20,10 @@ pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> 
     });
 
     let keypress = move |e: KeyboardEvent| async move {
-        e.prevent_default();
         if e.key() == Key::Enter {
             let _ = search(keyword()).await;
         } else if e.key() == Key::Escape {
+            e.prevent_default();
             blur().await;
         }
     };

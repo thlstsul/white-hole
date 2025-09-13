@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
-    api::{PageToken, open_tab, query_navigation_log, update_star},
+    api::{PageToken, blur, open_tab, query_navigation_log, update_star},
     app::Browser,
     search_input::SearchInput,
     settings::Settings,
@@ -43,15 +43,18 @@ pub fn SearchPage() -> Element {
         div {
             class: "max-h-screen flex flex-col",
             onkeydown: move |e| async move {
-                e.prevent_default();
-                let Some(focus_log) = focus_log() else {
-                    return;
-                };
-
                 if e.key() == Key::Enter {
-                    let _ = open_tab(focus_log.id).await;
+                    if let Some(focus_log) = focus_log() {
+                        let _ = open_tab(focus_log.id).await;
+                    };
                 } else if e.key() == Key::ArrowRight {
-                    keyword.set(focus_log.url.clone());
+                    e.prevent_default();
+                    if let Some(focus_log) = focus_log() {
+                        keyword.set(focus_log.url.clone());
+                    };
+                } else if e.key() == Key::Escape {
+                    e.prevent_default();
+                    blur().await;
                 }
             },
 
