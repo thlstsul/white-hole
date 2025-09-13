@@ -1,4 +1,5 @@
 use delay_timer::prelude::*;
+use log::error;
 use sqlx::SqlitePool;
 
 use crate::{database::DB_URL, public_suffix::sync_public_suffix};
@@ -23,7 +24,9 @@ fn startup_task() -> Result<Task, TaskError> {
         let Ok(pool) = SqlitePool::connect(db_url).await else {
             return;
         };
-        let _ = sync_public_suffix(&pool).await;
+        let _ = sync_public_suffix(&pool)
+            .await
+            .inspect_err(|e| error!("同步 public suffix 失败：{e}"));
     };
 
     task_builder
@@ -42,7 +45,9 @@ fn everyday_task() -> Result<Task, TaskError> {
         let Ok(pool) = SqlitePool::connect(db_url).await else {
             return;
         };
-        let _ = sync_public_suffix(&pool).await;
+        let _ = sync_public_suffix(&pool)
+            .await
+            .inspect_err(|e| error!("同步 public suffix 失败：{e}"));
     };
 
     task_builder

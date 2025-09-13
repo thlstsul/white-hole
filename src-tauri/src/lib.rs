@@ -109,7 +109,9 @@ pub fn run() -> Result<(), SetupError> {
                 let e = event.clone();
 
                 async move {
-                    let _ = Browser::on_window_event(&w, &e).await;
+                    let _ = Browser::on_window_event(&w, &e)
+                        .await
+                        .inspect_err(|e| error!("窗口事件处理失败：{e}"));
                 }
             });
         })

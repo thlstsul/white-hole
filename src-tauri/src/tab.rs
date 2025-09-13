@@ -218,7 +218,10 @@ impl Tab {
     }
 
     pub fn reload(&self) {
-        let _ = self.webview.reload().inspect_err(|e| error!("{e}"));
+        let _ = self
+            .webview
+            .reload()
+            .inspect_err(|e| error!("重载失败：{e}"));
     }
 }
 
@@ -308,7 +311,9 @@ impl TabMap {
     pub async fn set_size(&self, size: LogicalSize<f64>) {
         self.0
             .scan_async(|_, tab| {
-                let _ = tab.set_size(size);
+                let _ = tab
+                    .set_size(size)
+                    .inspect_err(|e| error!("设置窗口大小失败：{e}"));
             })
             .await;
     }

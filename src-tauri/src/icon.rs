@@ -2,6 +2,7 @@ use std::sync::OnceLock;
 
 use cached::proc_macro::cached;
 use get_data_url::GetDataUrl;
+use log::error;
 use sqlx::{SqlitePool, sqlite::SqliteQueryResult};
 use tauri::async_runtime;
 
@@ -42,7 +43,9 @@ pub async fn get_icon_data_url(pool: &SqlitePool, url: &str) -> Result<String, I
                 return;
             };
 
-            let _ = upsert_data_url(&pool, &url, &data_url).await;
+            let _ = upsert_data_url(&pool, &url, &data_url)
+                .await
+                .inspect_err(|e| error!("更新icon失败：{e}"));
         }
     });
 

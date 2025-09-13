@@ -1,4 +1,4 @@
-use log::info;
+use log::{error, info};
 use tauri::{State, Webview, Window, command};
 
 use crate::{
@@ -15,7 +15,8 @@ pub fn minimize(window: Window, mainview: Webview) {
     if !mainview.is_main() {
         return;
     }
-    let _ = window.minimize();
+
+    let _ = window.minimize().inspect_err(|e| error!("最小化失败：{e}"));
 }
 
 #[command]
@@ -43,7 +44,7 @@ pub fn close(window: Window, mainview: Webview) {
     if !mainview.is_main() {
         return;
     }
-    let _ = window.close();
+    let _ = window.close().inspect_err(|e| error!("关窗失败：{e}"));
 }
 
 #[command]
@@ -51,7 +52,9 @@ pub fn start_dragging(window: Window, mainview: Webview) {
     if !mainview.is_main() {
         return;
     }
-    let _ = window.start_dragging();
+    let _ = window
+        .start_dragging()
+        .inspect_err(|e| error!("开始拖拽失败：{e}"));
 }
 
 #[command]
