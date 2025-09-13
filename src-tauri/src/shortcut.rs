@@ -13,11 +13,16 @@ use global_hotkey::{
 use scc::HashMap;
 use tauri::{
     AppHandle, Manager, Runtime, Wry,
-    async_runtime::{self, RwLock},
+    async_runtime::{self, Mutex},
     plugin::{Builder as PluginBuilder, TauriPlugin},
 };
 
 use crate::{browser::BrowserExt, error::TabError};
+
+type Result<T> = std::result::Result<T, Error>;
+
+type HotKeyId = u32;
+type HandlerFn<R> = Box<dyn Fn(&AppHandle<R>, &Shortcut, ShortcutEvent) + Send + Sync + 'static>;
 
 pub fn plugin() -> Result<TauriPlugin<Wry>> {
     let plugin = Builder::new()
@@ -75,11 +80,6 @@ pub fn plugin() -> Result<TauriPlugin<Wry>> {
     Ok(plugin)
 }
 
-type Result<T> = std::result::Result<T, Error>;
-
-type HotKeyId = u32;
-type HandlerFn<R> = Box<dyn Fn(&AppHandle<R>, &Shortcut, ShortcutEvent) + Send + Sync + 'static>;
-
 pub struct ShortcutWrapper(Shortcut);
 
 impl From<Shortcut> for ShortcutWrapper {
@@ -120,7 +120,7 @@ pub struct GlobalShortcut<R: Runtime> {
     app: AppHandle<R>,
     manager: Arc<GlobalHotKeyManager>,
     shortcuts: Arc<HashMap<HotKeyId, RegisteredShortcut<R>>>,
-    is_paused: Arc<RwLock<bool>>,
+    is_paused: Arc<Mutex<bool>>,
 }
 
 macro_rules! run_main_thread {
@@ -296,24 +296,28 @@ impl<R: Runtime> GlobalShortcut<R> {
     }
 
     pub async fn pause(&self) -> Result<()> {
-        if *self.is_paused.read().await {
+        let mut is_paused = self.is_paused.lock().await;
+        if *is_paused {
             return Ok(());
         }
 
         let hotkeys = self.get_hotkeys().await;
-        self.manager.unregister_all(hotkeys.as_slice())?;
-        *self.is_paused.write().await = true;
+        #[rustfmt::skip]
+        run_main_thread!(self.app, self.manager, |m| m.unregister_all(hotkeys.as_slice()))?;
+        *is_paused = true;
         Ok(())
     }
 
     pub async fn resume(&self) -> Result<()> {
-        if !*self.is_paused.read().await {
+        let mut is_paused = self.is_paused.lock().await;
+        if !*is_paused {
             return Ok(());
         }
 
         let hotkeys = self.get_hotkeys().await;
-        self.manager.register_all(hotkeys.as_slice())?;
-        *self.is_paused.write().await = false;
+        #[rustfmt::skip]
+        run_main_thread!(self.app, self.manager, |m| m.0.register_all(hotkeys.as_slice()))?;
+        *is_paused = false;
         Ok(())
     }
 }
@@ -435,7 +439,7 @@ impl<R: Runtime> Builder<R> {
                     app: app.clone(),
                     manager: Arc::new(GlobalHotKeyManager(manager)),
                     shortcuts,
-                    is_paused: Arc::new(RwLock::new(false)),
+                    is_paused: Arc::new(Mutex::new(false)),
                 });
                 Ok(())
             })
