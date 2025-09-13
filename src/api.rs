@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri_sys::core::invoke_result;
+use tauri_sys::core::{invoke, invoke_result};
 use time::OffsetDateTime;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Deserialize)]
@@ -73,4 +73,48 @@ pub async fn query_navigation_log(
         },
     )
     .await
+}
+
+pub async fn back() {
+    invoke::<()>("back", &()).await;
+}
+
+pub async fn forward() {
+    invoke::<()>("forward", &()).await;
+}
+
+pub async fn reload() {
+    invoke::<()>("reload", &()).await;
+}
+
+pub async fn incognito() {
+    invoke::<()>("incognito", &()).await;
+}
+
+pub async fn start_dragging() {
+    invoke::<()>("start_dragging", &()).await;
+}
+
+pub async fn focus() {
+    invoke::<()>("focus", &()).await;
+}
+
+pub async fn blur() {
+    invoke::<()>("blur", &()).await;
+}
+
+pub async fn minimize() {
+    invoke::<()>("minimize", &()).await;
+}
+
+pub async fn maximize() {
+    invoke::<()>("maximize", &()).await;
+}
+
+pub async fn unmaximize() {
+    invoke::<()>("unmaximize", &()).await;
+}
+
+pub async fn close() {
+    invoke::<()>("close", &()).await;
 }

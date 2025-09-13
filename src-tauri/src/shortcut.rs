@@ -33,7 +33,6 @@ pub fn plugin() -> Result<TauriPlugin<Wry>> {
             Shortcut::new(Some(Modifiers::CONTROL), Code::KeyL),
             Shortcut::new(Some(Modifiers::CONTROL), Code::KeyW),
             Shortcut::new(Some(Modifiers::CONTROL), Code::Tab),
-            Shortcut::new(None, Code::Escape),
         ])?
         .with_handler(|app_handle, shortcut, event| {
             if event.state != ShortcutState::Pressed {
@@ -64,9 +63,6 @@ pub fn plugin() -> Result<TauriPlugin<Wry>> {
                     }
                     if shortcut.matches(Modifiers::CONTROL, Code::Tab) {
                         state_changed = browser.next_tab().await?;
-                    }
-                    if shortcut.matches(Modifiers::empty(), Code::Escape) {
-                        state_changed = browser.blur().await?;
                     }
                     if state_changed {
                         browser.state_changed(None).await?;
