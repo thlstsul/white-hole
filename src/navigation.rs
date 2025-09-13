@@ -1,7 +1,9 @@
 use dioxus::prelude::*;
-use tauri_sys::core::invoke;
 
-use crate::app::Browser;
+use crate::{
+    api::{back, forward, reload},
+    app::Browser,
+};
 
 #[component]
 pub fn Navigator(#[props(default)] class: String) -> Element {
@@ -20,15 +22,12 @@ pub fn Navigator(#[props(default)] class: String) -> Element {
 #[component]
 fn Back(#[props(default)] class: String) -> Element {
     let can_back = use_context::<Browser>().can_back;
-    let back = |_| async move {
-        invoke::<()>("back", &()).await;
-    };
 
     rsx! {
         button {
             class: "btn btn-square btn-ghost join-item",
             disabled: !can_back(),
-            onclick: back,
+            onclick: |_| async { back().await },
 
             svg {
                 fill: "currentColor",
@@ -44,15 +43,12 @@ fn Back(#[props(default)] class: String) -> Element {
 #[component]
 fn Forward(#[props(default)] class: String) -> Element {
     let can_forward = use_context::<Browser>().can_forward;
-    let forward = |_| async move {
-        invoke::<()>("forward", &()).await;
-    };
 
     rsx! {
         button {
             class: "forward btn btn-square btn-ghost {class}",
             disabled: !can_forward(),
-            onclick: forward,
+            onclick: |_| async { forward().await },
 
             svg {
                 fill: "currentColor",
@@ -80,14 +76,10 @@ fn ReloadOr(#[props(default)] class: String) -> Element {
 
 #[component]
 fn Reload(#[props(default)] class: String) -> Element {
-    let reload = |_| async move {
-        invoke::<()>("reload", &()).await;
-    };
-
     rsx! {
         button {
             class: "go btn btn-square btn-ghost {class}",
-            onclick: reload,
+            onclick: |_| async { reload().await },
 
             svg {
                 fill: "currentColor",

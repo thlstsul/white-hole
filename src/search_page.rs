@@ -43,15 +43,14 @@ pub fn SearchPage() -> Element {
         div {
             class: "max-h-screen flex flex-col",
             onkeydown: move |e| async move {
+                e.prevent_default();
                 let Some(focus_log) = focus_log() else {
                     return;
                 };
 
                 if e.key() == Key::Enter {
-                    e.prevent_default();
                     let _ = open_tab(focus_log.id).await;
                 } else if e.key() == Key::ArrowRight {
-                    e.prevent_default();
                     keyword.set(focus_log.url.clone());
                 }
             },

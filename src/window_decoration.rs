@@ -1,7 +1,9 @@
 use dioxus::prelude::*;
-use tauri_sys::core::invoke;
 
-use crate::app::Browser;
+use crate::{
+    api::{close, maximize, minimize, unmaximize},
+    app::Browser,
+};
 
 #[component]
 pub fn WindowDecoration(#[props(default)] class: String) -> Element {
@@ -19,15 +21,12 @@ pub fn WindowDecoration(#[props(default)] class: String) -> Element {
 
 #[component]
 fn Minimize(#[props(default)] class: String) -> Element {
-    let minimize = |_| async move {
-        invoke::<()>("minimize", &()).await;
-    };
-
     rsx! {
         button {
             class: "window-minimize btn btn-square btn-ghost {class}",
             id: "window-minimize",
-            onclick: minimize,
+            onclick: |_| async { minimize().await },
+
             svg {
                 xmlns: "http://www.w3.org/2000/svg",
                 class: "size-4",
@@ -43,15 +42,12 @@ fn Minimize(#[props(default)] class: String) -> Element {
 
 #[component]
 fn Close(#[props(default)] class: String) -> Element {
-    let close = |_| async move {
-        invoke::<()>("close", &()).await;
-    };
-
     rsx! {
         button {
             class: "window-close btn btn-square btn-ghost btn-secondary {class}",
             id: "window-close",
-            onclick: close,
+            onclick: |_| async { close().await },
+
             svg {
                 xmlns: "http://www.w3.org/2000/svg",
                 class: "size-5",
@@ -80,15 +76,12 @@ fn MaximizeOr(#[props(default)] class: String) -> Element {
 
 #[component]
 fn Maximize(#[props(default)] class: String) -> Element {
-    let maximize = move |_| async move {
-        invoke::<()>("maximize", &()).await;
-    };
-
     rsx! {
         button {
             class: "window-maximize btn btn-square btn-ghost btn-primary {class}",
             id: "window-maximize",
-            onclick: maximize,
+            onclick: |_| async { maximize().await },
+
             svg {
                 xmlns: "http://www.w3.org/2000/svg",
                 class: "size-4",
@@ -104,15 +97,12 @@ fn Maximize(#[props(default)] class: String) -> Element {
 
 #[component]
 fn Unmaximize(#[props(default)] class: String) -> Element {
-    let unmaximize = move |_| async move {
-        invoke::<()>("unmaximize", &()).await;
-    };
-
     rsx! {
         button {
             class: "window-unmaximize btn btn-square btn-ghost btn-primary {class}",
             id: "window-unmaximize",
-            onclick: unmaximize,
+            onclick: |_| async { unmaximize().await },
+
             svg {
                 xmlns: "http://www.w3.org/2000/svg",
                 class: "size-4",

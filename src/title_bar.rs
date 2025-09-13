@@ -1,9 +1,11 @@
 use crate::{
-    app::Browser, navigation::Navigator, url::percent_decode_str,
+    api::{focus, start_dragging},
+    app::Browser,
+    navigation::Navigator,
+    url::percent_decode_str,
     window_decoration::WindowDecoration,
 };
 use dioxus::{html::input_data::MouseButton, prelude::*};
-use tauri_sys::core::invoke;
 
 const DEFAULT_ICON: Asset = asset!("/assets/default_icon.svg");
 
@@ -15,7 +17,7 @@ pub fn TitleBar() -> Element {
         };
 
         if button == MouseButton::Primary {
-            invoke::<()>("start_dragging", &()).await;
+            start_dragging().await;
         }
     };
 
@@ -35,14 +37,10 @@ pub fn TitleBar() -> Element {
 fn TitleBarContent(#[props(default)] class: String) -> Element {
     let browser = use_context::<Browser>();
 
-    let focus = |_| async move {
-        invoke::<()>("focus", &()).await;
-    };
-
     rsx! {
         div {
             class: "title-bar-content flex items-center max-w-2/3 {class}",
-            onclick: focus,
+            onclick: |_| async { focus().await },
             onmousedown: |e| e.stop_propagation(),
 
             Icon { src: browser.icon_url }

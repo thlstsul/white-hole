@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use tauri_sys::core::invoke;
 
 use crate::app::Browser;
 
@@ -44,10 +43,6 @@ pub fn Settings(#[props(default)] class: String) -> Element {
 fn IncognitoItem(#[props(default)] class: String) -> Element {
     let incognito = use_context::<Browser>().incognito;
 
-    let incognito_handler = |_| async move {
-        invoke::<()>("incognito", &()).await;
-    };
-
     rsx! {
         li {
             label {
@@ -58,7 +53,7 @@ fn IncognitoItem(#[props(default)] class: String) -> Element {
                     class: "theme-controller",
                     value: "synthwave",
                     checked: incognito,
-                    onclick: incognito_handler,
+                    onclick: |_| async { crate::api::incognito().await },
                 }
 
                 div {
