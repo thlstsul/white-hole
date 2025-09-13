@@ -6,7 +6,7 @@ use crate::{
     log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
     page::PageToken,
     public_suffix::get_public_suffix_cached,
-    shortcut::{self, GlobalShortcutExt},
+    shortcut::GlobalShortcutExt,
     state::{Boolean, BrowserState},
     tab::{Tab, TabIndex, TabMap},
     task,
@@ -76,7 +76,6 @@ impl Browser {
             app.manage(state);
 
             task::setup()?;
-            shortcut::setup(app)?;
 
             Ok(())
         })

@@ -1,6 +1,6 @@
 #![cfg(not(any(target_os = "android", target_os = "ios")))]
 
-use std::{str::FromStr, sync::Arc};
+use std::{ops::Deref, str::FromStr, sync::Arc};
 
 use error_set::error_set;
 pub use global_hotkey::{
@@ -12,71 +12,67 @@ use global_hotkey::{
 };
 use scc::HashMap;
 use tauri::{
-    App, AppHandle, Manager, Runtime,
+    AppHandle, Manager, Runtime, Wry,
     async_runtime::{self, RwLock},
     plugin::{Builder as PluginBuilder, TauriPlugin},
 };
 
-use crate::{
-    browser::BrowserExt,
-    error::{SetupError, TabError},
-};
+use crate::{browser::BrowserExt, error::TabError};
 
-pub fn setup(app: &mut App) -> std::result::Result<(), SetupError> {
-    app.handle().plugin(
-        Builder::new()
-            .with_shortcuts([
-                Shortcut::new(Some(Modifiers::ALT), Code::ArrowLeft),
-                Shortcut::new(Some(Modifiers::ALT), Code::ArrowRight),
-                Shortcut::new(Some(Modifiers::CONTROL), Code::KeyT),
-                Shortcut::new(Some(Modifiers::CONTROL), Code::KeyL),
-                Shortcut::new(Some(Modifiers::CONTROL), Code::KeyW),
-                Shortcut::new(Some(Modifiers::CONTROL), Code::Tab),
-                Shortcut::new(None, Code::Escape),
-            ])?
-            .with_handler(|app_handle, shortcut, event| {
-                if event.state != ShortcutState::Pressed {
-                    return;
-                }
+pub fn plugin() -> Result<TauriPlugin<Wry>> {
+    let plugin = Builder::new()
+        .with_shortcuts([
+            Shortcut::new(Some(Modifiers::ALT), Code::ArrowLeft),
+            Shortcut::new(Some(Modifiers::ALT), Code::ArrowRight),
+            Shortcut::new(Some(Modifiers::CONTROL), Code::KeyT),
+            Shortcut::new(Some(Modifiers::CONTROL), Code::KeyL),
+            Shortcut::new(Some(Modifiers::CONTROL), Code::KeyW),
+            Shortcut::new(Some(Modifiers::CONTROL), Code::Tab),
+            Shortcut::new(None, Code::Escape),
+        ])?
+        .with_handler(|app_handle, shortcut, event| {
+            if event.state != ShortcutState::Pressed {
+                return;
+            }
 
-                async_runtime::spawn({
-                    let app_handle = app_handle.clone();
-                    let shortcut = *shortcut;
+            async_runtime::spawn({
+                let app_handle = app_handle.clone();
+                let shortcut = *shortcut;
 
-                    async move {
-                        let browser = app_handle.browser();
-                        let mut state_changed = false;
-                        if shortcut.matches(Modifiers::ALT, Code::ArrowLeft) {
-                            browser.back().await;
-                        }
-                        if shortcut.matches(Modifiers::ALT, Code::ArrowRight) {
-                            browser.forward().await;
-                        }
-                        if shortcut.matches(Modifiers::CONTROL, Code::KeyT)
-                            || shortcut.matches(Modifiers::CONTROL, Code::KeyL)
-                        {
-                            state_changed = browser.focus().await?;
-                        }
-                        if shortcut.matches(Modifiers::CONTROL, Code::KeyW) {
-                            browser.close_tab().await?;
-                            state_changed = true;
-                        }
-                        if shortcut.matches(Modifiers::CONTROL, Code::Tab) {
-                            state_changed = browser.next_tab().await?;
-                        }
-                        if shortcut.matches(Modifiers::empty(), Code::Escape) {
-                            state_changed = browser.blur().await?;
-                        }
-                        if state_changed {
-                            browser.state_changed(None).await?;
-                        }
-                        Ok::<(), TabError>(())
+                async move {
+                    let browser = app_handle.browser();
+                    let mut state_changed = false;
+                    if shortcut.matches(Modifiers::ALT, Code::ArrowLeft) {
+                        browser.back().await;
                     }
-                });
-            })
-            .build(),
-    )?;
-    Ok(())
+                    if shortcut.matches(Modifiers::ALT, Code::ArrowRight) {
+                        browser.forward().await;
+                    }
+                    if shortcut.matches(Modifiers::CONTROL, Code::KeyT)
+                        || shortcut.matches(Modifiers::CONTROL, Code::KeyL)
+                    {
+                        state_changed = browser.focus().await?;
+                    }
+                    if shortcut.matches(Modifiers::CONTROL, Code::KeyW) {
+                        browser.close_tab().await?;
+                        state_changed = true;
+                    }
+                    if shortcut.matches(Modifiers::CONTROL, Code::Tab) {
+                        state_changed = browser.next_tab().await?;
+                    }
+                    if shortcut.matches(Modifiers::empty(), Code::Escape) {
+                        state_changed = browser.blur().await?;
+                    }
+                    if state_changed {
+                        browser.state_changed(None).await?;
+                    }
+                    Ok::<(), TabError>(())
+                }
+            });
+        })
+        .build();
+
+    Ok(plugin)
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -111,6 +107,14 @@ unsafe impl Send for GlobalHotKeyManager {}
 /// SAFETY: we ensure it is run on main thread only
 unsafe impl Sync for GlobalHotKeyManager {}
 
+impl Deref for GlobalHotKeyManager {
+    type Target = global_hotkey::GlobalHotKeyManager;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 pub struct GlobalShortcut<R: Runtime> {
     #[allow(dead_code)]
     app: AppHandle<R>,
@@ -141,7 +145,7 @@ impl<R: Runtime> GlobalShortcut<R> {
     ) -> Result<()> {
         let id = shortcut.id();
         let handler = handler.map(|h| Arc::new(Box::new(h) as HandlerFn<R>));
-        run_main_thread!(self.app, self.manager, |m| m.0.register(shortcut))?;
+        run_main_thread!(self.app, self.manager, |m| m.register(shortcut))?;
         self.shortcuts
             .upsert(id, RegisteredShortcut { shortcut, handler });
         Ok(())
@@ -157,7 +161,7 @@ impl<R: Runtime> GlobalShortcut<R> {
         let hotkeys = shortcuts.into_iter().collect::<Vec<_>>();
 
         for shortcut in hotkeys {
-            run_main_thread!(self.app, self.manager, |m| m.0.register(shortcut))?;
+            run_main_thread!(self.app, self.manager, |m| m.register(shortcut))?;
             self.shortcuts.upsert(
                 shortcut.id(),
                 RegisteredShortcut {
@@ -227,7 +231,7 @@ impl<R: Runtime> GlobalShortcut<R> {
         S::Error: std::error::Error,
     {
         let shortcut = try_into_shortcut(shortcut)?;
-        run_main_thread!(self.app, self.manager, |m| m.0.unregister(shortcut))?;
+        run_main_thread!(self.app, self.manager, |m| m.unregister(shortcut))?;
         self.shortcuts.remove(&shortcut.id());
         Ok(())
     }
@@ -248,7 +252,7 @@ impl<R: Runtime> GlobalShortcut<R> {
         {
             let mapped_shortcuts = mapped_shortcuts.clone();
             #[rustfmt::skip]
-            run_main_thread!(self.app, self.manager, |m| m.0.unregister_all(&mapped_shortcuts))?;
+            run_main_thread!(self.app, self.manager, |m| m.unregister_all(&mapped_shortcuts))?;
         }
 
         for s in mapped_shortcuts {
@@ -272,7 +276,7 @@ impl<R: Runtime> GlobalShortcut<R> {
     pub async fn unregister_all(&self) -> Result<()> {
         let hotkeys = self.get_hotkeys().await;
         #[rustfmt::skip]
-        run_main_thread!(self.app, self.manager, |m| m.0.unregister_all(hotkeys.as_slice()))?;
+        run_main_thread!(self.app, self.manager, |m| m.unregister_all(hotkeys.as_slice()))?;
         self.shortcuts.clear();
         Ok(())
     }
@@ -298,7 +302,7 @@ impl<R: Runtime> GlobalShortcut<R> {
 
         let hotkeys = self.get_hotkeys().await;
         #[rustfmt::skip]
-        run_main_thread!(self.app, self.manager, |m| m.0.unregister_all(hotkeys.as_slice()))?;
+        run_main_thread!(self.app, self.manager, |m| m.unregister_all(hotkeys.as_slice()))?;
         *self.is_paused.write().await = true;
         Ok(())
     }
@@ -310,7 +314,7 @@ impl<R: Runtime> GlobalShortcut<R> {
 
         let hotkeys = self.get_hotkeys().await;
         #[rustfmt::skip]
-        run_main_thread!(self.app, self.manager, |m| m.0.register_all(hotkeys.as_slice()))?;
+        run_main_thread!(self.app, self.manager, |m| m.register_all(hotkeys.as_slice()))?;
         *self.is_paused.write().await = false;
         Ok(())
     }

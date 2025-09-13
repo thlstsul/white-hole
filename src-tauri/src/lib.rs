@@ -4,7 +4,7 @@ use tauri::{Manager, Webview, async_runtime};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use time::macros::format_description;
 
-use crate::{browser::Browser, error::FrameworkError};
+use crate::{browser::Browser, error::SetupError};
 
 mod browser;
 mod command;
@@ -23,7 +23,7 @@ mod update;
 mod url;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() -> Result<(), FrameworkError> {
+pub fn run() -> Result<(), SetupError> {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
@@ -31,39 +31,40 @@ pub fn run() -> Result<(), FrameworkError> {
 
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _| {
-            let Some(window) = app.get_window("main") else {
-                return;
-            };
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+                let Some(window) = app.get_window("main") else {
+                    return;
+                };
 
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
-            if args.len() < 2 {
-                // 命令不带参数
-                return;
-            }
-
-            async_runtime::spawn({
-                let url = args[1].clone();
-                async move {
-                    use crate::browser::BrowserExt as _;
-
-                    let browser = window.browser();
-                    let url = url::parse_keyword(None, &url).await.expect("非法链接");
-                    browser
-                        .open_tab_by_url(&url, true)
-                        .await
-                        .expect("打开链接失败");
-                    browser
-                        .state_changed(None)
-                        .await
-                        .expect("浏览器状态同步失败");
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+                if args.len() < 2 {
+                    // 命令不带参数
+                    return;
                 }
-            });
-        }));
 
-        builder = builder.plugin(tauri_plugin_window_state::Builder::new().build());
+                async_runtime::spawn({
+                    let url = args[1].clone();
+                    async move {
+                        use crate::browser::BrowserExt as _;
+
+                        let browser = window.browser();
+                        let url = url::parse_keyword(None, &url).await.expect("非法链接");
+                        browser
+                            .open_tab_by_url(&url, true)
+                            .await
+                            .expect("打开链接失败");
+                        browser
+                            .state_changed(None)
+                            .await
+                            .expect("浏览器状态同步失败");
+                    }
+                });
+            }))
+            .plugin(tauri_plugin_window_state::Builder::new().build())
+            .plugin(shortcut::plugin()?);
     }
 
     builder
