@@ -301,8 +301,7 @@ impl<R: Runtime> GlobalShortcut<R> {
         }
 
         let hotkeys = self.get_hotkeys().await;
-        #[rustfmt::skip]
-        run_main_thread!(self.app, self.manager, |m| m.unregister_all(hotkeys.as_slice()))?;
+        self.manager.unregister_all(hotkeys.as_slice())?;
         *self.is_paused.write().await = true;
         Ok(())
     }
@@ -313,8 +312,7 @@ impl<R: Runtime> GlobalShortcut<R> {
         }
 
         let hotkeys = self.get_hotkeys().await;
-        #[rustfmt::skip]
-        run_main_thread!(self.app, self.manager, |m| m.register_all(hotkeys.as_slice()))?;
+        self.manager.register_all(hotkeys.as_slice())?;
         *self.is_paused.write().await = false;
         Ok(())
     }
