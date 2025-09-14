@@ -313,7 +313,17 @@ impl TabMap {
             .scan_async(|_, tab| {
                 let _ = tab
                     .set_size(size)
-                    .inspect_err(|e| error!("设置窗口大小失败：{e}"));
+                    .inspect_err(|e| error!("设置webview大小失败：{e}"));
+            })
+            .await;
+    }
+
+    pub async fn set_position(&self, position: LogicalPosition<f64>) {
+        self.0
+            .scan_async(|_, tab| {
+                let _ = tab
+                    .set_position(position)
+                    .inspect_err(|e| error!("设置webview位置失败：{e}"));
             })
             .await;
     }

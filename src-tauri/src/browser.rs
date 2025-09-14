@@ -390,6 +390,28 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn fullscreen_changed(&self, is_fullscreen: bool) -> Result<(), FrameworkError> {
+        self.window.set_fullscreen(is_fullscreen)?;
+        let scale_factor = self.window.scale_factor()?;
+        let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
+        if !is_fullscreen {
+            web_size.height -= Webview::TITLE_HEIGHT;
+        }
+        self.tabs.set_size(web_size).await;
+        self.tabs
+            .set_position(if is_fullscreen {
+                LogicalPosition::new(0., 0.)
+            } else {
+                LogicalPosition::new(0., Webview::TITLE_HEIGHT)
+            })
+            .await;
+        Ok(())
+    }
+
+    pub async fn fullsreen(&self) -> Result<(), FrameworkError> {
+        self.fullscreen_changed(!self.window.is_fullscreen()?).await
+    }
+
     fn init_mainview() -> WebviewBuilder<Wry> {
         tauri::webview::WebviewBuilder::new(
             Webview::MAINVIEW_LABEL,

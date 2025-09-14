@@ -33,6 +33,7 @@ pub fn plugin() -> Result<TauriPlugin<Wry>> {
             Shortcut::new(Some(Modifiers::CONTROL), Code::KeyL),
             Shortcut::new(Some(Modifiers::CONTROL), Code::KeyW),
             Shortcut::new(Some(Modifiers::CONTROL), Code::Tab),
+            Shortcut::new(None, Code::F11),
         ])?
         .with_handler(|app_handle, shortcut, event| {
             if event.state != ShortcutState::Pressed {
@@ -48,22 +49,21 @@ pub fn plugin() -> Result<TauriPlugin<Wry>> {
                     let mut state_changed = false;
                     if shortcut.matches(Modifiers::ALT, Code::ArrowLeft) {
                         browser.back().await;
-                    }
-                    if shortcut.matches(Modifiers::ALT, Code::ArrowRight) {
+                    } else if shortcut.matches(Modifiers::ALT, Code::ArrowRight) {
                         browser.forward().await;
-                    }
-                    if shortcut.matches(Modifiers::CONTROL, Code::KeyT)
+                    } else if shortcut.matches(Modifiers::CONTROL, Code::KeyT)
                         || shortcut.matches(Modifiers::CONTROL, Code::KeyL)
                     {
                         state_changed = browser.focus().await?;
-                    }
-                    if shortcut.matches(Modifiers::CONTROL, Code::KeyW) {
+                    } else if shortcut.matches(Modifiers::CONTROL, Code::KeyW) {
                         browser.close_tab().await?;
                         state_changed = true;
-                    }
-                    if shortcut.matches(Modifiers::CONTROL, Code::Tab) {
+                    } else if shortcut.matches(Modifiers::CONTROL, Code::Tab) {
                         state_changed = browser.next_tab().await?;
+                    } else if shortcut.matches(Modifiers::empty(), Code::F11) {
+                        browser.fullsreen().await?;
                     }
+
                     if state_changed {
                         browser.state_changed(None).await?;
                     }

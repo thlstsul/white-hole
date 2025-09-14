@@ -101,7 +101,8 @@ pub fn run() -> Result<(), SetupError> {
             maximize,
             unmaximize,
             close,
-            start_dragging
+            start_dragging,
+            fullscreen_changed,
         ])
         .on_window_event(|window, event| {
             async_runtime::spawn({

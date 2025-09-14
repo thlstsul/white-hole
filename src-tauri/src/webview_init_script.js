@@ -27,6 +27,14 @@ if (window.self == window.top) {
     },
     false,
   );
+
+  document.addEventListener("fullscreenchange", function () {
+    if (document.fullscreenElement) {
+      fullscreenChanged(true);
+    } else {
+      fullscreenChanged(false);
+    }
+  });
 }
 
 function iconChanged(iconUrl) {
@@ -43,6 +51,10 @@ function replaceHistoryState() {
 
 function popHistoryState() {
   window.__TAURI__.core.invoke("pop_history_state");
+}
+
+function fullscreenChanged(isFullscreen) {
+  window.__TAURI__.core.invoke("fullscreen_changed", { isFullscreen });
 }
 
 function getIcon() {

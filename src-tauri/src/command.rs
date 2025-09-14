@@ -271,3 +271,21 @@ pub async fn pop_history_state(
     browser.push_history_state(webview.label()).await?;
     Ok(())
 }
+
+#[command]
+pub async fn fullscreen_changed(
+    browser: State<'_, Browser>,
+    webview: Webview,
+    is_fullscreen: bool,
+) -> Result<(), FrameworkError> {
+    if webview.is_main() {
+        return Ok(());
+    }
+
+    info!(
+        "{} webview fullscreen changed: {is_fullscreen}",
+        webview.label()
+    );
+    browser.fullscreen_changed(is_fullscreen).await?;
+    Ok(())
+}
