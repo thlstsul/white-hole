@@ -103,6 +103,7 @@ pub fn run() -> Result<(), SetupError> {
             close,
             start_dragging,
             fullscreen_changed,
+            leave_picture_in_picture,
         ])
         .on_window_event(|window, event| {
             async_runtime::spawn({

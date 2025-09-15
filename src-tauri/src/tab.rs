@@ -395,7 +395,7 @@ impl TabMap {
     }
 
     pub async fn next(&self, label: &str) -> Option<String> {
-        if self.0.len() < 2 {
+        if self.0.is_empty() {
             return None;
         }
 
@@ -427,7 +427,7 @@ impl TabMap {
     }
 
     pub async fn near(&self, label: &str) -> Option<String> {
-        if self.0.len() < 2 {
+        if self.0.is_empty() {
             return None;
         }
 

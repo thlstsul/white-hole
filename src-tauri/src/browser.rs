@@ -412,6 +412,13 @@ impl Browser {
         self.fullscreen_changed(!self.window.is_fullscreen()?).await
     }
 
+    pub async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
+        self.is_focused.set(false).await;
+        self.tabs.top(label, &self.window).await?;
+        self.label.set(label.to_string()).await;
+        Ok(())
+    }
+
     fn init_mainview() -> WebviewBuilder<Wry> {
         tauri::webview::WebviewBuilder::new(
             Webview::MAINVIEW_LABEL,
@@ -429,13 +436,6 @@ impl Browser {
         let label = tab.label().to_string();
         self.label.set(label.clone()).await;
         self.tabs.insert(label, tab).await;
-        Ok(())
-    }
-
-    async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
-        self.is_focused.set(false).await;
-        self.tabs.top(label, &self.window).await?;
-        self.label.set(label.to_string()).await;
         Ok(())
     }
 

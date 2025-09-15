@@ -289,3 +289,16 @@ pub async fn fullscreen_changed(
     browser.fullscreen_changed(is_fullscreen).await?;
     Ok(())
 }
+
+#[command]
+pub async fn leave_picture_in_picture(
+    browser: State<'_, Browser>,
+    webview: Webview,
+) -> Result<(), FrameworkError> {
+    if webview.is_main() {
+        return Ok(());
+    }
+
+    browser.switch_tab(webview.label()).await?;
+    Ok(())
+}
