@@ -38,23 +38,23 @@ if (window.self == window.top) {
 }
 
 function iconChanged(iconUrl) {
-  window.__TAURI__.core.invoke("icon_changed", { iconUrl });
+  window.__TAURI_INTERNALS__.invoke("icon_changed", { iconUrl });
 }
 
 function pushHistoryState() {
-  window.__TAURI__.core.invoke("push_history_state");
+  window.__TAURI_INTERNALS__.invoke("push_history_state");
 }
 
 function replaceHistoryState() {
-  window.__TAURI__.core.invoke("replace_history_state");
+  window.__TAURI_INTERNALS__.invoke("replace_history_state");
 }
 
 function popHistoryState() {
-  window.__TAURI__.core.invoke("pop_history_state");
+  window.__TAURI_INTERNALS__.invoke("pop_history_state");
 }
 
 function fullscreenChanged(isFullscreen) {
-  window.__TAURI__.core.invoke("fullscreen_changed", { isFullscreen });
+  window.__TAURI_INTERNALS__.invoke("fullscreen_changed", { isFullscreen });
 }
 
 function getIcon() {

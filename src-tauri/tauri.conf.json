@@ -10,7 +10,7 @@
     "frontendDist": "../dist/public"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "security": {
       "csp": null
     }
