@@ -4,7 +4,7 @@ use tauri::{Manager, Webview, async_runtime};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use time::macros::format_description;
 
-use crate::{browser::Browser, error::SetupError};
+use crate::{browser::Browser, error::SetupError, user_agent::setup_user_agent};
 
 mod browser;
 mod command;
@@ -21,9 +21,12 @@ mod tab;
 mod task;
 mod update;
 mod url;
+mod user_agent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), SetupError> {
+    setup_user_agent();
+
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())

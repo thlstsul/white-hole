@@ -15,6 +15,7 @@ use crate::{
     browser::{Browser, BrowserExt},
     error::{FrameworkError, StateError},
     state::BrowserState,
+    user_agent::get_user_agent,
 };
 
 pub struct Tab {
@@ -50,6 +51,7 @@ impl Tab {
         let webview = window.add_child(
             tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
                 .initialization_script(include_str!("webview_init_script.js"))
+                .user_agent(&get_user_agent())
                 .incognito(incognito)
                 .devtools(true)
                 .zoom_hotkeys_enabled(true)

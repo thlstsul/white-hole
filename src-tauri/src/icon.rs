@@ -2,11 +2,12 @@ use std::sync::OnceLock;
 
 use cached::proc_macro::cached;
 use get_data_url::GetDataUrl;
-use log::error;
+use log::{error, info};
+use reqwest::Client;
 use sqlx::{SqlitePool, sqlite::SqliteQueryResult};
 use tauri::async_runtime;
 
-use crate::error::IconError;
+use crate::{error::IconError, user_agent::get_user_agent};
 
 static GET_DATA_URL: OnceLock<GetDataUrl> = OnceLock::new();
 
@@ -28,13 +29,13 @@ pub async fn get_icon_data_url(pool: &SqlitePool, url: &str) -> Result<String, I
 
         async move {
             let get_date_url = GET_DATA_URL.get_or_init(|| {
-            let Ok(client) = reqwest::Client::builder()
-                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0")
-                .build() else {
+                let user_agent = get_user_agent();
+                info!("User-Agent: {}", user_agent);
+                let Ok(client) = Client::builder().user_agent(user_agent).build() else {
                     return GetDataUrl::new();
                 };
-            GetDataUrl::with_client(client)
-        });
+                GetDataUrl::with_client(client)
+            });
             let Ok(data_url) = get_date_url
                 .fetch(&url)
                 .await
