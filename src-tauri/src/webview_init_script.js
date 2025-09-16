@@ -24,6 +24,7 @@ if (window.self == window.top) {
     "DOMContentLoaded",
     function () {
       iconChanged(getIcon());
+      addListener2Video();
     },
     false,
   );
@@ -57,6 +58,10 @@ function fullscreenChanged(isFullscreen) {
   window.__TAURI_INTERNALS__.invoke("fullscreen_changed", { isFullscreen });
 }
 
+function leavePictureInPicture() {
+  window.__TAURI_INTERNALS__.invoke("leave_picture_in_picture");
+}
+
 function getIcon() {
   var iconUrl = "/favicon.ico";
   // 检查link标签
@@ -68,4 +73,12 @@ function getIcon() {
   }
 
   return new URL(iconUrl, window.location.href).href;
+}
+
+function addListener2Video() {
+  document.querySelectorAll("video").forEach(function (video) {
+    video.addEventListener("leavepictureinpicture", function () {
+      leavePictureInPicture();
+    });
+  });
 }
