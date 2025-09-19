@@ -51,13 +51,13 @@ pub async fn save_log(
 
                 async move {
                     let _ = sqlx::query!(
-                    "update navigation_log set title = ?, icon_id = ?, times = times + 1, last_time = datetime('now', 'localtime') where id = ?",
-                    title,
-                    icon_id,
-                    id
-                )
-                .execute(&pool)
-                .await.inspect_err(|e| error!("update navigation log failed: {e}"));
+                        "update navigation_log set title = ?, icon_id = ?, times = times + 1, last_time = datetime('now', 'localtime') where id = ?",
+                        title,
+                        icon_id,
+                        id
+                    )
+                    .execute(&pool)
+                    .await.inspect_err(|e| error!("update navigation log failed: {e}"));
                 }
             });
         }
@@ -65,10 +65,11 @@ pub async fn save_log(
         id
     } else {
         let result = sqlx::query!(
-            "insert into navigation_log (url, title, icon_id, star, times, last_time) values (?, ?, ?, false, 0, datetime('now', 'localtime'))",
+            "insert into navigation_log (url, icon_id, star, times, last_time) values (?, ?, false, 0, datetime('now', 'localtime')) on conflict(url) do update set title = ?, icon_id = ?, times = times + 1, last_time = datetime('now', 'localtime')",
             url,
+            icon_id,
             title,
-            icon_id
+            icon_id,
         )
         .execute(pool)
         .await?;
