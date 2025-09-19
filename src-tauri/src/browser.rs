@@ -6,7 +6,6 @@ use crate::{
     log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
     page::PageToken,
     public_suffix::get_public_suffix_cached,
-    shortcut::GlobalShortcutExt,
     state::{Boolean, BrowserState},
     tab::{Tab, TabIndex, TabMap},
     task,
@@ -15,9 +14,9 @@ use crate::{
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::{
     App, AppHandle, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder,
-    WebviewUrl, Window, WindowEvent, Wry, async_runtime, window::Color,
+    WebviewUrl, Window, Wry, async_runtime, window::Color,
 };
-use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
+use tauri_plugin_window_state::{StateFlags, WindowExt};
 
 pub struct Browser {
     db: Database,
@@ -86,30 +85,6 @@ impl Browser {
 
         browser.open_tab_by_url(url, true).await?;
         browser.state_changed(None).await?;
-        Ok(())
-    }
-
-    pub async fn on_window_event(window: &Window, event: &WindowEvent) -> Result<(), WindowError> {
-        match event {
-            WindowEvent::Resized(_) => {
-                let browser = window.browser();
-                browser.resize().await?;
-                browser.state_changed(None).await?;
-            }
-            WindowEvent::Focused(true) => {
-                let shortcut = window.global_shortcut();
-                shortcut.resume().await?;
-            }
-            WindowEvent::Focused(false) => {
-                let shortcut = window.global_shortcut();
-                shortcut.pause().await?;
-            }
-            WindowEvent::Destroyed => {
-                window.app_handle().save_window_state(StateFlags::all())?;
-            }
-            _ => {}
-        }
-
         Ok(())
     }
 
@@ -408,7 +383,7 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn fullsreen(&self) -> Result<(), FrameworkError> {
+    pub async fn fullscreen(&self) -> Result<(), FrameworkError> {
         self.fullscreen_changed(!self.window.is_fullscreen()?).await
     }
 

@@ -9,9 +9,6 @@ error_set! {
     FrameworkError = {
         Tauri(tauri::Error),
     };
-    ShortcutError = {
-        Shortcut(crate::shortcut::Error),
-    };
     DatabaseError = {
         Execute(sqlx::Error),
         Migrate(sqlx::migrate::MigrateError),
@@ -20,14 +17,14 @@ error_set! {
         DbConnect(sqlx::Error),
         Task(delay_timer::error::TaskError),
         Migarate(sqlx::migrate::MigrateError),
-    } || FrameworkError || ParseError || ShortcutError;
+    } || FrameworkError || ParseError;
     TabError = StateError || FrameworkError || ParseError;
     StateError = {
         NoMainView
     } || FrameworkError || DatabaseError || IconError;
     WindowError = {
         WindowState(tauri_plugin_window_state::Error),
-    } || ShortcutError || FrameworkError || StateError;
+    } || FrameworkError || StateError;
     IconError = {
         GetDataUrl(get_data_url::Error),
         SaveIcon(sqlx::Error),

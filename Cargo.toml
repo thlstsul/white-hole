@@ -14,16 +14,22 @@ futures-util = "0.3.31"
 js-sys = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
-tauri-sys = { branch = "v2", features = ["core", "event"], git = "https://github.com/JonasKruckenberg/tauri-sys" }
+tauri-sys = { branch = "v2", features = [
+    "core",
+    "event",
+], git = "https://github.com/JonasKruckenberg/tauri-sys" }
 time = { version = "0.3", features = [
-  "formatting",
-  "macros",
-  "serde",
-  "wasm-bindgen",
+    "formatting",
+    "macros",
+    "serde",
+    "wasm-bindgen",
 ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
+
+[patch.crates-io]
+tauri = { git = "https://github.com/thlstsul/tauri", branch = "device-events" }
 
 [profile.dev]
 incremental = true

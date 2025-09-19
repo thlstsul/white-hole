@@ -1,27 +1,48 @@
 use ::log::error;
 use command::*;
-use tauri::{Manager, Webview, async_runtime};
+use tauri::{
+    AppHandle, DeviceEvent, DeviceId, Manager, Runtime, Webview, Window, WindowEvent,
+    async_runtime, plugin::TauriPlugin,
+};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
+use tauri_plugin_window_state::{AppHandleExt as _, StateFlags};
 use time::macros::format_description;
 
-use crate::{browser::Browser, error::SetupError, user_agent::setup_user_agent};
+use crate::{
+    browser::{Browser, BrowserExt as _},
+    error::SetupError,
+    hotkey::HotkeyManagerExt,
+    user_agent::setup_user_agent,
+};
 
 mod browser;
 mod command;
 mod database;
 mod error;
+mod hotkey;
 mod icon;
 mod log;
 mod macros;
 mod page;
 mod public_suffix;
-mod shortcut;
 mod state;
 mod tab;
 mod task;
 mod update;
 mod url;
 mod user_agent;
+
+pub trait IsMainView {
+    const TITLE_HEIGHT: f64 = 40.;
+    const MAINVIEW_LABEL: &str = "main-view";
+    fn is_main(&self) -> bool;
+}
+
+impl IsMainView for Webview {
+    fn is_main(&self) -> bool {
+        self.label() == Self::MAINVIEW_LABEL
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), SetupError> {
@@ -30,57 +51,20 @@ pub fn run() -> Result<(), SetupError> {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
-        .plugin(setup_log().build());
+        .plugin(setup_log());
 
     #[cfg(desktop)]
     {
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(|app, args, _| {
-                let Some(window) = app.get_window("main") else {
-                    return;
-                };
-
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-                if args.len() < 2 {
-                    // 命令不带参数
-                    return;
-                }
-
-                async_runtime::spawn({
-                    let url = args[1].clone();
-                    async move {
-                        use crate::browser::BrowserExt as _;
-
-                        let browser = window.browser();
-                        let url = url::parse_keyword(None, &url).await.expect("非法链接");
-                        browser
-                            .open_tab_by_url(&url, true)
-                            .await
-                            .expect("打开链接失败");
-                        browser
-                            .state_changed(None)
-                            .await
-                            .expect("浏览器状态同步失败");
-                    }
-                });
-            }))
+            .plugin(tauri_plugin_single_instance::init(single_instance_init))
             .plugin(tauri_plugin_window_state::Builder::new().build())
-            .plugin(shortcut::plugin()?);
+            .plugin(hotkey::setup());
     }
 
     builder
         .setup(|app| {
             Browser::setup(app)?;
-            async_runtime::spawn({
-                let app_handle = app.handle().clone();
-                async move {
-                    if let Err(e) = update::update(app_handle).await {
-                        error!("检查更新失败: {}", e);
-                    }
-                }
-            });
+            update::update(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -108,29 +92,80 @@ pub fn run() -> Result<(), SetupError> {
             fullscreen_changed,
             leave_picture_in_picture,
         ])
-        .on_window_event(|window, event| {
-            async_runtime::spawn({
-                let w = window.clone();
-                let e = event.clone();
-
-                async move {
-                    let _ = Browser::on_window_event(&w, &e)
-                        .await
-                        .inspect_err(|e| error!("窗口事件处理失败：{e}"));
-                }
-            });
-        })
+        .on_window_event(on_window_event)
+        .on_device_event(on_device_event)
         .run(tauri::generate_context!())?;
     Ok(())
 }
 
-fn setup_log() -> tauri_plugin_log::Builder {
+fn single_instance_init(app: &AppHandle, args: Vec<String>, _cwd: String) {
+    let Some(window) = app.get_window("main") else {
+        return;
+    };
+
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+    if args.len() < 2 {
+        // 命令不带参数
+        return;
+    }
+
+    async_runtime::spawn({
+        let url = args[1].clone();
+        async move {
+            use crate::browser::BrowserExt as _;
+
+            let browser = window.browser();
+            let url = url::parse_keyword(None, &url).await.expect("非法链接");
+            browser
+                .open_tab_by_url(&url, true)
+                .await
+                .expect("打开链接失败");
+            browser
+                .state_changed(None)
+                .await
+                .expect("浏览器状态同步失败");
+        }
+    });
+}
+
+fn on_window_event(window: &Window, event: &WindowEvent) {
+    async_runtime::spawn({
+        let window = window.clone();
+        let event = event.clone();
+
+        async move {
+            if let WindowEvent::Destroyed = event
+                && let Err(e) = window.app_handle().save_window_state(StateFlags::all())
+            {
+                error!("保存窗口状态失败：{e}");
+            } else if let WindowEvent::Resized(_) = event {
+                let browser = window.browser();
+                if let Err(e) = browser.resize().await {
+                    error!("重置浏览器大小失败：{e}");
+                } else if let Err(e) = browser.state_changed(None).await {
+                    error!("浏览器状态同步失败：{e}");
+                }
+            }
+        }
+    });
+}
+
+fn on_device_event<ID: DeviceId>(app: &AppHandle, _id: ID, event: DeviceEvent) {
+    if let DeviceEvent::Key { pysical_key, state } = event {
+        let hotkey = app.hotkey();
+        hotkey.handle_key_event(pysical_key, state);
+    }
+}
+
+fn setup_log<R: Runtime>() -> TauriPlugin<R> {
     use ::log::LevelFilter;
 
     let time_format =
         format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]");
 
-    if cfg!(debug_assertions) {
+    let builder = if cfg!(debug_assertions) {
         use colored::Colorize as _;
         use fern::colors::{Color, ColoredLevelConfig};
 
@@ -198,17 +233,7 @@ fn setup_log() -> tauri_plugin_log::Builder {
                     message
                 ));
             })
-    }
-}
+    };
 
-pub trait IsMainView {
-    const TITLE_HEIGHT: f64 = 40.;
-    const MAINVIEW_LABEL: &str = "main-view";
-    fn is_main(&self) -> bool;
-}
-
-impl IsMainView for Webview {
-    fn is_main(&self) -> bool {
-        self.label() == Self::MAINVIEW_LABEL
-    }
+    builder.build()
 }
