@@ -1,5 +1,25 @@
-use keyboard::{Code, Modifiers};
-use std::collections::HashSet;
+use keyboard_types::{Code, KeyState, Modifiers};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+use tauri::{AppHandle, Runtime};
+
+type HandlerFn<R> = Box<dyn Fn(&AppHandle<R>, &Hotkey, KeyState) + Send + Sync + 'static>;
+
+pub struct HotkeyManager<R: Runtime> {
+    pressed_keys: HashSet<Code>,
+    hotkeys: HashMap<Hotkey, Arc<HandlerFn<R>>>,
+}
+
+impl<R: Runtime> HotkeyManager<R> {
+    pub fn new() -> Self {
+        Self {
+            pressed_keys: HashSet::new(),
+            hotkeys: HashMap::new(),
+        }
+    }
+}
 
 fn codes2modifiers(pressed_codes: &HashSet<Code>) -> Modifiers {
     pressed_codes
@@ -23,10 +43,6 @@ fn codes2modifiers(pressed_codes: &HashSet<Code>) -> Modifiers {
                 Some(Modifiers::SCROLL_LOCK)
             } else if *c == Code::FnLock {
                 Some(Modifiers::FN_LOCK)
-            } else if *c == Code::Super {
-                Some(Modifiers::SUPER)
-            } else if *c == Code::Hyper {
-                Some(Modifiers::HYPER)
             } else {
                 None
             }
