@@ -167,11 +167,6 @@ impl<R: Runtime> HotkeyManager<R> {
             if self.pressed_keys.insert(key).is_ok() {
                 // 键按下时检查快捷键
                 self.check_hotkeys();
-            } else {
-                error!(
-                    "处理按键事件失败，已按下按键：{:?}，当前按键：{}",
-                    self.pressed_keys, key
-                );
             }
         } else {
             self.pressed_keys.remove(&key);

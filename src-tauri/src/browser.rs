@@ -313,6 +313,17 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn fullscreen(&self) -> Result<(), FrameworkError> {
+        self.fullscreen_changed(!self.window.is_fullscreen()?).await
+    }
+
+    pub async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
+        self.is_focused.set(false).await;
+        self.tabs.top(label, &self.window).await?;
+        self.label.set(label.to_string()).await;
+        Ok(())
+    }
+
     pub async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
         let pool = self.db.get().await;
         Ok(save_log(&pool, log).await?)
@@ -383,14 +394,9 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn fullscreen(&self) -> Result<(), FrameworkError> {
-        self.fullscreen_changed(!self.window.is_fullscreen()?).await
-    }
-
-    pub async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
-        self.is_focused.set(false).await;
-        self.tabs.top(label, &self.window).await?;
-        self.label.set(label.to_string()).await;
+    /// 重新聚焦webview
+    pub async fn focus_changed(&self) -> Result<(), FrameworkError> {
+        // TODO Webview::set_focus 生效，但会使webview闪动（或许只是光标闪动）
         Ok(())
     }
 
