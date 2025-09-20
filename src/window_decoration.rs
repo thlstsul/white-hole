@@ -23,6 +23,7 @@ pub fn WindowDecoration(#[props(default)] class: String) -> Element {
 fn Minimize(#[props(default)] class: String) -> Element {
     rsx! {
         button {
+            tabindex: "-1",
             class: "window-minimize btn btn-square btn-ghost {class}",
             id: "window-minimize",
             onclick: |_| async { minimize().await },
@@ -44,6 +45,7 @@ fn Minimize(#[props(default)] class: String) -> Element {
 fn Close(#[props(default)] class: String) -> Element {
     rsx! {
         button {
+            tabindex: "-1",
             class: "window-close btn btn-square btn-ghost btn-secondary {class}",
             id: "window-close",
             onclick: |_| async { close().await },
@@ -78,6 +80,7 @@ fn MaximizeOr(#[props(default)] class: String) -> Element {
 fn Maximize(#[props(default)] class: String) -> Element {
     rsx! {
         button {
+            tabindex: "-1",
             class: "window-maximize btn btn-square btn-ghost btn-primary {class}",
             id: "window-maximize",
             onclick: |_| async { maximize().await },
@@ -99,6 +102,7 @@ fn Maximize(#[props(default)] class: String) -> Element {
 fn Unmaximize(#[props(default)] class: String) -> Element {
     rsx! {
         button {
+            tabindex: "-1",
             class: "window-unmaximize btn btn-square btn-ghost btn-primary {class}",
             id: "window-unmaximize",
             onclick: |_| async { unmaximize().await },

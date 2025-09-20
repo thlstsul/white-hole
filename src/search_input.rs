@@ -51,11 +51,11 @@ pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> 
             input {
                 r#type: "search",
                 placeholder: "搜索",
+                autocomplete: "off",
                 value: keyword,
                 oninput: move |e| {
                     keyword.set(e.value());
                 },
-                autocomplete: "off",
                 onmounted: move |element| input_element.set(Some(element.data())),
             }
 

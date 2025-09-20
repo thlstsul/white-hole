@@ -25,6 +25,7 @@ fn Back(#[props(default)] class: String) -> Element {
 
     rsx! {
         button {
+            tabindex: "-1",
             class: "btn btn-square btn-ghost join-item",
             disabled: !can_back(),
             onclick: |_| async { back().await },
@@ -46,6 +47,7 @@ fn Forward(#[props(default)] class: String) -> Element {
 
     rsx! {
         button {
+            tabindex: "-1",
             class: "forward btn btn-square btn-ghost {class}",
             disabled: !can_forward(),
             onclick: |_| async { forward().await },
@@ -78,6 +80,7 @@ fn ReloadOr(#[props(default)] class: String) -> Element {
 fn Reload(#[props(default)] class: String) -> Element {
     rsx! {
         button {
+            tabindex: "-1",
             class: "go btn btn-square btn-ghost {class}",
             onclick: |_| async { reload().await },
 
@@ -96,6 +99,7 @@ fn Reload(#[props(default)] class: String) -> Element {
 fn Loading(#[props(default)] class: String) -> Element {
     rsx! {
         button {
+            tabindex: "-1",
             class: "btn btn-square btn-ghost {class}",
             span {
                 class: "loading loading-ring loading-lg",
