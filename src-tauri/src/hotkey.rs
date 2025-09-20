@@ -20,6 +20,7 @@ pub fn setup() -> TauriPlugin<Wry> {
             hotket_manager.register(Hotkey::new(Modifiers::ALT, Code::ArrowRight), forward);
             hotket_manager.register(Hotkey::new(Modifiers::CONTROL, Code::KeyT), focus);
             hotket_manager.register(Hotkey::new(Modifiers::CONTROL, Code::KeyL), focus);
+            hotket_manager.register(Hotkey::new(Modifiers::empty(), Code::Escape), blur);
             hotket_manager.register(Hotkey::new(Modifiers::CONTROL, Code::KeyW), close_tab);
             hotket_manager.register(Hotkey::new(Modifiers::CONTROL, Code::Tab), next_tab);
             hotket_manager.register(Hotkey::new(Modifiers::empty(), Code::F11), fullscreen);
@@ -57,7 +58,28 @@ fn focus(app_handle: &AppHandle) {
 
         async move {
             let browser = app_handle.browser();
-            if let Ok(true) = browser.focus().await
+            if let Ok(true) = browser
+                .focus()
+                .await
+                .inspect_err(|e| error!("浏览器焦点失败：{e}"))
+                && let Err(e) = browser.state_changed(None).await
+            {
+                error!("浏览器状态同步失败：{e}");
+            }
+        }
+    });
+}
+
+fn blur(app_handle: &AppHandle) {
+    async_runtime::spawn({
+        let app_handle = app_handle.clone();
+
+        async move {
+            let browser = app_handle.browser();
+            if let Ok(true) = browser
+                .blur()
+                .await
+                .inspect_err(|e| error!("浏览器焦点失败：{e}"))
                 && let Err(e) = browser.state_changed(None).await
             {
                 error!("浏览器状态同步失败：{e}");
@@ -136,13 +158,20 @@ impl<R: Runtime> HotkeyManager<R> {
             .inspect_err(|(k, _)| error!("注册快捷键 {:?} 失败", k));
     }
 
+    pub fn clear_pressed(&self) {
+        self.pressed_keys.clear();
+    }
+
     pub fn handle_key_event(&self, key: Code, state: KeyState) {
         if state == KeyState::Down {
             if self.pressed_keys.insert(key).is_ok() {
                 // 键按下时检查快捷键
                 self.check_hotkeys();
             } else {
-                error!("处理按键事件失败");
+                error!(
+                    "处理按键事件失败，已按下按键：{:?}，当前按键：{}",
+                    self.pressed_keys, key
+                );
             }
         } else {
             self.pressed_keys.remove(&key);

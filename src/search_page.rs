@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
-    api::{PageToken, blur, open_tab, query_navigation_log, update_star},
+    api::{PageToken, open_tab, query_navigation_log, update_star},
     app::Browser,
     search_input::SearchInput,
     settings::Settings,
@@ -52,9 +52,6 @@ pub fn SearchPage() -> Element {
                     if let Some(focus_log) = focus_log() {
                         keyword.set(focus_log.url.clone());
                     };
-                } else if e.key() == Key::Escape {
-                    e.prevent_default();
-                    blur().await;
                 }
             },
 

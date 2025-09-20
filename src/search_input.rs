@@ -2,10 +2,7 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
-use crate::{
-    api::{blur, search},
-    app::Browser,
-};
+use crate::{api::search, app::Browser};
 
 #[component]
 pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> Element {
@@ -22,9 +19,6 @@ pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> 
     let keypress = move |e: KeyboardEvent| async move {
         if e.key() == Key::Enter {
             let _ = search(keyword()).await;
-        } else if e.key() == Key::Escape {
-            e.prevent_default();
-            blur().await;
         }
     };
 

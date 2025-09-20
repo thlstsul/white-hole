@@ -99,6 +99,7 @@ pub async fn focus() {
     invoke::<()>("focus", &()).await;
 }
 
+#[allow(dead_code)]
 pub async fn blur() {
     invoke::<()>("blur", &()).await;
 }
