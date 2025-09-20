@@ -65,7 +65,7 @@ pub async fn save_log(
         id
     } else {
         let result = sqlx::query!(
-            "insert into navigation_log (url, icon_id, star, times, last_time) values (?, ?, false, 0, datetime('now', 'localtime')) on conflict(url) do update set title = ?, icon_id = ?, times = times + 1, last_time = datetime('now', 'localtime')",
+            "insert into navigation_log (url, icon_id, star, times, last_time, title) values (?, ?, false, 0, datetime('now', 'localtime'), '') on conflict(url) do update set title = ?, icon_id = ?, times = times + 1",
             url,
             icon_id,
             title,
