@@ -11,12 +11,14 @@ use crate::{
     task,
     url::parse_keyword,
 };
+use log::error;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::{
-    App, AppHandle, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder,
-    WebviewUrl, Window, Wry, async_runtime, window::Color,
+    App, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl,
+    Window, Wry, async_runtime, window::Color,
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
+use tokio::join;
 
 pub struct Browser {
     db: Database,
@@ -80,19 +82,13 @@ impl Browser {
         })
     }
 
-    pub async fn on_new_window(app_handle: &AppHandle, url: &Url) -> Result<(), TabError> {
-        let browser = app_handle.browser();
-
-        browser.open_tab_by_url(url, true).await?;
-        browser.state_changed(None).await?;
-        Ok(())
-    }
-
-    pub async fn resize(&self) -> Result<(), FrameworkError> {
+    pub async fn resize(&self) -> Result<(), StateError> {
         let scale_factor = self.window.scale_factor()?;
         let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
         web_size.height -= Webview::TITLE_HEIGHT;
         self.tabs.set_size(web_size).await;
+
+        self.state_changed(None).await?;
         Ok(())
     }
 
@@ -105,6 +101,7 @@ impl Browser {
             self.switch_tab(&near_label).await?;
         }
 
+        self.join_state_focus_changed().await;
         Ok(())
     }
 
@@ -119,6 +116,8 @@ impl Browser {
         } else {
             self.create_tab(url, true).await?;
         }
+
+        self.join_state_focus_changed().await;
         Ok(())
     }
 
@@ -130,30 +129,45 @@ impl Browser {
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             self.create_tab(&Url::parse(&url)?, true).await?;
         }
+
+        self.join_state_focus_changed().await;
         Ok(())
     }
 
-    pub async fn next_tab(&self) -> Result<bool, TabError> {
+    pub async fn next_tab(&self) -> Result<(), TabError> {
         let label = self.label.get().await;
-        let mut is_switch = false;
         if let Some(next_label) = self.tabs.next(&label).await {
             self.switch_tab(&next_label).await?;
-            is_switch = true;
-        }
 
-        Ok(is_switch)
+            self.join_state_focus_changed().await;
+        }
+        Ok(())
     }
 
     pub async fn is_current_tab(&self, label: &str) -> bool {
         self.label.eq(label).await
     }
 
-    pub async fn change_tab_title(&self, label: &str, title: String) {
+    pub async fn change_tab_title(&self, label: &str, title: String) -> Result<(), StateError> {
         self.tabs.set_title(label, title).await;
+
+        let state = self.get_state(None).await?;
+        if self.is_current_tab(label).await {
+            self.state_changed(Some(state.clone())).await?;
+        }
+        self.save_navigation_log(state.into()).await?;
+        Ok(())
     }
 
-    pub async fn change_tab_icon(&self, label: &str, icon_url: String) {
+    pub async fn change_tab_icon(&self, label: &str, icon_url: String) -> Result<(), StateError> {
         self.tabs.set_icon(label, icon_url).await;
+
+        let state = self.get_state(None).await?;
+        if self.is_current_tab(label).await {
+            self.state_changed(Some(state.clone())).await?;
+        }
+        self.save_navigation_log(state.into()).await?;
+        Ok(())
     }
 
     pub async fn change_tab_loading_state(
@@ -216,34 +230,43 @@ impl Browser {
         parse_keyword(public_suffix, keyword).await
     }
 
-    pub fn maximize(&self) -> Result<(), FrameworkError> {
-        Ok(self.window.maximize()?)
+    pub async fn maximize(&self) -> Result<(), StateError> {
+        self.window.maximize()?;
+
+        self.join_state_focus_changed().await;
+        Ok(())
     }
 
-    pub fn unmaximize(&self) -> Result<(), FrameworkError> {
-        Ok(self.window.unmaximize()?)
+    pub async fn unmaximize(&self) -> Result<(), StateError> {
+        self.window.unmaximize()?;
+
+        self.join_state_focus_changed().await;
+        Ok(())
     }
 
-    pub async fn focus(&self) -> Result<bool, FrameworkError> {
+    pub async fn focus(&self) -> Result<(), StateError> {
         if !self.is_focused.set(true).await {
-            return Ok(false);
+            return Ok(());
         }
 
         self.mainview.reparent(&self.window)?;
-        Ok(true)
+
+        self.join_state_focus_changed().await;
+        Ok(())
     }
 
-    pub async fn blur(&self) -> Result<bool, FrameworkError> {
+    pub async fn blur(&self) -> Result<(), StateError> {
         if !self.is_focused.set(false).await {
-            return Ok(false);
+            return Ok(());
         }
 
         let label = self.label.get().await;
-        if label.is_empty() {
-            return Ok(true);
+        if !label.is_empty() {
+            self.tabs.top(&label, &self.window).await?;
         }
-        self.tabs.top(&label, &self.window).await?;
-        Ok(true)
+
+        self.join_state_focus_changed().await;
+        Ok(())
     }
 
     pub async fn back(&self) {
@@ -309,7 +332,7 @@ impl Browser {
             self.incognito.set(true).await;
             self.db.migrate_memory().await?;
         }
-
+        self.state_changed(None).await?;
         Ok(())
     }
 
@@ -322,11 +345,6 @@ impl Browser {
         self.tabs.top(label, &self.window).await?;
         self.label.set(label.to_string()).await;
         Ok(())
-    }
-
-    pub async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
-        let pool = self.db.get().await;
-        Ok(save_log(&pool, log).await?)
     }
 
     pub async fn query_navigation_log(
@@ -364,18 +382,6 @@ impl Browser {
         Ok(state)
     }
 
-    pub async fn state_changed(&self, state: Option<BrowserState>) -> Result<(), StateError> {
-        let state = if let Some(state) = state {
-            state
-        } else {
-            self.get_state(None).await?
-        };
-
-        self.window
-            .emit_to(Webview::MAINVIEW_LABEL, "state-changed", state)?;
-        Ok(())
-    }
-
     pub async fn fullscreen_changed(&self, is_fullscreen: bool) -> Result<(), FrameworkError> {
         self.window.set_fullscreen(is_fullscreen)?;
         let scale_factor = self.window.scale_factor()?;
@@ -396,7 +402,12 @@ impl Browser {
 
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<(), FrameworkError> {
-        // TODO Webview::set_focus 生效，但会使webview闪动（或许只是光标闪动）
+        if self.is_focused.get().await || self.label.get().await.is_empty() {
+            self.mainview.set_focus()?;
+        } else {
+            self.tabs.set_focus(&self.label.get().await).await?;
+        }
+
         Ok(())
     }
 
@@ -408,6 +419,7 @@ impl Browser {
         .auto_resize()
         .transparent(true)
         .zoom_hotkeys_enabled(false)
+        .focused(true)
         .devtools(cfg!(debug_assertions))
     }
 
@@ -420,9 +432,34 @@ impl Browser {
         Ok(())
     }
 
+    async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
+        let pool = self.db.get().await;
+        Ok(save_log(&pool, log).await?)
+    }
+
     async fn get_icon_data_url(&self, url: &str) -> Result<String, IconError> {
         let pool = self.db.get().await;
         get_icon_data_url(&pool, url).await
+    }
+
+    async fn join_state_focus_changed(&self) {
+        match join!(self.state_changed(None), self.focus_changed()) {
+            (Err(e), _) => error!("同步浏览器状态失败: {e}"),
+            (_, Err(e)) => error!("变更浏览器焦点失败: {e}"),
+            _ => {}
+        }
+    }
+
+    async fn state_changed(&self, state: Option<BrowserState>) -> Result<(), StateError> {
+        let state = if let Some(state) = state {
+            state
+        } else {
+            self.get_state(None).await?
+        };
+
+        self.window
+            .emit_to(Webview::MAINVIEW_LABEL, "state-changed", state)?;
+        Ok(())
     }
 }
 

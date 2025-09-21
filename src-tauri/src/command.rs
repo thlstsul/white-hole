@@ -25,8 +25,8 @@ pub async fn maximize(browser: State<'_, Browser>, mainview: Webview) -> Result<
         return Ok(());
     }
 
-    browser.maximize()?;
-    browser.state_changed(None).await
+    browser.maximize().await?;
+    Ok(())
 }
 
 #[command]
@@ -35,8 +35,8 @@ pub async fn unmaximize(browser: State<'_, Browser>, mainview: Webview) -> Resul
         return Ok(());
     }
 
-    browser.unmaximize()?;
-    browser.state_changed(None).await
+    browser.unmaximize().await?;
+    Ok(())
 }
 
 #[command]
@@ -63,9 +63,7 @@ pub async fn focus(browser: State<'_, Browser>, mainview: Webview) -> Result<(),
         return Ok(());
     }
 
-    if browser.focus().await? {
-        browser.state_changed(None).await?;
-    }
+    browser.focus().await?;
     Ok(())
 }
 
@@ -75,9 +73,7 @@ pub async fn blur(browser: State<'_, Browser>, mainview: Webview) -> Result<(), 
         return Ok(());
     }
 
-    if browser.blur().await? {
-        browser.state_changed(None).await?;
-    }
+    browser.blur().await?;
     Ok(())
 }
 
@@ -107,7 +103,6 @@ pub async fn search(
         return Ok(());
     };
     browser.open_tab_by_url(&url, true).await?;
-    browser.state_changed(None).await?;
     Ok(())
 }
 
@@ -122,7 +117,6 @@ pub async fn open_tab(
     }
 
     browser.open_tab(id).await?;
-    browser.state_changed(None).await?;
     Ok(())
 }
 
@@ -177,7 +171,6 @@ pub async fn incognito(browser: State<'_, Browser>, mainview: Webview) -> Result
     }
 
     browser.incognito().await?;
-    browser.state_changed(None).await?;
     Ok(())
 }
 
@@ -220,13 +213,7 @@ pub async fn icon_changed(
 
     let label = webview.label();
     info!("{label} webview icon changed {icon_url}");
-    browser.change_tab_icon(label, icon_url).await;
-
-    let state = browser.get_state(None).await?;
-    if browser.is_current_tab(label).await {
-        browser.state_changed(Some(state.clone())).await?;
-    }
-    browser.save_navigation_log(state.into()).await?;
+    browser.change_tab_icon(label, icon_url).await?;
     Ok(())
 }
 

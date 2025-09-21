@@ -58,13 +58,8 @@ fn focus(app_handle: &AppHandle) {
 
         async move {
             let browser = app_handle.browser();
-            if let Ok(true) = browser
-                .focus()
-                .await
-                .inspect_err(|e| error!("浏览器焦点失败：{e}"))
-                && let Err(e) = browser.state_changed(None).await
-            {
-                error!("浏览器状态同步失败：{e}");
+            if let Err(e) = browser.focus().await {
+                error!("浏览器焦点失败：{e}");
             }
         }
     });
@@ -76,13 +71,8 @@ fn blur(app_handle: &AppHandle) {
 
         async move {
             let browser = app_handle.browser();
-            if let Ok(true) = browser
-                .blur()
-                .await
-                .inspect_err(|e| error!("浏览器焦点失败：{e}"))
-                && let Err(e) = browser.state_changed(None).await
-            {
-                error!("浏览器状态同步失败：{e}");
+            if let Err(e) = browser.blur().await {
+                error!("浏览器焦点失败：{e}");
             }
         }
     });
@@ -97,9 +87,6 @@ fn close_tab(app_handle: &AppHandle) {
             if let Err(e) = browser.close_tab().await {
                 error!("关闭标签失败: {e}");
             }
-            if let Err(e) = browser.state_changed(None).await {
-                error!("浏览器状态同步失败：{e}");
-            }
         }
     });
 }
@@ -110,10 +97,8 @@ fn next_tab(app_handle: &AppHandle) {
 
         async move {
             let browser = app_handle.browser();
-            if let Ok(true) = browser.next_tab().await
-                && let Err(e) = browser.state_changed(None).await
-            {
-                error!("浏览器状态同步失败：{e}");
+            if let Err(e) = browser.next_tab().await {
+                error!("浏览器切换标签失败：{e}");
             }
         }
     });

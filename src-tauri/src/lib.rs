@@ -122,10 +122,6 @@ fn single_instance_init(app: &AppHandle, args: Vec<String>, _cwd: String) {
                 .open_tab_by_url(&url, true)
                 .await
                 .expect("打开链接失败");
-            browser
-                .state_changed(None)
-                .await
-                .expect("浏览器状态同步失败");
         }
     });
 }
@@ -144,20 +140,12 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
                 let browser = window.browser();
                 if let Err(e) = browser.resize().await {
                     error!("重置浏览器大小失败：{e}");
-                } else if let Err(e) = browser.state_changed(None).await {
-                    error!("浏览器状态同步失败：{e}");
                 }
-            } else if let WindowEvent::Focused(is_focused) = event {
-                if is_focused {
-                    let browser = window.browser();
-                    if let Err(e) = browser.focus_changed().await {
-                        error!("聚焦webview失败：{e}");
-                    }
-                } else {
-                    // 窗口失去焦点时，清空残留已按下按键
-                    let hotkey = window.hotkey();
-                    hotkey.clear_pressed();
-                }
+            } else if let WindowEvent::Focused(true) = event {
+                // 窗口失去焦点时，清空残留已按下按键
+                let hotkey = window.hotkey();
+                hotkey.clear_pressed();
+                // TODO Webview::set_focus 后，会触发 WindowEvent::Focused 事件；如何使切换窗口后自动获得焦点？
             }
         }
     });

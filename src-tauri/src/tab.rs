@@ -3,7 +3,7 @@ use std::ops::Deref;
 use log::{error, info};
 use scc::HashMap;
 use tauri::{
-    LogicalPosition, LogicalSize, Manager as _, Webview, WebviewUrl, Window,
+    AppHandle, LogicalPosition, LogicalSize, Manager as _, Webview, WebviewUrl, Window,
     async_runtime::{self, RwLock},
     webview::{NewWindowResponse, PageLoadEvent},
 };
@@ -12,8 +12,8 @@ use uuid::Uuid;
 
 use crate::{
     IsMainView as _,
-    browser::{Browser, BrowserExt},
-    error::{FrameworkError, StateError},
+    browser::BrowserExt,
+    error::{FrameworkError, StateError, TabError},
     state::BrowserState,
     user_agent::get_user_agent,
 };
@@ -55,13 +55,14 @@ impl Tab {
                 .incognito(incognito)
                 .devtools(true)
                 .zoom_hotkeys_enabled(true)
+                .focused(true)
                 .on_new_window(move |url, _| {
                     async_runtime::spawn({
                         let url = url.clone();
                         let app_handle = app_handle.clone();
 
                         async move {
-                            if let Err(e) = Browser::on_new_window(&app_handle, &url).await {
+                            if let Err(e) = on_new_window(&app_handle, &url).await {
                                 error!("{e}");
                             }
                         }
@@ -310,6 +311,14 @@ impl TabMap {
         Ok(())
     }
 
+    pub async fn set_focus(&self, label: &str) -> Result<(), FrameworkError> {
+        self.0
+            .read_async(label, |_, tab| tab.set_focus())
+            .await
+            .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
+        Ok(())
+    }
+
     pub async fn set_size(&self, size: LogicalSize<f64>) {
         self.0
             .scan_async(|_, tab| {
@@ -456,19 +465,18 @@ impl TabMap {
     }
 }
 
+async fn on_new_window(app_handle: &AppHandle, url: &Url) -> Result<(), TabError> {
+    let browser = app_handle.browser();
+    browser.open_tab_by_url(url, true).await?;
+    Ok(())
+}
+
 async fn on_document_title_changed(webview: Webview, title: String) -> Result<(), StateError> {
     let label = webview.label();
     info!("{label} webview title changed: {title}");
 
     let browser = webview.browser();
-    browser.change_tab_title(label, title).await;
-
-    let state = browser.get_state(None).await?;
-    if browser.is_current_tab(label).await {
-        browser.state_changed(Some(state.clone())).await?;
-    }
-    browser.save_navigation_log(state.into()).await?;
-
+    browser.change_tab_title(label, title).await?;
     Ok(())
 }
 

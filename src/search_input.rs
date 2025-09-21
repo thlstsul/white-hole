@@ -52,6 +52,7 @@ pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> 
                 r#type: "search",
                 placeholder: "搜索",
                 autocomplete: "off",
+                autofocus: true,
                 value: keyword,
                 oninput: move |e| {
                     keyword.set(e.value());
