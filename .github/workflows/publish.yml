@@ -48,8 +48,10 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
+      - name: Install cargo-binstall
+        run: cargo install cargo-binstall
       - name: Dioxus
-        run: cargo install dioxus-cli
+        run: cargo binstall dioxus-cli
 
       - name: Build & Publish
         uses: tauri-apps/tauri-action@v0
