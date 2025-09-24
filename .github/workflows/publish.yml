@@ -50,8 +50,17 @@ jobs:
 
       - name: Install cargo-binstall
         run: cargo install cargo-binstall
+
       - name: Dioxus
         run: cargo binstall dioxus-cli
+
+      - name: Install sqlx-cli
+        run: cargo binstall sqlx-cli
+
+      - name: Create database
+        run: sqlx database create
+      - name: Migrate database
+        run: sqlx migrate run
 
       - name: Build & Publish
         uses: tauri-apps/tauri-action@v0
