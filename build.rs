@@ -53,11 +53,7 @@ fn main() {
     println!("cargo:rerun-if-changed=./src");
 }
 
-pub fn run_command_safely(
-    command: &str,
-    args: &[&str],
-    output_file: Option<&str>,
-) -> io::Result<()> {
+fn run_command_safely(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {
     // 根据编译模式选择执行方式
     if is_release_build() {
         // Release 模式：同步执行
@@ -97,9 +93,10 @@ fn run_sync(command: &str, args: &[&str], output_file: Option<&str>) -> io::Resu
 
     let status = cmd.status()?;
     if !status.success() {
-        return Err(io::Error::other(
-            format!("Command failed with exit code: {:?}", status.code()),
-        ));
+        return Err(io::Error::other(format!(
+            "Command failed with exit code: {:?}",
+            status.code()
+        )));
     }
 
     Ok(())
