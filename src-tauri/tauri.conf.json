@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2.8.0",
-  "productName": "白洞",
+  "productName": "white-hole",
   "version": "0.1.0",
   "identifier": "com.thlstsul.white-hole",
   "build": {
