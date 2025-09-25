@@ -11,32 +11,49 @@ use crate::{
 };
 
 #[command]
-pub fn minimize(window: Window, mainview: Webview) {
-    if !mainview.is_main() {
-        return;
-    }
-
-    let _ = window.minimize().inspect_err(|e| error!("最小化失败：{e}"));
-}
-
-#[command]
-pub async fn maximize(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
+pub async fn minimize(
+    browser: State<'_, Browser>,
+    window: Window,
+    mainview: Webview,
+) -> Result<(), FrameworkError> {
     if !mainview.is_main() {
         return Ok(());
     }
 
-    browser.maximize().await?;
-    Ok(())
+    if let Err(e) = window.minimize() {
+        error!("最小化失败：{e}");
+    }
+    browser.focus_changed().await
 }
 
 #[command]
-pub async fn unmaximize(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
+pub async fn maximize(
+    browser: State<'_, Browser>,
+    mainview: Webview,
+) -> Result<(), FrameworkError> {
     if !mainview.is_main() {
         return Ok(());
     }
 
-    browser.unmaximize().await?;
-    Ok(())
+    if let Err(e) = browser.maximize().await {
+        error!("最大化失败：{e}");
+    }
+    browser.focus_changed().await
+}
+
+#[command]
+pub async fn unmaximize(
+    browser: State<'_, Browser>,
+    mainview: Webview,
+) -> Result<(), FrameworkError> {
+    if !mainview.is_main() {
+        return Ok(());
+    }
+
+    if let Err(e) = browser.unmaximize().await {
+        error!("取消最大化失败：{e}");
+    }
+    browser.focus_changed().await
 }
 
 #[command]
@@ -48,13 +65,19 @@ pub fn close(window: Window, mainview: Webview) {
 }
 
 #[command]
-pub fn start_dragging(window: Window, mainview: Webview) {
+pub async fn start_dragging(
+    browser: State<'_, Browser>,
+    window: Window,
+    mainview: Webview,
+) -> Result<(), FrameworkError> {
     if !mainview.is_main() {
-        return;
+        return Ok(());
     }
-    let _ = window
-        .start_dragging()
-        .inspect_err(|e| error!("开始拖拽失败：{e}"));
+
+    if let Err(e) = window.start_dragging() {
+        error!("开始拖拽失败：{e}");
+    }
+    browser.focus_changed().await
 }
 
 #[command]
@@ -127,6 +150,7 @@ pub async fn back(browser: State<'_, Browser>, mainview: Webview) -> Result<(), 
     }
 
     browser.back().await;
+    browser.focus_changed().await?;
     Ok(())
 }
 
@@ -137,7 +161,7 @@ pub async fn forward(browser: State<'_, Browser>, mainview: Webview) -> Result<(
     }
 
     browser.forward().await;
-    Ok(())
+    browser.focus_changed().await
 }
 
 #[command]
@@ -151,7 +175,7 @@ pub async fn go(
     }
 
     browser.go(index).await;
-    Ok(())
+    browser.focus_changed().await
 }
 
 #[command]
@@ -161,7 +185,7 @@ pub async fn reload(browser: State<'_, Browser>, mainview: Webview) -> Result<()
     }
 
     browser.reload().await;
-    Ok(())
+    browser.focus_changed().await
 }
 
 #[command]
@@ -286,6 +310,8 @@ pub async fn leave_picture_in_picture(
         return Ok(());
     }
 
-    browser.switch_tab(webview.label()).await?;
-    Ok(())
+    if let Err(e) = browser.leave_picture_in_picture(webview.label()).await {
+        error!("退出画中画失败：{e}");
+    }
+    browser.focus_changed().await
 }

@@ -61,6 +61,9 @@ fn focus(app_handle: &AppHandle) {
             if let Err(e) = browser.focus().await {
                 error!("浏览器焦点失败：{e}");
             }
+            if let Err(e) = browser.focus_changed().await {
+                error!("浏览器焦点变化失败：{e}");
+            }
         }
     });
 }
@@ -73,6 +76,9 @@ fn blur(app_handle: &AppHandle) {
             let browser = app_handle.browser();
             if let Err(e) = browser.blur().await {
                 error!("浏览器焦点失败：{e}");
+            }
+            if let Err(e) = browser.focus_changed().await {
+                error!("浏览器焦点变化失败：{e}");
             }
         }
     });
@@ -87,6 +93,9 @@ fn close_tab(app_handle: &AppHandle) {
             if let Err(e) = browser.close_tab().await {
                 error!("关闭标签失败: {e}");
             }
+            if let Err(e) = browser.focus_changed().await {
+                error!("浏览器焦点变化失败：{e}");
+            }
         }
     });
 }
@@ -99,6 +108,9 @@ fn next_tab(app_handle: &AppHandle) {
             let browser = app_handle.browser();
             if let Err(e) = browser.next_tab().await {
                 error!("浏览器切换标签失败：{e}");
+            }
+            if let Err(e) = browser.focus_changed().await {
+                error!("浏览器焦点变化失败：{e}");
             }
         }
     });

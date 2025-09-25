@@ -11,14 +11,12 @@ use crate::{
     task,
     url::parse_keyword,
 };
-use log::error;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::{
     App, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl,
     Window, Wry, async_runtime, window::Color,
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
-use tokio::join;
 
 pub struct Browser {
     db: Database,
@@ -101,7 +99,7 @@ impl Browser {
             self.switch_tab(&near_label).await?;
         }
 
-        self.join_state_focus_changed().await;
+        self.state_changed(None).await?;
         Ok(())
     }
 
@@ -116,8 +114,10 @@ impl Browser {
         } else {
             self.create_tab(url, true).await?;
         }
+        self.is_focused.set(false).await;
 
-        self.join_state_focus_changed().await;
+        self.state_changed(None).await?;
+        self.focus_changed().await?;
         Ok(())
     }
 
@@ -129,8 +129,10 @@ impl Browser {
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             self.create_tab(&Url::parse(&url)?, true).await?;
         }
+        self.is_focused.set(false).await;
 
-        self.join_state_focus_changed().await;
+        self.state_changed(None).await?;
+        self.focus_changed().await?;
         Ok(())
     }
 
@@ -139,7 +141,7 @@ impl Browser {
         if let Some(next_label) = self.tabs.next(&label).await {
             self.switch_tab(&next_label).await?;
 
-            self.join_state_focus_changed().await;
+            self.state_changed(None).await?;
         }
         Ok(())
     }
@@ -233,14 +235,14 @@ impl Browser {
     pub async fn maximize(&self) -> Result<(), StateError> {
         self.window.maximize()?;
 
-        self.join_state_focus_changed().await;
+        self.state_changed(None).await?;
         Ok(())
     }
 
     pub async fn unmaximize(&self) -> Result<(), StateError> {
         self.window.unmaximize()?;
 
-        self.join_state_focus_changed().await;
+        self.state_changed(None).await?;
         Ok(())
     }
 
@@ -251,7 +253,7 @@ impl Browser {
 
         self.mainview.reparent(&self.window)?;
 
-        self.join_state_focus_changed().await;
+        self.state_changed(None).await?;
         Ok(())
     }
 
@@ -265,7 +267,7 @@ impl Browser {
             self.tabs.top(&label, &self.window).await?;
         }
 
-        self.join_state_focus_changed().await;
+        self.state_changed(None).await?;
         Ok(())
     }
 
@@ -341,7 +343,6 @@ impl Browser {
     }
 
     pub async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
-        self.is_focused.set(false).await;
         self.tabs.top(label, &self.window).await?;
         self.label.set(label.to_string()).await;
         Ok(())
@@ -400,6 +401,12 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn leave_picture_in_picture(&self, label: &str) -> Result<(), StateError> {
+        self.switch_tab(label).await?;
+        self.state_changed(None).await?;
+        Ok(())
+    }
+
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<(), FrameworkError> {
         if self.is_focused.get().await || self.label.get().await.is_empty() {
@@ -425,7 +432,6 @@ impl Browser {
 
     async fn create_tab(&self, url: &Url, _active: bool) -> Result<(), FrameworkError> {
         let tab = Tab::new(&self.window, url, self.incognito.get().await)?;
-        self.is_focused.set(false).await;
         let label = tab.label().to_string();
         self.label.set(label.clone()).await;
         self.tabs.insert(label, tab).await;
@@ -440,14 +446,6 @@ impl Browser {
     async fn get_icon_data_url(&self, url: &str) -> Result<String, IconError> {
         let pool = self.db.get().await;
         get_icon_data_url(&pool, url).await
-    }
-
-    async fn join_state_focus_changed(&self) {
-        match join!(self.state_changed(None), self.focus_changed()) {
-            (Err(e), _) => error!("同步浏览器状态失败: {e}"),
-            (_, Err(e)) => error!("变更浏览器焦点失败: {e}"),
-            _ => {}
-        }
     }
 
     async fn state_changed(&self, state: Option<BrowserState>) -> Result<(), StateError> {
