@@ -72,7 +72,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: v__VERSION__
           releaseBody: "See the assets to download this version and install."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
 
       - run: mkdir public && mv latest.json public/white-hole-latest.json
@@ -80,5 +80,6 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          external_repository: thlstsul/thlstsul.github.io
           publish_dir: ./public
           keep_files: true
