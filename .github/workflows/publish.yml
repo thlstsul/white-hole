@@ -75,6 +75,23 @@ jobs:
           releaseDraft: false
           prerelease: false
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: white-hole-latest
+          path: latest.json
+
+  deploy-update:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: publish-tauri # 等待所有平台的publish-tauri job完成
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: white-hole-latest
+
       - run: mkdir public && mv latest.json public/white-hole-latest.json
       - name: Deploy update
         uses: peaceiris/actions-gh-pages@v4
