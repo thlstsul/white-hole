@@ -18,6 +18,9 @@ use tauri::{
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
 
+const WIDTH: f64 = 800.;
+const HEIGHT: f64 = 600.;
+
 pub struct Browser {
     db: Database,
     window: Window,
@@ -41,9 +44,6 @@ impl Browser {
                 let pool = SqlitePoolOptions::new().connect_with(options).await?;
                 sqlx::migrate!("../migrations").run(&pool).await?;
             }
-
-            const WIDTH: f64 = 800.;
-            const HEIGHT: f64 = 600.;
 
             let window = tauri::window::WindowBuilder::new(app, "main")
                 .title("白洞")
@@ -83,6 +83,11 @@ impl Browser {
     pub async fn resize(&self) -> Result<(), StateError> {
         let scale_factor = self.window.scale_factor()?;
         let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
+        if self.label.get().await.is_empty() || web_size.height < HEIGHT || web_size.width < WIDTH {
+            // 无TAB或最小化后，不需要变更大小
+            return Ok(());
+        }
+
         web_size.height -= Webview::TITLE_HEIGHT;
         self.tabs.set_size(web_size).await;
 

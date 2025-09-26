@@ -17,6 +17,7 @@ fn insert_public_suffix() -> Result<(), Box<dyn std::error::Error>> {
     let mut sql_file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open("../migrations/99999999999999_insert_public_suffix.sql")?;
     sql_file.write_all(sql.as_bytes())?;
 
