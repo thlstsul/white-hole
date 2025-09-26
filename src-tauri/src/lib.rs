@@ -141,7 +141,7 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
                 if let Err(e) = browser.resize().await {
                     error!("重置浏览器大小失败：{e}");
                 }
-            } else if let WindowEvent::Focused(true) = event {
+            } else if let WindowEvent::Focused(false) = event {
                 // 窗口失去焦点时，清空残留已按下按键
                 let hotkey = window.hotkey();
                 hotkey.clear_pressed();
