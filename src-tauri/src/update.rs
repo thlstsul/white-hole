@@ -9,7 +9,7 @@ pub fn update(app: tauri::AppHandle) {
             return;
         };
 
-        let Ok(Some(_update)) = updater
+        let Ok(Some(update)) = updater
             .check()
             .await
             .inspect_err(|e| error!("检查更新失败：{e}"))
@@ -17,6 +17,9 @@ pub fn update(app: tauri::AppHandle) {
             return;
         };
 
-        // TODO: 提交到下载器
+        // TODO: 提交到下载器，避免重复下载
+        if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
+            error!("下载更新失败：{e}");
+        }
     });
 }
