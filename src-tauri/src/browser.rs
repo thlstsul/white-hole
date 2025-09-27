@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     IsMainView,
     database::{DB_NAME, Database},
@@ -14,9 +16,12 @@ use crate::{
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::{
     App, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl,
-    Window, Wry, async_runtime, window::Color,
+    Window, Wry,
+    async_runtime::{self, Mutex},
+    window::Color,
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
+use tokio::time::Instant;
 
 const WIDTH: f64 = 800.;
 const HEIGHT: f64 = 600.;
@@ -29,6 +34,7 @@ pub struct Browser {
     tabs: TabMap,
     is_focused: Boolean,
     incognito: Boolean,
+    last_focus_changed: Mutex<Instant>,
 }
 
 impl Browser {
@@ -71,6 +77,7 @@ impl Browser {
                 tabs: TabMap::new(),
                 is_focused: Boolean::default(),
                 incognito: Boolean::default(),
+                last_focus_changed: Mutex::new(Instant::now()),
             };
             app.manage(state);
 
@@ -414,11 +421,18 @@ impl Browser {
 
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<(), FrameworkError> {
+        let now = Instant::now();
+        let mut last_focus_changed = self.last_focus_changed.lock().await;
+        if now.duration_since(*last_focus_changed) < Duration::from_millis(50) {
+            return Ok(());
+        }
+
         if self.is_focused.get().await || self.label.get().await.is_empty() {
             self.mainview.set_focus()?;
         } else {
             self.tabs.set_focus(&self.label.get().await).await?;
         }
+        *last_focus_changed = now;
 
         Ok(())
     }

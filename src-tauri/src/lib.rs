@@ -145,7 +145,12 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
                 // 窗口失去焦点时，清空残留已按下按键
                 let hotkey = window.hotkey();
                 hotkey.clear_pressed();
-                // TODO Webview::set_focus 后，会触发 WindowEvent::Focused 事件；如何使切换窗口后自动获得焦点？
+            } else if let WindowEvent::Focused(true) = event {
+                // Webview::set_focus 后，会触发 WindowEvent::Focused 事件；所以 focus_changed 做了防抖
+                let browser = window.browser();
+                if let Err(e) = browser.focus_changed().await {
+                    error!("聚焦变更失败：{e}");
+                }
             }
         }
     });
