@@ -384,11 +384,6 @@ impl Browser {
             .await
             .unwrap_or(BrowserState::default());
 
-        if !state.icon_url.is_empty()
-            && let Ok(icon_url) = self.get_icon_data_url(&state.icon_url).await
-        {
-            state.icon_url = icon_url;
-        }
         state.maximized = self.window.is_maximized()?;
         state.focus = self.is_focused.get().await;
         state.incognito = self.incognito.get().await;
@@ -469,11 +464,17 @@ impl Browser {
     }
 
     async fn state_changed(&self, state: Option<BrowserState>) -> Result<(), StateError> {
-        let state = if let Some(state) = state {
+        let mut state = if let Some(state) = state {
             state
         } else {
             self.get_state(None).await?
         };
+
+        if !state.icon_url.is_empty()
+            && let Ok(icon_url) = self.get_icon_data_url(&state.icon_url).await
+        {
+            state.icon_url = icon_url;
+        }
 
         self.window
             .emit_to(Webview::MAINVIEW_LABEL, "state-changed", state)?;
