@@ -421,11 +421,11 @@ impl Browser {
     }
 
     /// 重新聚焦webview
-    pub async fn focus_changed(&self) -> Result<(), FrameworkError> {
+    pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
         let now = Instant::now();
         let mut last_focus_changed = self.last_focus_changed.lock().await;
         if now.duration_since(*last_focus_changed) < Duration::from_millis(50) {
-            return Ok(());
+            return Ok(false);
         }
 
         if self.is_focused.get().await || self.label.get().await.is_empty() {
@@ -435,7 +435,7 @@ impl Browser {
         }
         *last_focus_changed = now;
 
-        Ok(())
+        Ok(true)
     }
 
     fn init_mainview() -> WebviewBuilder<Wry> {

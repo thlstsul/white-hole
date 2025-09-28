@@ -142,15 +142,17 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
                 if let Err(e) = browser.resize().await {
                     error!("重置浏览器大小失败：{e}");
                 }
-            } else if let WindowEvent::Focused(false) = event {
-                // 窗口失去焦点时，清空残留已按下按键
-                let hotkey = window.hotkey();
-                hotkey.clear_pressed();
             } else if let WindowEvent::Focused(true) = event {
                 // Webview::set_focus 后，会触发 WindowEvent::Focused 事件；所以 focus_changed 做了防抖
                 let browser = window.browser();
-                if let Err(e) = browser.focus_changed().await {
-                    error!("聚焦变更失败：{e}");
+                if let Ok(true) = browser
+                    .focus_changed()
+                    .await
+                    .inspect_err(|e| error!("聚焦变更失败：{e}"))
+                {
+                    // 窗口重新聚焦时，清空残留已按下按键
+                    let hotkey = window.hotkey();
+                    hotkey.clear_pressed();
                 }
             }
         }
