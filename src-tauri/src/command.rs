@@ -11,19 +11,12 @@ use crate::{
 };
 
 #[command]
-pub async fn minimize(
-    browser: State<'_, Browser>,
-    window: Window,
-    mainview: Webview,
-) -> Result<(), FrameworkError> {
+pub async fn minimize(window: Window, mainview: Webview) -> Result<(), FrameworkError> {
     if !mainview.is_main() {
         return Ok(());
     }
 
-    if let Err(e) = window.minimize() {
-        error!("最小化失败：{e}");
-    }
-    browser.focus_changed().await?;
+    window.minimize()?;
     Ok(())
 }
 
