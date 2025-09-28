@@ -1,8 +1,8 @@
 use log::error;
-use tauri::async_runtime;
+use tauri::{AppHandle, async_runtime};
 use tauri_plugin_updater::UpdaterExt as _;
 
-pub fn update(app: tauri::AppHandle) {
+pub fn update(app: AppHandle) {
     async_runtime::spawn(async move {
         let Ok(updater) = app.updater().inspect_err(|e| error!("创建更新器失败：{e}"))
         else {
