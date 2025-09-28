@@ -1,7 +1,7 @@
 use ::log::error;
 use command::*;
 use tauri::{
-    AppHandle, DeviceEvent, DeviceId, Emitter, Manager, Runtime, Webview, Window, WindowEvent,
+    AppHandle, DeviceEvent, DeviceId, Manager, Runtime, Webview, Window, WindowEvent,
     async_runtime, plugin::TauriPlugin,
 };
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
@@ -65,7 +65,6 @@ pub fn run() -> Result<(), SetupError> {
         .setup(|app| {
             Browser::setup(app)?;
             update::update(app.handle().clone());
-            setup_heartbeat(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -243,18 +242,4 @@ fn setup_log<R: Runtime>() -> TauriPlugin<R> {
     };
 
     builder.build()
-}
-
-/// 定期发送心跳消息保持渲染活跃
-fn setup_heartbeat(app_handle: AppHandle) {
-    async_runtime::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
-        loop {
-            interval.tick().await;
-            // 发送心跳到前端
-            if let Err(e) = app_handle.emit("heartbeat", "") {
-                eprintln!("Failed to send heartbeat: {}", e);
-            }
-        }
-    });
 }
