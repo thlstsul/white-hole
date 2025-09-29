@@ -80,6 +80,7 @@ jobs:
         with:
           name: white-hole-latest
           path: latest.json
+          overwrite: true
 
   deploy-update:
     permissions:
