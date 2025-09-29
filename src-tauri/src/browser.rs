@@ -433,14 +433,6 @@ impl Browser {
         Ok(true)
     }
 
-    pub async fn resume(&self) -> Result<(), FrameworkError> {
-        self.mainview.reparent(&self.window)?;
-        if !self.is_focused.get().await {
-            self.tabs.top(&self.label.get().await, &self.window).await?;
-        }
-        Ok(())
-    }
-
     fn init_mainview() -> WebviewBuilder<Wry> {
         tauri::webview::WebviewBuilder::new(
             Webview::MAINVIEW_LABEL,

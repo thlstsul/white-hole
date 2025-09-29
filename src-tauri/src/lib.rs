@@ -1,7 +1,7 @@
 use ::log::error;
 use command::*;
 use tauri::{
-    AppHandle, DeviceEvent, DeviceId, Manager, RunEvent, Runtime, Webview, Window, WindowEvent,
+    AppHandle, DeviceEvent, DeviceId, Manager, Runtime, Webview, Window, WindowEvent,
     async_runtime, plugin::TauriPlugin,
 };
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
@@ -61,7 +61,7 @@ pub fn run() -> Result<(), SetupError> {
             .plugin(hotkey::setup());
     }
 
-    let app = builder
+    builder
         .setup(|app| {
             Browser::setup(app)?;
             update::update(app.handle().clone());
@@ -94,24 +94,9 @@ pub fn run() -> Result<(), SetupError> {
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)
-        .build(tauri::generate_context!())?;
+        .run(tauri::generate_context!())?;
 
-    app.run(on_app_running);
     Ok(())
-}
-
-fn on_app_running(app_handle: &AppHandle, event: RunEvent) {
-    if let RunEvent::Resumed = event {
-        async_runtime::spawn({
-            let app_handle = app_handle.clone();
-            async move {
-                let browser = app_handle.browser();
-                if let Err(e) = browser.resume().await {
-                    error!("恢复浏览器状态失败：{e}");
-                }
-            }
-        });
-    }
 }
 
 fn single_instance_init(app: &AppHandle, args: Vec<String>, _cwd: String) {
