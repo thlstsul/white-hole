@@ -410,6 +410,7 @@ impl Browser {
     }
 
     pub async fn leave_picture_in_picture(&self, label: &str) -> Result<(), StateError> {
+        self.blur().await?;
         self.switch_tab(label).await?;
         self.state_changed(None).await?;
         Ok(())
