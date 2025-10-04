@@ -24,7 +24,7 @@ pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> 
 
     rsx! {
         label {
-            class: "url input input-ghost input-neutral w-full {class}",
+            class: "url input input-ghost has-[:focus]:outline-none w-full {class}",
             onkeydown: keypress,
 
             svg {
