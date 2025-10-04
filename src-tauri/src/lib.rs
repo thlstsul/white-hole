@@ -49,6 +49,7 @@ pub fn run() -> Result<(), SetupError> {
     setup_user_agent();
 
     let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         // .plugin(tauri_plugin_notification::init())
         .plugin(setup_log());

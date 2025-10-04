@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="WhiteHoleRegistry" Guid="*">
+        <RegistryKey Root="HKCR" Key="WhiteHoleHTM\shell\open\command">
+          <RegistryValue
+                        Type="string"
+                        Value="&quot;[!Path]&quot; &quot;%1&quot;"
+                    />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="WhiteHoleHTM\Application">
+          <RegistryValue
+                        Type="string"
+                        Name="ApplicationIcon"
+                        Value="&quot;[!Path]&quot;,0"
+                    />
+        </RegistryKey>
+      </Component>
+      <Component Id="HttpsRegistry" Guid="*">
+        <RegistryKey
+                    Root="HKCU"
+                    Key="Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice"
+                >
+              <RegistryValue
+                        Type="string"
+                        Name="ProgId"
+                        Value="WhiteHoleHTM"
+                        KeyPath="yes"
+                    />
+        </RegistryKey>
+      </Component>
+      <Component Id="HttpRegistry" Guid="*">
+        <RegistryKey
+                    Root="HKCU"
+                    Key="Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
+                >
+              <RegistryValue
+                        Type="string"
+                        Name="ProgId"
+                        Value="WhiteHoleHTM"
+                        KeyPath="yes"
+                    />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>
