@@ -6,48 +6,64 @@ edition = "2024"
 [workspace]
 members = ["src-tauri"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-dioxus = { version = "0.6", features = ["web"] }
 dioxus-logger = "0.6"
 futures-util = "0.3.31"
 js-sys = "0.3"
-serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
-tauri-sys = { branch = "v2", features = [
-    "core",
-    "event",
-], git = "https://github.com/JonasKruckenberg/tauri-sys" }
-time = { version = "0.3", features = [
-    "formatting",
-    "macros",
-    "serde",
-    "wasm-bindgen",
-] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 
-[patch.crates-io]
-tauri = { git = "https://github.com/thlstsul/tauri", branch = "device-events" }
-tauri-utils = { git = "https://github.com/thlstsul/tauri", branch = "device-events" }
+[dependencies.dioxus]
+features = ["web"]
+version = "0.6"
+
+[dependencies.serde]
+features = ["derive"]
+version = "1"
+
+[dependencies.tauri-sys]
+branch = "v2"
+features = [
+    "core",
+    "event",
+]
+git = "https://github.com/JonasKruckenberg/tauri-sys"
+
+[dependencies.time]
+features = [
+    "formatting",
+    "macros",
+    "serde",
+    "wasm-bindgen",
+]
+version = "0.3"
+
+[patch.crates-io.tauri]
+branch = "device-events"
+git = "https://github.com/thlstsul/tauri"
+
+[patch.crates-io.tauri-utils]
+branch = "device-events"
+git = "https://github.com/thlstsul/tauri"
+
+[profile.android-dev]
+inherits = "dev"
 
 [profile.dev]
 incremental = true
 
 [profile.release]
-opt-level = "s"
-strip = true
-lto = true
-panic = "abort"
 codegen-units = 1
-
-[profile.wasm-dev]
-inherits = "dev"
-opt-level = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
 
 [profile.server-dev]
 inherits = "dev"
 
-[profile.android-dev]
+[profile.wasm-dev]
 inherits = "dev"
+opt-level = 1

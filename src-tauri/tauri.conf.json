@@ -1,23 +1,32 @@
 {
+  "package": null,
   "$schema": "https://schema.tauri.app/config/2.8.0",
-  "productName": "white-hole",
-  "version": "0.1.2",
-  "identifier": "com.thlstsul.white-hole",
-  "build": {
-    "beforeDevCommand": "dx serve --port 1420",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "dx bundle --release",
-    "frontendDist": "../dist/public"
-  },
   "app": {
-    "withGlobalTauri": false,
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": false
+  },
+  "build": {
+    "beforeBuildCommand": "dx bundle --release",
+    "beforeDevCommand": "dx serve --port 1420",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist/public"
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "fileAssociations": [
+      {
+        "ext": [
+          "html",
+          "htm"
+        ],
+        "mimeType": "text/html",
+        "name": "HTML",
+        "role": "Viewer"
+      }
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -25,36 +34,42 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "fileAssociations": [
-      {
-        "ext": ["html", "htm"],
-        "name": "HTML",
-        "mimeType": "text/html",
-        "role": "Viewer"
-      }
-    ],
+    "targets": "all",
     "windows": {
-      "wix": {
-        "language": "zh-CN",
-        "fragmentPaths": ["./windows/registry.wxs"],
-        "componentRefs": ["WhiteHoleRegistry", "HttpsRegistry", "HttpRegistry"]
-      },
       "nsis": {
         "displayLanguageSelector": true,
         "installerHooks": "./windows/registry.nsh"
-      }
-    },
-    "createUpdaterArtifacts": true
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5OUMwMEE0MkMwM0Q4REUKUldUZTJBTXNwQUNjS1pPVTd5ZzZPSmNXdGlld09KNTcyZ1hVSVoyaTVLRDlVc2ZweWRiQ2g2cS8K",
-      "endpoints": ["https://thlstsul.github.io/white-hole-latest.json"]
-    },
-    "deep-link": {
-      "desktop": {
-        "schemes": ["http", "https"]
+      },
+      "wix": {
+        "componentRefs": [
+          "WhiteHoleRegistry",
+          "HttpsRegistry",
+          "HttpRegistry"
+        ],
+        "fragmentPaths": [
+          "./windows/registry.wxs"
+        ],
+        "language": "zh-CN"
       }
     }
-  }
+  },
+  "identifier": "com.thlstsul.white-hole",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    },
+    "updater": {
+      "endpoints": [
+        "https://thlstsul.github.io/white-hole-latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5OUMwMEE0MkMwM0Q4REUKUldUZTJBTXNwQUNjS1pPVTd5ZzZPSmNXdGlld09KNTcyZ1hVSVoyaTVLRDlVc2ZweWRiQ2g2cS8K"
+    }
+  },
+  "productName": "white-hole",
+  "version": "0.1.2"
 }
