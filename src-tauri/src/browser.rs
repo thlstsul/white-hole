@@ -170,7 +170,10 @@ impl Browser {
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
-        self.save_navigation_log(state.into()).await?;
+
+        let log: NavigationLog = state.into();
+        let id = self.save_navigation_log(log).await?;
+        self.tabs.insert_history(label, id).await;
         Ok(())
     }
 
@@ -192,22 +195,8 @@ impl Browser {
     ) -> Result<(), StateError> {
         self.tabs.set_loading(label, loading).await;
 
-        let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
-        if state.url == "about:blank" {
-            // 非http协议的空白页面，关闭当前tab
-            self.tabs.close(label).await?;
-            return Ok(());
-        }
-
-        if loading {
-            let mut log: NavigationLog = state.into();
-            log.title = "".to_string();
-            let id = self.save_navigation_log(log).await?;
-            self.tabs.insert_history(label, id).await;
+            self.state_changed(None).await?;
         }
 
         Ok(())
