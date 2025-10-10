@@ -21,7 +21,7 @@ pub fn SearchPage() -> Element {
 
     use_effect(move || {
         // 输入关键字进行检索、切换模式时，重置页码
-        let _ = (keyword.read(), use_context::<Browser>().incognito);
+        let _ = (keyword.read(), use_context::<Browser>().incognito.read());
         page_token.set(PageToken::default());
         next_page_token.set(None);
     });

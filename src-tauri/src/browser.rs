@@ -335,6 +335,7 @@ impl Browser {
             // 进入无痕模式
             self.incognito.set(true).await;
             self.db.migrate_memory().await?;
+            self.label.set(String::new()).await;
         }
         self.state_changed(None).await?;
         Ok(())
