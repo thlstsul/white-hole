@@ -270,16 +270,13 @@ pub async fn replace_history_state(
 }
 
 #[command]
-pub async fn pop_history_state(
-    browser: State<'_, Browser>,
-    webview: Webview,
-) -> Result<(), StateError> {
+pub async fn hash_changed(browser: State<'_, Browser>, webview: Webview) -> Result<(), StateError> {
     if webview.is_main() {
         return Ok(());
     }
 
-    info!("{} webview pop history state", webview.label());
-    browser.push_history_state(webview.label()).await?;
+    info!("{} webview hash changed", webview.label());
+    browser.hash_changed(webview.label()).await?;
     Ok(())
 }
 

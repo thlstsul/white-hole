@@ -228,6 +228,19 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn hash_changed(&self, label: &str) -> Result<(), StateError> {
+        let state = self.get_state(Some(label)).await?;
+        if self.is_current_tab(label).await {
+            self.state_changed(Some(state.clone())).await?;
+        }
+
+        let log: NavigationLog = state.into();
+        let id = self.save_navigation_log(log).await?;
+        self.tabs.insert_history(label, id).await;
+
+        Ok(())
+    }
+
     pub async fn parse_keyword(&self, keyword: &str) -> Option<Url> {
         let pool = self.db.get().await;
         let public_suffix = get_public_suffix_cached(&pool).await.ok();

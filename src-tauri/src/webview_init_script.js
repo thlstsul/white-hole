@@ -15,10 +15,13 @@ if (window.self == window.top) {
     };
   })(history.replaceState);
 
-  window.addEventListener("popstate", function () {
-    // popstate(hash changed will pop too)
-    popHistoryState();
-  });
+  window.addEventListener(
+    "hashchange",
+    function () {
+      hashChanged();
+    },
+    false,
+  );
 
   window.addEventListener(
     "DOMContentLoaded",
@@ -50,8 +53,8 @@ function replaceHistoryState() {
   window.__TAURI_INTERNALS__.invoke("replace_history_state");
 }
 
-function popHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("pop_history_state");
+function hashChanged() {
+  window.__TAURI_INTERNALS__.invoke("hash_changed");
 }
 
 function fullscreenChanged(isFullscreen) {

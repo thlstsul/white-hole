@@ -25,7 +25,7 @@ pub struct Tab {
     icon_url: String,
     loading: bool,
     incognito: bool,
-    index: i32,
+    index: isize,
     history_states: Vec<i64>,
 }
 
@@ -95,8 +95,8 @@ impl Tab {
             icon_url: String::new(),
             loading: true,
             incognito,
-            index: -1,
             history_states: Vec::new(),
+            index: -1,
         })
     }
 
@@ -139,16 +139,16 @@ impl Tab {
             .find_map(|(i, item)| if *item == id { Some(i) } else { None })
     }
 
-    pub fn insert_history(&mut self, id: i64) -> i32 {
+    pub fn insert_history(&mut self, id: i64) {
         if self.index < 0 {
             self.history_states.push(id);
-            self.index = (self.history_states.len() - 1) as i32;
-            return self.index;
+            self.index = (self.history_states.len() - 1) as isize;
+            return;
         }
 
         let i = self.index as usize;
         if id == self.history_states[i] {
-            return self.index;
+            return;
         }
 
         if i != self.history_states.len() - 1 {
@@ -156,17 +156,23 @@ impl Tab {
         }
         self.history_states.push(id);
         self.index += 1;
-        self.index
+        info!(
+            "insert history, index: {}, history_states: {:?}",
+            self.index, self.history_states
+        );
     }
 
-    pub fn replace_history(&mut self, id: i64) -> i32 {
+    pub fn replace_history(&mut self, id: i64) {
         if self.index < 0 {
             self.history_states.push(id);
-            self.index = (self.history_states.len() - 1) as i32;
+            self.index = (self.history_states.len() - 1) as isize;
         } else {
             self.history_states[self.index as usize] = id;
         }
-        self.index
+        info!(
+            "replace history, index: {}, history_states: {:?}",
+            self.index, self.history_states
+        );
     }
 
     pub fn can_back(&self) -> bool {
@@ -174,7 +180,7 @@ impl Tab {
     }
 
     pub fn can_forward(&self) -> bool {
-        self.index < self.history_states.len() as i32 - 1
+        self.index < self.history_states.len() as isize - 1
     }
 
     pub fn back(&mut self) {
@@ -208,7 +214,7 @@ impl Tab {
     }
 
     pub fn go(&mut self, index: usize) {
-        let index = index as i32;
+        let index = index as isize;
         if self.index != index
             && self
                 .webview
