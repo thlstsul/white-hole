@@ -2,7 +2,13 @@
   "$schema": "https://schema.tauri.app/config/2.8.0",
   "app": {
     "security": {
-      "csp": null
+      "csp": null,
+      "pattern": {
+        "use": "isolation",
+        "options": {
+          "dir": "../isolation"
+        }
+      }
     },
     "withGlobalTauri": false
   },
@@ -17,10 +23,7 @@
     "createUpdaterArtifacts": true,
     "fileAssociations": [
       {
-        "ext": [
-          "html",
-          "htm"
-        ],
+        "ext": ["html", "htm"],
         "mimeType": "text/html",
         "name": "HTML",
         "role": "Viewer"
@@ -40,14 +43,8 @@
         "installerHooks": "./windows/registry.nsh"
       },
       "wix": {
-        "componentRefs": [
-          "WhiteHoleRegistry",
-          "HttpsRegistry",
-          "HttpRegistry"
-        ],
-        "fragmentPaths": [
-          "./windows/registry.wxs"
-        ],
+        "componentRefs": ["WhiteHoleRegistry", "HttpsRegistry", "HttpRegistry"],
+        "fragmentPaths": ["./windows/registry.wxs"],
         "language": "zh-CN"
       }
     }
@@ -56,16 +53,11 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "http",
-          "https"
-        ]
+        "schemes": ["http", "https"]
       }
     },
     "updater": {
-      "endpoints": [
-        "https://thlstsul.github.io/white-hole-latest.json"
-      ],
+      "endpoints": ["https://thlstsul.github.io/white-hole-latest.json"],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5OUMwMEE0MkMwM0Q4REUKUldUZTJBTXNwQUNjS1pPVTd5ZzZPSmNXdGlld09KNTcyZ1hVSVoyaTVLRDlVc2ZweWRiQ2g2cS8K"
     }
   },

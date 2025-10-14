@@ -10,7 +10,7 @@ features = ["blocking"]
 version = "0.12.22"
 
 [build-dependencies.tauri-build]
-features = []
+features = ["isolation"]
 version = "2.4.0"
 
 [dependencies]
@@ -53,6 +53,7 @@ version = "0.8.6"
 
 [dependencies.tauri]
 features = [
+    "isolation",
     "devtools",
     "tray-icon",
     "unstable",
