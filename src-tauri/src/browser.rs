@@ -104,6 +104,10 @@ impl Browser {
     }
 
     pub async fn close_tab(&self) -> Result<(), TabError> {
+        if self.is_focused.get().await {
+            return Ok(());
+        }
+
         let label = self.label.get().await;
         self.tabs.close(&label).await?;
         self.label.set(String::new()).await;
@@ -150,6 +154,10 @@ impl Browser {
     }
 
     pub async fn next_tab(&self) -> Result<(), TabError> {
+        if self.is_focused.get().await {
+            return Ok(());
+        }
+
         let label = self.label.get().await;
         if let Some(next_label) = self.tabs.next(&label).await {
             self.switch_tab(&next_label).await?;
@@ -355,6 +363,10 @@ impl Browser {
     }
 
     pub async fn fullscreen(&self) -> Result<(), FrameworkError> {
+        if self.is_focused.get().await {
+            return Ok(());
+        }
+
         self.fullscreen_changed(!self.window.is_fullscreen()?).await
     }
 
