@@ -32,6 +32,17 @@ if (window.self == window.top) {
     false,
   );
 
+  window.addEventListener("keydown", function (e) {
+    if (e.altKey && e.code === "ArrowLeft") {
+      e.preventDefault();
+    }
+  });
+  window.addEventListener("keydown", function (e) {
+    if (e.altKey && e.code === "ArrowRight") {
+      e.preventDefault();
+    }
+  });
+
   document.addEventListener("fullscreenchange", function () {
     if (document.fullscreenElement) {
       fullscreenChanged(true);

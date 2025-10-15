@@ -56,6 +56,7 @@ impl Browser {
                 .inner_size(WIDTH, HEIGHT)
                 .min_inner_size(WIDTH, HEIGHT)
                 .decorations(false)
+                .transparent(true)
                 .focused(true)
                 .background_color(Color(29, 35, 42, 0))
                 .build()?;
