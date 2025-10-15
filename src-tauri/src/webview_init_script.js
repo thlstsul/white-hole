@@ -33,12 +33,7 @@ if (window.self == window.top) {
   );
 
   window.addEventListener("keydown", function (e) {
-    if (e.altKey && e.code === "ArrowLeft") {
-      e.preventDefault();
-    }
-  });
-  window.addEventListener("keydown", function (e) {
-    if (e.altKey && e.code === "ArrowRight") {
+    if (e.altKey && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
       e.preventDefault();
     }
   });
