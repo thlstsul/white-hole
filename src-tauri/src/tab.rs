@@ -91,7 +91,7 @@ impl Tab {
         Ok(Self {
             webview,
             label,
-            title: String::new(),
+            title: url.to_string(),
             icon_url: String::new(),
             loading: true,
             incognito,
@@ -395,10 +395,14 @@ impl TabMap {
         let state = self
             .0
             .read_async(label, |_, tab| {
+                let mut url = tab.url()?.to_string();
+                if url == "about:blank" {
+                    url = String::new();
+                }
                 Ok(BrowserState {
                     icon_url: tab.icon_url().to_owned(),
                     title: tab.title().to_owned(),
-                    url: tab.url()?.to_string(),
+                    url,
                     loading: tab.loading(),
                     can_back: tab.can_back(),
                     can_forward: tab.can_forward(),

@@ -45,22 +45,39 @@ pub async fn save_log(
     };
 
     let id = if let Some(id) = id {
+        let mut builder: QueryBuilder<Sqlite> = QueryBuilder::new("");
         if !title.is_empty() && icon_id != -1 {
-            async_runtime::spawn({
-                let pool = pool.clone();
-
-                async move {
-                    let _ = sqlx::query!(
-                        "update navigation_log set title = ?, icon_id = ?, times = times + 1, last_time = datetime('now', 'localtime') where id = ?",
-                        title,
-                        icon_id,
-                        id
-                    )
-                    .execute(&pool)
-                    .await.inspect_err(|e| error!("update navigation log failed: {e}"));
-                }
-            });
+            builder
+                .push("update navigation_log set title = ")
+                .push_bind(title)
+                .push(", icon_id = ")
+                .push_bind(icon_id)
+                .push(" where id = ")
+                .push_bind(id);
+        } else if !title.is_empty() {
+            // title change 总早于 icon change
+            builder
+                .push("update navigation_log set title = ")
+                .push_bind(title)
+                .push(", times = times + 1, last_time = datetime('now', 'localtime') where id = ")
+                .push_bind(id);
+        } else {
+            builder.push(
+                "update navigation_log set last_time = datetime('now', 'localtime') where id = ",
+            ).push_bind(id);
         }
+
+        async_runtime::spawn({
+            let pool = pool.clone();
+
+            async move {
+                let _ = builder
+                    .build()
+                    .execute(&pool)
+                    .await
+                    .inspect_err(|e| error!("update navigation log failed: {e}"));
+            }
+        });
 
         id
     } else {

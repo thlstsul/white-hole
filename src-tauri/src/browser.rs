@@ -124,32 +124,42 @@ impl Browser {
     pub async fn open_tab_by_url(&self, url: &Url, _active: bool) -> Result<(), TabError> {
         let pool = self.db.get().await;
         let incognito = self.incognito.get().await;
+        self.is_focused.set(false).await;
         if let Some(id) = get_id(&pool, url.as_str()).await
             && let Some((label, index)) = self.tabs.any_open(id, incognito).await
         {
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
+            self.state_changed(None).await?;
         } else {
             self.create_tab(url, true).await?;
+            let state = self.get_state(None).await?;
+            self.state_changed(Some(state.clone())).await?;
+            let mut log: NavigationLog = state.into();
+            log.url = url.to_string();
+            self.save_navigation_log(log).await?;
         }
-        self.is_focused.set(false).await;
 
-        self.state_changed(None).await?;
         self.focus_changed().await?;
         Ok(())
     }
 
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
         let incognito = self.incognito.get().await;
+        self.is_focused.set(false).await;
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
+            self.state_changed(None).await?;
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             self.create_tab(&Url::parse(&url)?, true).await?;
+            let state = self.get_state(None).await?;
+            self.state_changed(Some(state.clone())).await?;
+            let mut log: NavigationLog = state.into();
+            log.url = url;
+            self.save_navigation_log(log).await?;
         }
-        self.is_focused.set(false).await;
 
-        self.state_changed(None).await?;
         self.focus_changed().await?;
         Ok(())
     }
