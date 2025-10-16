@@ -5,18 +5,15 @@ use std::process::{Command, Stdio};
 use std::thread;
 
 fn main() {
+    if is_release_build() {
+        // tauri 没有清空 frontendDist，会导致越编译越大
+        let _ = std::fs::remove_dir_all("./dist/public");
+    }
+
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
     let pnpx = if cfg!(windows) { "pnpx.cmd" } else { "pnpx" };
 
-    // let output = Command::new(pnpm)
-    //     .arg("install")
-    //     .arg("tailwindcss")
-    //     .arg("@tailwindcss/cli")
-    //     .arg("daisyui")
-    //     .output()
-    //     .expect("failed to execute pnpm");
-    // io::stdout().write_all(&output.stdout).unwrap();
-    // io::stderr().write_all(&output.stderr).unwrap();
+    // pnpm install tailwindcss @tailwindcss/cli daisyui
     run_command_safely(
         pnpm,
         &["install", "tailwindcss", "@tailwindcss/cli", "daisyui"],
@@ -24,17 +21,7 @@ fn main() {
     )
     .expect("failed to execute pnpm");
 
-    // let output = Command::new(pnpx)
-    //     .arg("@tailwindcss/cli")
-    //     .arg("-i")
-    //     .arg("./tailwind.css")
-    //     .arg("-o")
-    //     .arg("./assets/styles.css")
-    //     .arg("--minify")
-    //     .output()
-    //     .expect("failed to execute pnpx");
-    // io::stdout().write_all(&output.stdout).unwrap();
-    // io::stderr().write_all(&output.stderr).unwrap();
+    // pnpx @tailwindcss/cli -i ./tailwind.css -o ./assets/styles.css --minify
     run_command_safely(
         pnpx,
         &[
