@@ -1,6 +1,6 @@
 use hotkey::{Builder, Code, Hotkey, Modifiers, hotkey};
 use log::error;
-use tauri::{AppHandle, Wry, async_runtime, plugin::TauriPlugin};
+use tauri::{AppHandle, Wry, plugin::TauriPlugin};
 
 use crate::browser::BrowserExt as _;
 

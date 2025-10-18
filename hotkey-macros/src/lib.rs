@@ -38,7 +38,7 @@ pub fn hotkey(_args: TokenStream, input: TokenStream) -> TokenStream {
         #fn_vis fn #fn_name(app_handle: &AppHandle) {
             async fn #fn_name(app_handle: AppHandle) #fn_block
 
-            async_runtime::spawn(#fn_name(app_handle.clone()));
+            tauri::async_runtime::spawn(#fn_name(app_handle.clone()));
         }
     };
 
