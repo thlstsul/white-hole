@@ -199,7 +199,7 @@ impl Browser {
     pub async fn change_tab_title(&self, label: &str, title: String) -> Result<(), StateError> {
         self.tabs.set_title(label, title).await;
 
-        let state = self.get_state(None).await?;
+        let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
@@ -213,7 +213,7 @@ impl Browser {
     pub async fn change_tab_icon(&self, label: &str, icon_url: String) -> Result<(), StateError> {
         self.tabs.set_icon(label, icon_url).await;
 
-        let state = self.get_state(None).await?;
+        let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
