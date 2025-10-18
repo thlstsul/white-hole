@@ -1,3 +1,4 @@
+use ::hotkey::HotkeyManagerExt as _;
 use ::log::error;
 use command::*;
 use tauri::{
@@ -11,7 +12,6 @@ use time::macros::format_description;
 use crate::{
     browser::{Browser, BrowserExt as _},
     error::SetupError,
-    hotkey::HotkeyManagerExt,
     user_agent::setup_user_agent,
 };
 
@@ -51,7 +51,7 @@ pub fn run() -> Result<(), SetupError> {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        // .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(setup_log());
 
     #[cfg(desktop)]

@@ -25,6 +25,7 @@ scc = "2.3.4"
 serde_json = "1"
 tauri-plugin-deep-link = "2"
 tauri-plugin-log = "2.6.0"
+tauri-plugin-notification = "2.3.1"
 url = "2.5.4"
 
 [dependencies.cached]
@@ -88,7 +89,7 @@ crate-type = [
 name = "white_hole_lib"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-keyboard-types = "0.8.1"
+hotkey = { path = "../hotkey" }
 tauri-plugin-single-instance = "2.3"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"

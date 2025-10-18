@@ -3,18 +3,16 @@ use std::ops::Deref;
 use log::{error, info};
 use scc::HashMap;
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager as _, Webview, WebviewUrl, Window,
+    AppHandle, LogicalPosition, LogicalSize, Manager as _, Webview, WebviewUrl, Window, Wry,
     async_runtime::{self, RwLock},
-    webview::{NewWindowResponse, PageLoadEvent},
+    webview::{DownloadEvent, NewWindowResponse, PageLoadPayload},
 };
+use tauri_plugin_notification::NotificationExt;
 use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    IsMainView as _,
-    browser::BrowserExt,
-    error::{FrameworkError, StateError, TabError},
-    state::BrowserState,
+    IsMainView as _, browser::BrowserExt, error::FrameworkError, state::BrowserState,
     user_agent::get_user_agent,
 };
 
@@ -56,34 +54,10 @@ impl Tab {
                 .devtools(true)
                 .zoom_hotkeys_enabled(true)
                 .focused(true)
-                .on_new_window(move |url, _| {
-                    async_runtime::spawn({
-                        let url = url.clone();
-                        let app_handle = app_handle.clone();
-
-                        async move {
-                            if let Err(e) = on_new_window(&app_handle, &url).await {
-                                error!("{e}");
-                            }
-                        }
-                    });
-                    NewWindowResponse::Deny
-                })
-                .on_document_title_changed(move |webview, title| {
-                    async_runtime::spawn(async move {
-                        if let Err(e) = on_document_title_changed(webview, title).await {
-                            error!("{e}");
-                        }
-                    });
-                })
-                .on_page_load(|w, p| {
-                    let event = p.event();
-                    async_runtime::spawn(async move {
-                        if let Err(e) = on_page_load(w, event).await {
-                            error!("{e}");
-                        }
-                    });
-                }),
+                .on_new_window(move |url, _| on_new_window(&app_handle, url))
+                .on_document_title_changed(on_document_title_changed)
+                .on_page_load(on_page_load)
+                .on_download(on_download),
             LogicalPosition::new(0., Webview::TITLE_HEIGHT),
             size,
         )?;
@@ -475,35 +449,73 @@ impl TabMap {
     }
 }
 
-async fn on_new_window(app_handle: &AppHandle, url: &Url) -> Result<(), TabError> {
-    let browser = app_handle.browser();
-    browser.open_tab_by_url(url, true).await?;
-    Ok(())
+fn on_new_window(app_handle: &AppHandle, url: Url) -> NewWindowResponse<Wry> {
+    async_runtime::spawn({
+        let app_handle = app_handle.clone();
+
+        async move {
+            let browser = app_handle.browser();
+            browser
+                .open_tab_by_url(&url, true)
+                .await
+                .inspect_err(|e| error!("打开链接{url}失败：{e}"))
+        }
+    });
+
+    NewWindowResponse::Deny
 }
 
-async fn on_document_title_changed(webview: Webview, title: String) -> Result<(), StateError> {
-    let label = webview.label();
-    info!("{label} webview title changed: {title}");
+fn on_document_title_changed(webview: Webview, title: String) {
+    async_runtime::spawn(async move {
+        let label = webview.label();
+        info!("{label} webview title changed: {title}");
 
-    let browser = webview.browser();
-    browser.change_tab_title(label, title).await?;
-    Ok(())
+        let browser = webview.browser();
+        browser
+            .change_tab_title(label, title)
+            .await
+            .inspect_err(|e| error!("{label}变更标题失败：{e}"))
+    });
 }
 
-async fn on_page_load(webview: Webview, event: PageLoadEvent) -> Result<(), StateError> {
-    info!("{} webview page load: {event:?}", webview.label());
+fn on_page_load(webview: Webview, payload: PageLoadPayload) {
+    let event = payload.event();
+    async_runtime::spawn(async move {
+        let label = webview.label();
+        info!("{label} webview page load: {event:?}");
 
-    let browser = webview.browser();
-    match event {
-        tauri::webview::PageLoadEvent::Started => {
-            browser
-                .change_tab_loading_state(webview.label(), true)
+        let browser = webview.browser();
+        match event {
+            tauri::webview::PageLoadEvent::Started => browser
+                .change_tab_loading_state(label, true)
                 .await
-        }
-        tauri::webview::PageLoadEvent::Finished => {
-            browser
-                .change_tab_loading_state(webview.label(), false)
+                .inspect_err(|e| error!("{label}变更加载状态失败：{e}")),
+            tauri::webview::PageLoadEvent::Finished => browser
+                .change_tab_loading_state(label, false)
                 .await
+                .inspect_err(|e| error!("{label}变更加载状态失败：{e}")),
         }
+    });
+}
+
+fn on_download(webview: Webview, event: DownloadEvent) -> bool {
+    if let Err(e) = match event {
+        DownloadEvent::Requested { url, .. } => {
+            let notification = webview.notification();
+            notification.builder().title("下载").body(url).show()
+        }
+        DownloadEvent::Finished { url, success, .. } => {
+            let notification = webview.notification();
+            if success {
+                notification.builder().title("下载完成").body(url).show()
+            } else {
+                notification.builder().title("下载失败").body(url).show()
+            }
+        }
+        _ => Ok(()),
+    } {
+        error!("下载事件处理失败：{e}");
     }
+    // TODO 使用自建下载器
+    true
 }

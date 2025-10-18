@@ -4,7 +4,7 @@ version = "0.1.5"
 edition = "2024"
 
 [workspace]
-members = ["src-tauri"]
+members = ["hotkey", "hotkey-macros","src-tauri"]
 
 [dependencies]
 dioxus-logger = "0.6"

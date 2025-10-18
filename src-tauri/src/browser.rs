@@ -178,6 +178,20 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn near_tab(&self) -> Result<(), TabError> {
+        if self.is_focused.get().await {
+            return Ok(());
+        }
+
+        let label = self.label.get().await;
+        if let Some(near_label) = self.tabs.near(&label).await {
+            self.switch_tab(&near_label).await?;
+
+            self.state_changed(None).await?;
+        }
+        Ok(())
+    }
+
     pub async fn is_current_tab(&self, label: &str) -> bool {
         self.label.eq(label).await
     }
