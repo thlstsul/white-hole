@@ -50,21 +50,17 @@ pub async fn save_log(
 
     let id = if let Some(id) = id {
         let mut builder: QueryBuilder<Sqlite> = QueryBuilder::new("");
-        if !title.is_empty() && icon_id != -1 {
+        if !title.is_empty() {
             builder
                 .push("update navigation_log set title = ")
-                .push_bind(title)
-                .push(", icon_id = ")
-                .push_bind(icon_id)
-                .push(" where id = ")
-                .push_bind(id);
-        } else if !title.is_empty() {
-            // title change 总早于 icon change
-            builder
-                .push("update navigation_log set title = ")
-                .push_bind(title)
-                .push(", times = times + 1, last_time = datetime('now', 'localtime') where id = ")
-                .push_bind(id);
+                .push_bind(title);
+            if icon_id != -1 {
+                builder
+                    .push(", icon_id = ")
+                    .push_bind(icon_id)
+                    .push(", times = times + 1, last_time = datetime('now', 'localtime') ");
+            }
+            builder.push("where id = ").push_bind(id);
         } else {
             builder.push(
                 "update navigation_log set last_time = datetime('now', 'localtime') where id = ",

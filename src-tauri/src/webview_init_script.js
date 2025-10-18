@@ -48,27 +48,31 @@ if (window.self == window.top) {
 }
 
 function iconChanged(iconUrl) {
-  window.__TAURI_INTERNALS__.invoke("icon_changed", { iconUrl });
+  invoke("icon_changed", { iconUrl });
 }
 
 function pushHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("push_history_state");
+  invoke("push_history_state");
 }
 
 function replaceHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("replace_history_state");
+  invoke("replace_history_state");
 }
 
 function hashChanged() {
-  window.__TAURI_INTERNALS__.invoke("hash_changed");
+  invoke("hash_changed");
 }
 
 function fullscreenChanged(isFullscreen) {
-  window.__TAURI_INTERNALS__.invoke("fullscreen_changed", { isFullscreen });
+  invoke("fullscreen_changed", { isFullscreen });
 }
 
 function leavePictureInPicture() {
-  window.__TAURI_INTERNALS__.invoke("leave_picture_in_picture");
+  invoke("leave_picture_in_picture");
+}
+
+function invoke(cmd, payload) {
+  window.__TAURI_INTERNALS__.invoke(cmd, payload);
 }
 
 function getIcon() {
