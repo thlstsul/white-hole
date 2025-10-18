@@ -1,6 +1,6 @@
 [package]
 name = "white-hole"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["thlstsul"]
 description = "Fxxk You Edge"
 edition = "2024"
@@ -89,7 +89,9 @@ crate-type = [
 name = "white_hole_lib"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-hotkey = { path = "../hotkey" }
 tauri-plugin-single-instance = "2.3"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies.hotkey]
+path = "../hotkey"

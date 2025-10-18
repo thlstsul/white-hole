@@ -1,12 +1,17 @@
 [package]
 name = "hotkey"
-version = "0.1.0"
+version = "0.1.6"
 edition = "2024"
 
 [dependencies]
-hotkey-macros = { path = "../hotkey-macros" }
-keyboard-types = "0.8.1"
 error_set = "0.8.5"
-scc = "2.3.4"
+keyboard-types = "0.8.1"
 log = "0.4.27"
-tauri = { version = "2.8.5", default-features = false }
+scc = "2.3.4"
+
+[dependencies.hotkey-macros]
+path = "../hotkey-macros"
+
+[dependencies.tauri]
+default-features = false
+version = "2.8.5"
