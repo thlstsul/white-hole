@@ -1,39 +1,22 @@
-use hotkey::{Builder, Code, Hotkey, Modifiers, hotkey};
+use hotkey::{Code, Modifiers, hotkey};
 use log::error;
-use tauri::{AppHandle, Wry, plugin::TauriPlugin};
+use tauri::AppHandle;
 
 use crate::browser::BrowserExt as _;
 
-pub fn setup() -> TauriPlugin<Wry> {
-    Builder::new()
-        .register(Hotkey::new(Modifiers::ALT, Code::ArrowLeft), back)
-        .register(Hotkey::new(Modifiers::ALT, Code::ArrowRight), forward)
-        .register(Hotkey::new(Modifiers::CONTROL, Code::KeyT), focus)
-        .register(Hotkey::new(Modifiers::CONTROL, Code::KeyL), focus)
-        .register(Hotkey::new(Modifiers::empty(), Code::Escape), blur)
-        .register(Hotkey::new(Modifiers::CONTROL, Code::KeyW), close_tab)
-        .register(Hotkey::new(Modifiers::CONTROL, Code::Tab), next_tab)
-        .register(
-            Hotkey::new(Modifiers::CONTROL | Modifiers::SHIFT, Code::Tab),
-            near_tab,
-        )
-        .register(Hotkey::new(Modifiers::empty(), Code::F11), fullscreen)
-        .build()
-}
-
-#[hotkey]
+#[hotkey(Modifiers::ALT, Code::ArrowLeft)]
 async fn back(app_handle: AppHandle) {
     let browser = app_handle.browser();
     browser.back().await;
 }
 
-#[hotkey]
+#[hotkey(Modifiers::ALT, Code::ArrowRight)]
 async fn forward(app_handle: AppHandle) {
     let browser = app_handle.browser();
     browser.forward().await;
 }
 
-#[hotkey]
+#[hotkey(Modifiers::CONTROL, Code::KeyL)]
 async fn focus(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.focus().await {
@@ -44,7 +27,7 @@ async fn focus(app_handle: AppHandle) {
     }
 }
 
-#[hotkey]
+#[hotkey(Modifiers::empty(), Code::Escape)]
 async fn blur(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.blur().await {
@@ -55,7 +38,7 @@ async fn blur(app_handle: AppHandle) {
     }
 }
 
-#[hotkey]
+#[hotkey(Modifiers::CONTROL, Code::KeyW)]
 async fn close_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.close_tab().await {
@@ -66,7 +49,7 @@ async fn close_tab(app_handle: AppHandle) {
     }
 }
 
-#[hotkey]
+#[hotkey(Modifiers::CONTROL, Code::Tab)]
 async fn next_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.next_tab().await {
@@ -77,7 +60,7 @@ async fn next_tab(app_handle: AppHandle) {
     }
 }
 
-#[hotkey]
+#[hotkey(Modifiers::CONTROL | Modifiers::SHIFT, Code::Tab)]
 async fn near_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.near_tab().await {
@@ -88,10 +71,19 @@ async fn near_tab(app_handle: AppHandle) {
     }
 }
 
-#[hotkey]
+#[hotkey(Modifiers::empty(), Code::F11)]
 async fn fullscreen(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.fullscreen().await {
         error!("全屏失败: {e}");
     }
+}
+
+#[hotkey(Modifiers::CONTROL, Code::KeyI)]
+async fn incognito(app_handle: AppHandle) {
+    let browser = app_handle.browser();
+    if let Err(e) = browser.incognito().await {
+        error!("浏览器切换标签失败：{e}");
+    }
+    focus(app_handle).await;
 }

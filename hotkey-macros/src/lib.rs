@@ -1,46 +1,61 @@
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::Token;
+use syn::parse::{Parse, ParseStream};
 use syn::{ItemFn, parse_macro_input};
 
+// 定义热键参数结构
+struct HotkeyArgs {
+    modifiers: syn::Expr,
+    _comma: Token![,],
+    code: syn::Expr,
+}
+
+impl Parse for HotkeyArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(HotkeyArgs {
+            modifiers: input.parse()?,
+            _comma: input.parse()?,
+            code: input.parse()?,
+        })
+    }
+}
+
 #[proc_macro_attribute]
-pub fn hotkey(_args: TokenStream, input: TokenStream) -> TokenStream {
-    // 解析输入的函数
+pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
+    // 解析输入函数
     let input_fn = parse_macro_input!(input as ItemFn);
 
-    // 获取函数名、参数、函数体等信息
+    // 获取原函数信息
+    let vis = &input_fn.vis;
     let fn_name = &input_fn.sig.ident;
-    let fn_block = &input_fn.block;
-    let fn_attrs = &input_fn.attrs;
-    let fn_vis = &input_fn.vis;
+    let wrapper_name = syn::Ident::new(&format!("_{}", fn_name), fn_name.span());
 
-    // 检查函数签名是否符合要求
-    let sig = &input_fn.sig;
-    if sig.asyncness.is_none() {
-        return syn::Error::new_spanned(sig, "hotkey macro can only be applied to async functions")
-            .to_compile_error()
-            .into();
-    }
+    // 解析属性参数
+    let args = parse_macro_input!(args as HotkeyArgs);
 
-    // 提取参数信息 - 假设只有一个参数：app_handle: AppHandle
-    let inputs = &sig.inputs;
-    if inputs.len() != 1 {
-        return syn::Error::new_spanned(
-            inputs,
-            "hotkey function must have exactly one parameter: app_handle: AppHandle",
-        )
-        .to_compile_error()
-        .into();
-    }
+    let modifiers = &args.modifiers;
+    let code = &args.code;
 
-    // 生成输出代码
+    // 生成代码
     let expanded = quote! {
-        #(#fn_attrs)*
-        #fn_vis fn #fn_name(app_handle: &AppHandle) {
-            async fn #fn_name(app_handle: AppHandle) #fn_block
+        #input_fn
 
-            tauri::async_runtime::spawn(#fn_name(app_handle.clone()));
+        #[allow(non_camel_case_types, missing_docs)]
+        #vis struct #wrapper_name;
+
+        impl ::hotkey::HotkeyRegistrar for #wrapper_name {
+            fn register(&self, mut manager: ::hotkey::HotkeyManager<::tauri::Wry>) -> ::hotkey::HotkeyManager<::tauri::Wry> {
+                #vis fn #wrapper_name(app_handle: &::tauri::AppHandle) {
+                    ::tauri::async_runtime::spawn(#fn_name(app_handle.clone()));
+                }
+                manager.register(::hotkey::Hotkey::new(#modifiers, #code), #wrapper_name);
+                manager
+            }
         }
+
+        ::hotkey::submit_hotkey!(#wrapper_name);
     };
 
-    expanded.into()
+    TokenStream::from(expanded)
 }

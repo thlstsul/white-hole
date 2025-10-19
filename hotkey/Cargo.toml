@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 error_set = "0.8.5"
+inventory = "0.3.21"
 keyboard-types = "0.8.1"
 log = "0.4.27"
 scc = "2.3.4"

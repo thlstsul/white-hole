@@ -59,7 +59,7 @@ pub fn run() -> Result<(), SetupError> {
         builder = builder
             .plugin(tauri_plugin_single_instance::init(single_instance_init))
             .plugin(tauri_plugin_window_state::Builder::new().build())
-            .plugin(hotkey::setup());
+            .plugin(::hotkey::init());
     }
 
     builder

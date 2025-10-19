@@ -3,51 +3,41 @@ use std::{borrow::Borrow, fmt::Display, str::FromStr};
 
 use error_set::error_set;
 pub use hotkey_macros::hotkey;
+pub use inventory::submit;
 pub use keyboard_types::{Code, KeyState, Modifiers};
 use log::error;
 use scc::{HashMap, HashSet};
 use tauri::plugin::TauriPlugin;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Manager, Runtime, Wry};
 
 type HandlerFn<R> = Box<dyn Fn(&AppHandle<R>) + Send + Sync + 'static>;
 
-pub struct Builder<R: Runtime> {
-    hotkeys: HashMap<Hotkey, Arc<HandlerFn<R>>>,
+pub fn init() -> TauriPlugin<Wry> {
+    tauri::plugin::Builder::new("hotkey-manager")
+        .setup(move |app, _api| {
+            let mut mamager = HotkeyManager::new(app.clone());
+            for factory in inventory::iter::<&dyn HotkeyRegistrar> {
+                mamager = factory.register(mamager);
+            }
+            app.manage(mamager);
+            Ok(())
+        })
+        .build()
 }
 
-impl<R: Runtime> Default for Builder<R> {
-    fn default() -> Self {
-        Self::new()
-    }
+pub trait HotkeyRegistrar: Send + Sync + 'static {
+    fn register(&self, manager: HotkeyManager<Wry>) -> HotkeyManager<Wry>;
 }
 
-impl<R: Runtime> Builder<R> {
-    pub fn new() -> Self {
-        Self {
-            hotkeys: HashMap::new(),
-        }
-    }
+inventory::collect!(&'static dyn HotkeyRegistrar);
 
-    pub fn register<F: Fn(&AppHandle<R>) + Send + Sync + 'static>(
-        self,
-        hotkey: Hotkey,
-        callback: F,
-    ) -> Self {
-        let _ = self.hotkeys.insert(hotkey, Arc::new(Box::new(callback)));
-        Self {
-            hotkeys: self.hotkeys,
+#[macro_export]
+macro_rules! submit_hotkey {
+    ($ty:ident) => {
+        ::hotkey::submit! {
+            &$ty as &dyn ::hotkey::HotkeyRegistrar
         }
-    }
-
-    pub fn build(self) -> TauriPlugin<R> {
-        tauri::plugin::Builder::new("hotkey-manager")
-            .setup(move |app, _api| {
-                let mamager = HotkeyManager::init(app.clone(), self.hotkeys);
-                app.manage(mamager);
-                Ok(())
-            })
-            .build()
-    }
+    };
 }
 
 pub struct HotkeyManager<R: Runtime> {
