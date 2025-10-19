@@ -10,7 +10,7 @@ use scc::{HashMap, HashSet};
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Manager, Runtime, Wry};
 
-type HandlerFn<R> = Box<dyn Fn(&AppHandle<R>) + Send + Sync + 'static>;
+type HandlerFn<R> = Box<dyn Fn(AppHandle<R>) + Send + Sync + 'static>;
 
 pub fn init() -> TauriPlugin<Wry> {
     tauri::plugin::Builder::new("hotkey-manager")
@@ -63,7 +63,7 @@ impl<R: Runtime> HotkeyManager<R> {
         }
     }
 
-    pub fn register<F: Fn(&AppHandle<R>) + Send + Sync + 'static>(
+    pub fn register<F: Fn(AppHandle<R>) + Send + Sync + 'static>(
         &self,
         hotkey: Hotkey,
         callback: F,
@@ -97,7 +97,7 @@ impl<R: Runtime> HotkeyManager<R> {
         let Some(callback) = self.hotkeys.get(&hotkey) else {
             return;
         };
-        callback(&self.app);
+        callback(self.app.clone());
     }
 }
 

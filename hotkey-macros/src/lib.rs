@@ -28,6 +28,7 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
 
     // 获取原函数信息
     let vis = &input_fn.vis;
+    let fn_async = input_fn.sig.asyncness.is_some();
     let fn_name = &input_fn.sig.ident;
     let wrapper_name = syn::Ident::new(&format!("_{}", fn_name), fn_name.span());
 
@@ -36,6 +37,19 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let modifiers = &args.modifiers;
     let code = &args.code;
+
+    let impl_content = if fn_async {
+        quote! {
+            #vis fn #wrapper_name(app_handle: ::tauri::AppHandle) {
+                ::tauri::async_runtime::spawn(#fn_name(app_handle));
+            }
+            manager.register(::hotkey::Hotkey::new(#modifiers, #code), #wrapper_name);
+        }
+    } else {
+        quote! {
+            manager.register(::hotkey::Hotkey::new(#modifiers, #code), #fn_name);
+        }
+    };
 
     // 生成代码
     let expanded = quote! {
@@ -46,10 +60,7 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
 
         impl ::hotkey::HotkeyRegistrar for #wrapper_name {
             fn register(&self, mut manager: ::hotkey::HotkeyManager<::tauri::Wry>) -> ::hotkey::HotkeyManager<::tauri::Wry> {
-                #vis fn #wrapper_name(app_handle: &::tauri::AppHandle) {
-                    ::tauri::async_runtime::spawn(#fn_name(app_handle.clone()));
-                }
-                manager.register(::hotkey::Hotkey::new(#modifiers, #code), #wrapper_name);
+                #impl_content
                 manager
             }
         }
