@@ -2,7 +2,7 @@ use delay_timer::prelude::*;
 use log::error;
 use sqlx::SqlitePool;
 
-use crate::{database::DB_URL, public_suffix::sync_public_suffix};
+use crate::{database::DB_PATH, public_suffix::sync_public_suffix};
 
 pub fn setup() -> Result<(), TaskError> {
     let delay_timer = DelayTimerBuilder::default()
@@ -18,10 +18,10 @@ pub fn setup() -> Result<(), TaskError> {
 fn startup_task() -> Result<Task, TaskError> {
     let mut task_builder = TaskBuilder::default();
     let body = || async {
-        let Some(db_url) = DB_URL.get() else {
+        let Some(db_path) = DB_PATH.get() else {
             return;
         };
-        let Ok(pool) = SqlitePool::connect(db_url).await else {
+        let Ok(pool) = SqlitePool::connect(&format!("sqlite:{db_path}")).await else {
             return;
         };
         let _ = sync_public_suffix(&pool)
@@ -39,10 +39,10 @@ fn startup_task() -> Result<Task, TaskError> {
 fn everyday_task() -> Result<Task, TaskError> {
     let mut task_builder = TaskBuilder::default();
     let body = || async move {
-        let Some(db_url) = DB_URL.get() else {
+        let Some(db_path) = DB_PATH.get() else {
             return;
         };
-        let Ok(pool) = SqlitePool::connect(db_url).await else {
+        let Ok(pool) = SqlitePool::connect(&format!("sqlite:{db_path}")).await else {
             return;
         };
         let _ = sync_public_suffix(&pool)

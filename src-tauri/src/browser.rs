@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::{
     IsMainView,
-    database::{DB_NAME, Database},
+    database::Database,
     error::*,
     icon::get_icon_data_url,
     log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
@@ -13,7 +13,6 @@ use crate::{
     task,
     url::parse_keyword,
 };
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::{
     App, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl,
     Window, Wry,
@@ -40,17 +39,6 @@ pub struct Browser {
 impl Browser {
     pub fn setup(app: &mut App) -> Result<(), SetupError> {
         async_runtime::block_on(async {
-            let db_path = app.path().app_local_data_dir()?.join(DB_NAME);
-            if !db_path.exists() {
-                let options = SqliteConnectOptions::new()
-                    .filename(db_path)
-                    .create_if_missing(true)
-                    .foreign_keys(true);
-
-                let pool = SqlitePoolOptions::new().connect_with(options).await?;
-                sqlx::migrate!("../migrations").run(&pool).await?;
-            }
-
             let window = tauri::window::WindowBuilder::new(app, "main")
                 .title("白洞")
                 .inner_size(WIDTH, HEIGHT)
