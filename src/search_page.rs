@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use dioxus::prelude::*;
 use time::{OffsetDateTime, macros::format_description};
 
@@ -18,6 +20,7 @@ pub fn SearchPage() -> Element {
     let mut main_element = use_signal(|| None);
     let mut logs = use_signal(Vec::new);
     let mut focus_log = use_signal(|| None);
+    let input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
 
     use_effect(move || {
         // 输入关键字进行检索、切换模式时，重置页码
@@ -51,6 +54,9 @@ pub fn SearchPage() -> Element {
                     e.prevent_default();
                     if let Some(focus_log) = focus_log() {
                         keyword.set(focus_log.url.clone());
+                        if let Some(url) = input_element() {
+                            let _ = url.set_focus(true).await;
+                        }
                     };
                 }
             },
@@ -61,6 +67,7 @@ pub fn SearchPage() -> Element {
                     SearchInput {
                         class: "join-item",
                         keyword,
+                        input_element,
                     }
                     Settings { class: "join-item" }
                 }

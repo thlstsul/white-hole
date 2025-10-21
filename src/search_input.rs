@@ -5,9 +5,11 @@ use dioxus::prelude::*;
 use crate::{api::search, app::Browser};
 
 #[component]
-pub fn SearchInput(#[props(default)] class: String, keyword: Signal<String>) -> Element {
-    let mut input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
-
+pub fn SearchInput(
+    #[props(default)] class: String,
+    #[props(default)] input_element: Signal<Option<Rc<MountedData>>>,
+    keyword: Signal<String>,
+) -> Element {
     let _ = use_resource(move || async move {
         let browser = use_context::<Browser>();
         let focus = browser.focus;
