@@ -8,8 +8,8 @@ create table if not exists navigation_log (
     last_time datetime not null
 );
 
-create unique index navigation_log_url_index on navigation_log(url);
-create index navigation_log_title_index on navigation_log(title);
+create unique index if not exists navigation_log_url_index on navigation_log(url);
+create index if not exists navigation_log_title_index on navigation_log(title);
 
 create table if not exists icon_cached (
     id integer primary key autoincrement,
@@ -18,4 +18,4 @@ create table if not exists icon_cached (
     update_time datetime not null
 );
 
-create unique index icon_cached_url_index on icon_cached(url);
+create unique index if not exists icon_cached_url_index on icon_cached(url);
