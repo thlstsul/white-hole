@@ -255,10 +255,11 @@ impl TabMap {
     pub async fn close_incognito(&self) -> Result<(), FrameworkError> {
         let mut labels = Vec::new();
         self.0
-            .scan_async(|l, tab| {
+            .iter_async(|l, tab| {
                 if tab.incognito() {
                     labels.push(l.to_owned());
                 }
+                true
             })
             .await;
         for label in labels {
@@ -305,20 +306,22 @@ impl TabMap {
 
     pub async fn set_size(&self, size: LogicalSize<f64>) {
         self.0
-            .scan_async(|_, tab| {
+            .iter_async(|_, tab| {
                 let _ = tab
                     .set_size(size)
                     .inspect_err(|e| error!("设置webview大小失败：{e}"));
+                true
             })
             .await;
     }
 
     pub async fn set_position(&self, position: LogicalPosition<f64>) {
         self.0
-            .scan_async(|_, tab| {
+            .iter_async(|_, tab| {
                 let _ = tab
                     .set_position(position)
                     .inspect_err(|e| error!("设置webview位置失败：{e}"));
+                true
             })
             .await;
     }
@@ -401,7 +404,7 @@ impl TabMap {
         let mut rtn = None::<String>;
         let mut max = label.to_owned();
         self.0
-            .scan_async(|l, _| {
+            .iter_async(|l, _| {
                 if l.as_str() < label {
                     if rtn.is_none() {
                         rtn = Some(l.to_owned());
@@ -415,6 +418,7 @@ impl TabMap {
                 if l > &max {
                     max = l.to_owned();
                 }
+                true
             })
             .await;
 
@@ -432,7 +436,7 @@ impl TabMap {
 
         let mut rtn = None::<String>;
         self.0
-            .scan_async(|l, _| {
+            .iter_async(|l, _| {
                 if l.as_str() > label {
                     if rtn.is_none() {
                         rtn = Some(l.to_owned());
@@ -442,6 +446,7 @@ impl TabMap {
                         rtn = Some(l.to_owned());
                     }
                 }
+                true
             })
             .await;
 

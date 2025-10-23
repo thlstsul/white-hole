@@ -70,22 +70,22 @@ impl<R: Runtime> HotkeyManager<R> {
     ) {
         let _ = self
             .hotkeys
-            .insert(hotkey, Arc::new(Box::new(callback)))
+            .insert_sync(hotkey, Arc::new(Box::new(callback)))
             .inspect_err(|(k, _)| error!("注册快捷键 {:?} 失败", k));
     }
 
     pub fn clear_pressed(&self) {
-        self.pressed_keys.clear();
+        self.pressed_keys.clear_sync();
     }
 
     pub fn handle_key_event(&self, key: Code, state: KeyState) {
         if state == KeyState::Down {
-            if self.pressed_keys.insert(key).is_ok() {
+            if self.pressed_keys.insert_sync(key).is_ok() {
                 // 键按下时检查快捷键
                 self.check_hotkeys();
             }
         } else {
-            self.pressed_keys.remove(&key);
+            self.pressed_keys.remove_sync(&key);
         }
     }
 
@@ -94,7 +94,7 @@ impl<R: Runtime> HotkeyManager<R> {
             return;
         };
 
-        let Some(callback) = self.hotkeys.get(&hotkey) else {
+        let Some(callback) = self.hotkeys.get_sync(&hotkey) else {
             return;
         };
         callback(self.app.clone());
@@ -199,19 +199,22 @@ impl TryFrom<String> for Hotkey {
 fn match_hotkey(pressed_keys: &HashSet<Code>) -> Option<Hotkey> {
     let mut mods = Modifiers::empty();
     let mut key = None;
-    pressed_keys.scan(|code| match *code {
-        Code::ControlLeft | Code::ControlRight => mods |= Modifiers::CONTROL,
-        Code::AltLeft | Code::AltRight => mods |= Modifiers::ALT,
-        Code::ShiftLeft | Code::ShiftRight => mods |= Modifiers::SHIFT,
-        Code::MetaLeft | Code::MetaRight => mods |= Modifiers::META,
-        Code::Fn => mods |= Modifiers::FN,
-        Code::CapsLock => mods |= Modifiers::CAPS_LOCK,
-        Code::NumLock => mods |= Modifiers::NUM_LOCK,
-        Code::ScrollLock => mods |= Modifiers::SCROLL_LOCK,
-        Code::FnLock => mods |= Modifiers::FN_LOCK,
-        _ => {
-            let _ = key.insert(*code);
+    pressed_keys.iter_sync(|code| {
+        match *code {
+            Code::ControlLeft | Code::ControlRight => mods |= Modifiers::CONTROL,
+            Code::AltLeft | Code::AltRight => mods |= Modifiers::ALT,
+            Code::ShiftLeft | Code::ShiftRight => mods |= Modifiers::SHIFT,
+            Code::MetaLeft | Code::MetaRight => mods |= Modifiers::META,
+            Code::Fn => mods |= Modifiers::FN,
+            Code::CapsLock => mods |= Modifiers::CAPS_LOCK,
+            Code::NumLock => mods |= Modifiers::NUM_LOCK,
+            Code::ScrollLock => mods |= Modifiers::SCROLL_LOCK,
+            Code::FnLock => mods |= Modifiers::FN_LOCK,
+            _ => {
+                let _ = key.insert(*code);
+            }
         }
+        true
     });
 
     key.map(|key| Hotkey { mods, key })
