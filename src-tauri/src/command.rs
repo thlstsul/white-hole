@@ -178,12 +178,12 @@ pub async fn go(
 }
 
 #[command]
-pub async fn reload(browser: State<'_, Browser>, mainview: Webview) -> Result<(), FrameworkError> {
+pub async fn reload(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
     if !mainview.is_main() {
         return Ok(());
     }
 
-    browser.reload().await;
+    browser.reload().await?;
     browser.focus_changed().await?;
     Ok(())
 }

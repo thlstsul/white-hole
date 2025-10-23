@@ -346,17 +346,18 @@ impl Browser {
         self.tabs.go(&label, index).await;
     }
 
-    pub async fn reload(&self) {
+    pub async fn reload(&self) -> Result<(), StateError> {
         if self.is_focused.get().await {
-            return;
+            return Ok(());
         }
 
         let label = self.label.get().await;
         if label.is_empty() {
-            return;
+            return Ok(());
         }
 
         self.tabs.reload(&label).await;
+        self.change_tab_loading_state(&label, true).await
     }
 
     pub async fn incognito(&self) -> Result<(), StateError> {
@@ -472,6 +473,7 @@ impl Browser {
         .zoom_hotkeys_enabled(false)
         .focused(true)
         .devtools(cfg!(debug_assertions))
+        .initialization_script_for_all_frames(include_str!("../js/prevent_default_hotkey.js"))
     }
 
     async fn create_tab(&self, url: &Url, _active: bool) -> Result<(), FrameworkError> {

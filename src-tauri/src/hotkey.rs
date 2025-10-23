@@ -4,6 +4,14 @@ use tauri::AppHandle;
 
 use crate::browser::BrowserExt as _;
 
+#[hotkey(Modifiers::CONTROL, Code::KeyR)]
+async fn reload(app_handle: AppHandle) {
+    let browser = app_handle.browser();
+    if let Err(e) = browser.reload().await {
+        error!("浏览器刷新失败：{e}");
+    }
+}
+
 #[hotkey(Modifiers::ALT, Code::ArrowLeft)]
 async fn back(app_handle: AppHandle) {
     let browser = app_handle.browser();
@@ -20,7 +28,7 @@ async fn forward(app_handle: AppHandle) {
 async fn focus(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.focus().await {
-        error!("浏览器焦点失败：{e}");
+        error!("进入主视图失败：{e}");
     }
     if let Err(e) = browser.focus_changed().await {
         error!("浏览器焦点变化失败：{e}");
@@ -31,7 +39,7 @@ async fn focus(app_handle: AppHandle) {
 async fn blur(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.blur().await {
-        error!("浏览器焦点失败：{e}");
+        error!("退出主视图失败：{e}");
     }
     if let Err(e) = browser.focus_changed().await {
         error!("浏览器焦点变化失败：{e}");
