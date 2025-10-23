@@ -1,6 +1,6 @@
 [package]
 name = "white-hole"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["thlstsul"]
 description = "Fxxk You Edge"
 edition = "2024"
