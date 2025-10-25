@@ -8,20 +8,24 @@ use crate::browser::BrowserExt as _;
 async fn reload(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.reload().await {
-        error!("浏览器刷新失败：{e}");
+        error!("刷新失败：{e}");
     }
 }
 
 #[hotkey(Modifiers::ALT, Code::ArrowLeft)]
 async fn back(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    browser.back().await;
+    if let Err(e) = browser.back().await {
+        error!("后退失败：{e}");
+    }
 }
 
 #[hotkey(Modifiers::ALT, Code::ArrowRight)]
 async fn forward(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    browser.forward().await;
+    if let Err(e) = browser.forward().await {
+        error!("前进失败：{e}");
+    }
 }
 
 #[hotkey(Modifiers::CONTROL, Code::KeyL)]
@@ -31,7 +35,7 @@ async fn focus(app_handle: AppHandle) {
         error!("进入主视图失败：{e}");
     }
     if let Err(e) = browser.focus_changed().await {
-        error!("浏览器焦点变化失败：{e}");
+        error!("焦点变化失败：{e}");
     }
 }
 
@@ -42,7 +46,7 @@ async fn blur(app_handle: AppHandle) {
         error!("退出主视图失败：{e}");
     }
     if let Err(e) = browser.focus_changed().await {
-        error!("浏览器焦点变化失败：{e}");
+        error!("焦点变化失败：{e}");
     }
 }
 
@@ -53,7 +57,7 @@ async fn close_tab(app_handle: AppHandle) {
         error!("关闭标签失败: {e}");
     }
     if let Err(e) = browser.focus_changed().await {
-        error!("浏览器焦点变化失败：{e}");
+        error!("焦点变化失败：{e}");
     }
 }
 
@@ -61,10 +65,10 @@ async fn close_tab(app_handle: AppHandle) {
 async fn next_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.next_tab().await {
-        error!("浏览器切换标签失败：{e}");
+        error!("切换标签失败：{e}");
     }
     if let Err(e) = browser.focus_changed().await {
-        error!("浏览器焦点变化失败：{e}");
+        error!("焦点变化失败：{e}");
     }
 }
 
@@ -72,10 +76,10 @@ async fn next_tab(app_handle: AppHandle) {
 async fn near_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.near_tab().await {
-        error!("浏览器切换标签失败：{e}");
+        error!("切换标签失败：{e}");
     }
     if let Err(e) = browser.focus_changed().await {
-        error!("浏览器焦点变化失败：{e}");
+        error!("焦点变化失败：{e}");
     }
 }
 
@@ -91,7 +95,7 @@ async fn fullscreen(app_handle: AppHandle) {
 async fn incognito(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.incognito().await {
-        error!("浏览器切换标签失败：{e}");
+        error!("切换标签失败：{e}");
     }
     focus(app_handle).await;
 }

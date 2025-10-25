@@ -249,6 +249,10 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn pop_history_state(&self, label: &str) -> Result<(), StateError> {
+        self.change_tab_loading_state(label, false).await
+    }
+
     pub async fn hash_changed(&self, label: &str) -> Result<(), StateError> {
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
@@ -307,43 +311,55 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn back(&self) {
+    pub async fn back(&self) -> Result<(), StateError> {
         if self.is_focused.get().await {
-            return;
+            return Ok(());
         }
 
         let label = self.label.get().await;
         if label.is_empty() {
-            return;
+            return Ok(());
         }
 
-        self.tabs.back(&label).await;
+        if self.tabs.back(&label).await {
+            self.change_tab_loading_state(&label, true).await?;
+        }
+
+        Ok(())
     }
 
-    pub async fn forward(&self) {
+    pub async fn forward(&self) -> Result<(), StateError> {
         if self.is_focused.get().await {
-            return;
+            return Ok(());
         }
 
         let label = self.label.get().await;
         if label.is_empty() {
-            return;
+            return Ok(());
         }
 
-        self.tabs.forward(&label).await;
+        if self.tabs.forward(&label).await {
+            self.change_tab_loading_state(&label, true).await?;
+        }
+
+        Ok(())
     }
 
-    pub async fn go(&self, index: usize) {
+    pub async fn go(&self, index: usize) -> Result<(), StateError> {
         if self.is_focused.get().await {
-            return;
+            return Ok(());
         }
 
         let label = self.label.get().await;
         if label.is_empty() {
-            return;
+            return Ok(());
         }
 
-        self.tabs.go(&label, index).await;
+        if self.tabs.go(&label, index).await {
+            self.change_tab_loading_state(&label, true).await?;
+        }
+
+        Ok(())
     }
 
     pub async fn reload(&self) -> Result<(), StateError> {

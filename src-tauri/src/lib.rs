@@ -83,6 +83,7 @@ pub fn run() -> Result<(), SetupError> {
             update_star,
             push_history_state,
             replace_history_state,
+            pop_history_state,
             hash_changed,
             icon_changed,
             minimize,

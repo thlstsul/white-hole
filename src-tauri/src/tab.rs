@@ -118,6 +118,10 @@ impl Tab {
     }
 
     pub fn insert_history(&mut self, id: i64) {
+        if id <= 0 {
+            return;
+        }
+
         if self.index < 0 {
             self.history_states.push(id);
             self.index = (self.history_states.len() - 1) as isize;
@@ -141,6 +145,10 @@ impl Tab {
     }
 
     pub fn replace_history(&mut self, id: i64) {
+        if id <= 0 {
+            return;
+        }
+
         if self.index < 0 {
             self.history_states.push(id);
             self.index = (self.history_states.len() - 1) as isize;
@@ -161,46 +169,49 @@ impl Tab {
         self.index < self.history_states.len() as isize - 1
     }
 
-    pub fn back(&mut self) {
+    pub fn back(&mut self) -> bool {
         if !self.can_back() {
-            return;
+            return false;
         }
 
-        if self
-            .webview
-            .eval("history.back()")
-            .inspect_err(|e| error!("{e}"))
-            .is_ok()
-        {
+        if let Err(e) = self.webview.eval("history.back()") {
+            error!("{}后退失败{e}", self.label());
+            false
+        } else {
             self.index -= 1;
+            true
         }
     }
 
-    pub fn forward(&mut self) {
+    pub fn forward(&mut self) -> bool {
         if !self.can_forward() {
-            return;
+            return false;
         }
 
-        if self
-            .webview
-            .eval("history.forward()")
-            .inspect_err(|e| error!("{e}"))
-            .is_ok()
-        {
+        if let Err(e) = self.webview.eval("history.forward()") {
+            error!("{}前进失败{e}", self.label());
+            false
+        } else {
             self.index += 1;
+            true
         }
     }
 
-    pub fn go(&mut self, index: usize) {
+    pub fn go(&mut self, index: usize) -> bool {
         let index = index as isize;
-        if self.index != index
-            && self
-                .webview
-                .eval(format!("history.go({})", index - self.index))
-                .inspect_err(|e| error!("{e}"))
-                .is_ok()
+        if self.index == index {
+            return false;
+        }
+
+        if let Err(e) = self
+            .webview
+            .eval(format!("history.go({})", index - self.index))
         {
+            error!("{}跳转失败{e}", self.label());
+            false
+        } else {
             self.index = index;
+            true
         }
     }
 
@@ -356,16 +367,25 @@ impl TabMap {
             .await;
     }
 
-    pub async fn back(&self, label: &str) {
-        self.0.update_async(label, |_, tab| tab.back()).await;
+    pub async fn back(&self, label: &str) -> bool {
+        self.0
+            .update_async(label, |_, tab| tab.back())
+            .await
+            .unwrap_or(false)
     }
 
-    pub async fn forward(&self, label: &str) {
-        self.0.update_async(label, |_, tab| tab.forward()).await;
+    pub async fn forward(&self, label: &str) -> bool {
+        self.0
+            .update_async(label, |_, tab| tab.forward())
+            .await
+            .unwrap_or(false)
     }
 
-    pub async fn go(&self, label: &str, index: usize) {
-        self.0.update_async(label, |_, tab| tab.go(index)).await;
+    pub async fn go(&self, label: &str, index: usize) -> bool {
+        self.0
+            .update_async(label, |_, tab| tab.go(index))
+            .await
+            .unwrap_or(false)
     }
 
     pub async fn reload(&self, label: &str) {

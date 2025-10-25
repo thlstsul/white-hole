@@ -141,23 +141,23 @@ pub async fn open_tab(
 }
 
 #[command]
-pub async fn back(browser: State<'_, Browser>, mainview: Webview) -> Result<(), FrameworkError> {
+pub async fn back(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
     if !mainview.is_main() {
         return Ok(());
     }
 
-    browser.back().await;
+    browser.back().await?;
     browser.focus_changed().await?;
     Ok(())
 }
 
 #[command]
-pub async fn forward(browser: State<'_, Browser>, mainview: Webview) -> Result<(), FrameworkError> {
+pub async fn forward(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
     if !mainview.is_main() {
         return Ok(());
     }
 
-    browser.forward().await;
+    browser.forward().await?;
     browser.focus_changed().await?;
     Ok(())
 }
@@ -167,12 +167,12 @@ pub async fn go(
     browser: State<'_, Browser>,
     mainview: Webview,
     index: usize,
-) -> Result<(), FrameworkError> {
+) -> Result<(), StateError> {
     if !mainview.is_main() {
         return Ok(());
     }
 
-    browser.go(index).await;
+    browser.go(index).await?;
     browser.focus_changed().await?;
     Ok(())
 }
@@ -266,6 +266,20 @@ pub async fn replace_history_state(
 
     info!("{} webview replace history state", webview.label());
     browser.replace_history_state(webview.label()).await?;
+    Ok(())
+}
+
+#[command]
+pub async fn pop_history_state(
+    browser: State<'_, Browser>,
+    webview: Webview,
+) -> Result<(), StateError> {
+    if webview.is_main() {
+        return Ok(());
+    }
+
+    info!("{} webview pop history state", webview.label());
+    browser.pop_history_state(webview.label()).await?;
     Ok(())
 }
 

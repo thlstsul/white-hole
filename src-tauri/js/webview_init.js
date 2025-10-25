@@ -16,6 +16,14 @@ if (window.self == window.top) {
   })(history.replaceState);
 
   window.addEventListener(
+    "popstate",
+    function () {
+      popHistoryState();
+    },
+    false,
+  );
+
+  window.addEventListener(
     "hashchange",
     function () {
       hashChanged();
@@ -42,6 +50,10 @@ function pushHistoryState() {
 
 function replaceHistoryState() {
   window.__TAURI_INTERNALS__.invoke("replace_history_state");
+}
+
+function popHistoryState() {
+  window.__TAURI_INTERNALS__.invoke("pop_history_state");
 }
 
 function hashChanged() {
