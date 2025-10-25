@@ -2,6 +2,7 @@ use std::sync::{Arc, OnceLock};
 
 use sqlx::{
     SqlitePool,
+    migrate::MigrateError,
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
 use tauri::{App, Manager as _, async_runtime::Mutex};
@@ -30,7 +31,27 @@ impl Database {
             .foreign_keys(true);
 
         let pool = SqlitePoolOptions::new().connect_with(options).await?;
-        sqlx::migrate!("../migrations").run(&pool).await?;
+
+        if let Err(MigrateError::VersionMismatch(version)) =
+            sqlx::migrate!("../migrations").run(&pool).await
+        {
+            let migrator = sqlx::migrate!("../migrations");
+            if let Some(checksum) = migrator.iter().find_map(|m| {
+                if m.version == version {
+                    Some(m.checksum.clone())
+                } else {
+                    None
+                }
+            }) {
+                // 99999999999999_insert_public_suffix.sql 动态脚本
+                let _ = sqlx::query("update _sqlx_migrations set checksum = ? where version = ?")
+                    .bind(checksum.into_owned())
+                    .bind(version)
+                    .execute(&pool)
+                    .await;
+            }
+            migrator.run(&pool).await?;
+        }
 
         Ok(Self {
             storage: Arc::new(pool),
