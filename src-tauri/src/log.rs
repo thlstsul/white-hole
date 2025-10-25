@@ -91,7 +91,11 @@ pub async fn save_log(
         )
         .execute(pool)
         .await?;
-        result.last_insert_rowid()
+        let mut id = result.last_insert_rowid();
+        if id == 0 {
+            id = get_id(pool, &url).await.unwrap_or(-1);
+        }
+        id
     };
 
     Ok(id)
@@ -182,6 +186,14 @@ pub async fn query_log_by_id(
     let record = query_builder.build_query_as().fetch_all(pool).await?;
 
     Ok(record)
+}
+
+pub async fn clear_log(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    // 清理跳转的URL记录
+    sqlx::query!("delete from navigation_log where url = title")
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 impl From<BrowserState> for NavigationLog {

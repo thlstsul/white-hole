@@ -24,6 +24,7 @@ fn startup_task() -> Result<Task, TaskError> {
         let Ok(pool) = SqlitePool::connect(&format!("sqlite:{db_path}")).await else {
             return;
         };
+
         let _ = sync_public_suffix(&pool)
             .await
             .inspect_err(|e| error!("同步 public suffix 失败：{e}"));
@@ -45,9 +46,13 @@ fn everyday_task() -> Result<Task, TaskError> {
         let Ok(pool) = SqlitePool::connect(&format!("sqlite:{db_path}")).await else {
             return;
         };
+
         let _ = sync_public_suffix(&pool)
             .await
             .inspect_err(|e| error!("同步 public suffix 失败：{e}"));
+        let _ = crate::log::clear_log(&pool)
+            .await
+            .inspect_err(|e| error!("清理浏览记录失败：{e}"));
     };
 
     task_builder
