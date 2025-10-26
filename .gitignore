@@ -1,6 +1,5 @@
 /dist/
 /target/
-/Cargo.lock
 /node_modules
 /.cargo
 99999999999999_insert_public_suffix.sql
