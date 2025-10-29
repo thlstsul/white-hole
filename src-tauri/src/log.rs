@@ -190,7 +190,7 @@ pub async fn query_log_by_id(
 
 pub async fn clear_log(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     // 清理跳转的URL记录
-    sqlx::query!("delete from navigation_log where url = title")
+    sqlx::query!("delete from navigation_log where url = title or title is null or title = ''")
         .execute(pool)
         .await?;
     Ok(())
