@@ -463,9 +463,8 @@ impl Browser {
 
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
-        let now = Instant::now();
         let mut last_focus_changed = self.last_focus_changed.lock().await;
-        if now.duration_since(*last_focus_changed) < Duration::from_millis(50) {
+        if Instant::now().duration_since(*last_focus_changed) < Duration::from_millis(50) {
             return Ok(false);
         }
 
@@ -474,7 +473,7 @@ impl Browser {
         } else {
             self.tabs.set_focus(&self.label.get().await).await?;
         }
-        *last_focus_changed = now;
+        *last_focus_changed = Instant::now();
 
         Ok(true)
     }
