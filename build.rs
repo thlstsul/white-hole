@@ -8,6 +8,7 @@ fn main() {
     if is_release_build() {
         // tauri 没有清空 frontendDist，会导致越编译越大
         let _ = std::fs::remove_dir_all("./dist/public");
+        println!("cargo:rerun-if-changed=./dist");
     }
 
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
