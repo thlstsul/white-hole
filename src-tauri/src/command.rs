@@ -245,6 +245,7 @@ pub async fn icon_changed(
 pub async fn push_history_state(
     browser: State<'_, Browser>,
     webview: Webview,
+    length: i32,
 ) -> Result<(), StateError> {
     if webview.is_main() {
         return Ok(());
@@ -259,6 +260,7 @@ pub async fn push_history_state(
 pub async fn replace_history_state(
     browser: State<'_, Browser>,
     webview: Webview,
+    length: i32,
 ) -> Result<(), StateError> {
     if webview.is_main() {
         return Ok(());
@@ -284,7 +286,11 @@ pub async fn pop_history_state(
 }
 
 #[command]
-pub async fn hash_changed(browser: State<'_, Browser>, webview: Webview) -> Result<(), StateError> {
+pub async fn hash_changed(
+    browser: State<'_, Browser>,
+    webview: Webview,
+    length: i32,
+) -> Result<(), StateError> {
     if webview.is_main() {
         return Ok(());
     }

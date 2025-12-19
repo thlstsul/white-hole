@@ -45,11 +45,11 @@ function iconChanged(iconUrl) {
 }
 
 function pushHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("push_history_state");
+  window.__TAURI_INTERNALS__.invoke("push_history_state", { length: history.length });
 }
 
 function replaceHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("replace_history_state");
+  window.__TAURI_INTERNALS__.invoke("replace_history_state", { length: history.length });
 }
 
 function popHistoryState() {
@@ -57,7 +57,7 @@ function popHistoryState() {
 }
 
 function hashChanged() {
-  window.__TAURI_INTERNALS__.invoke("hash_changed");
+  window.__TAURI_INTERNALS__.invoke("hash_changed", { length: history.length });
 }
 
 function getIcon() {

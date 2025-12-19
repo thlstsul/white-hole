@@ -3,33 +3,33 @@ use error_set::error_set;
 use crate::impl_serialize;
 
 error_set! {
-    ParseError = {
+    ParseError := {
         Url(url::ParseError),
-    };
-    FrameworkError = {
+    }
+    FrameworkError := {
         Tauri(tauri::Error),
-    };
-    DatabaseError = {
+    }
+    DatabaseError := {
         Execute(sqlx::Error),
         Migrate(sqlx::migrate::MigrateError),
-    };
-    SetupError = {
+    }
+    SetupError := {
         DbConnect(sqlx::Error),
         Task(delay_timer::error::TaskError),
         Migarate(sqlx::migrate::MigrateError),
-    } || FrameworkError || ParseError;
-    TabError = StateError || FrameworkError || ParseError;
-    StateError = {
+    } || FrameworkError || ParseError
+    TabError := StateError || FrameworkError || ParseError
+    StateError := {
         NoMainView
-    } || FrameworkError || DatabaseError || IconError;
-    WindowError = {
+    } || FrameworkError || DatabaseError || IconError
+    WindowError := {
         WindowState(tauri_plugin_window_state::Error),
-    } || FrameworkError || StateError;
-    IconError = {
+    } || FrameworkError || StateError
+    IconError := {
         GetDataUrl(get_data_url::Error),
         SaveIcon(sqlx::Error),
         Fetching,
-    };
+    }
 }
 
 impl_serialize![

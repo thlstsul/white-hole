@@ -419,7 +419,7 @@ fn parse_key(key: &str) -> Result<Code, HotkeyParseError> {
 }
 
 error_set! {
-    HotkeyParseError = {
+    HotkeyParseError := {
         #[display("Couldn't recognize \"{key}\" as a valid key for hotkey, if you feel like it should be, please report this to https://github.com/tauri-apps/muda")]
         UnsupportedKey {
             key: String,
@@ -432,5 +432,5 @@ error_set! {
         InvalidFormat {
             hotkey: String,
         },
-    };
+    }
 }

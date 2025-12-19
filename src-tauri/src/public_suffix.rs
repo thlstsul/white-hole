@@ -50,12 +50,12 @@ pub async fn update_public_suffix(
 }
 
 error_set! {
-    SyncError = {
+    SyncError := {
         Get(reqwest::Error),
         Query(sqlx::Error),
-    };
-    GetError = {
+    }
+    GetError := {
         Parse(publicsuffix::Error),
         Query(sqlx::Error),
-    };
+    }
 }
