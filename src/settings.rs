@@ -6,7 +6,7 @@ use crate::app::Browser;
 pub fn Settings(#[props(default)] class: String) -> Element {
     rsx! {
         div {
-            class: "dropdown dropdown-hover dropdown-end",
+            class: "dropdown dropdown-hover dropdown-end z-1",
             div {
                 role: "button",
                 class: "btn btn-square btn-ghost {class}",
@@ -31,7 +31,7 @@ pub fn Settings(#[props(default)] class: String) -> Element {
                 }
             }
             ul {
-                class: "menu dropdown-content bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
+                class: "dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
 
                 IncognitoItem {}
             }
