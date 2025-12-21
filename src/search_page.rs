@@ -49,7 +49,7 @@ pub fn SearchPage() -> Element {
                 if e.key() == Key::Enter {
                     if let Some(focus_log) = focus_log() {
                         let _ = open_tab(focus_log.id).await;
-                    };
+                    }
                 } else if e.key() == Key::ArrowRight {
                     e.prevent_default();
                     if let Some(focus_log) = focus_log() {
@@ -57,18 +57,13 @@ pub fn SearchPage() -> Element {
                         if let Some(url) = input_element() {
                             let _ = url.set_focus(true).await;
                         }
-                    };
+                    }
                 }
             },
 
             header {
-                div {
-                    class: "w-full join",
-                    SearchInput {
-                        class: "join-item",
-                        keyword,
-                        input_element,
-                    }
+                div { class: "w-full join",
+                    SearchInput { class: "join-item", keyword, input_element }
                     Settings { class: "join-item" }
                 }
             }
@@ -80,39 +75,46 @@ pub fn SearchPage() -> Element {
                         return;
                     };
 
-                    let (Ok(size), Ok(offset), Ok(client)) = (main_element.get_scroll_size().await, main_element.get_scroll_offset().await, main_element.get_client_rect().await) else {
+                    let (Ok(size), Ok(offset), Ok(client)) = (
+
+                        main_element.get_scroll_size().await,
+                        main_element.get_scroll_offset().await,
+                        main_element.get_client_rect().await,
+                    ) else {
                         return;
                     };
-
-                    if size.height - offset.y - client.size.height < 10. && let Some(next_page_token) = next_page_token() {
+                    if size.height - offset.y - client.size.height < 10.
+                        && let Some(next_page_token) = next_page_token()
+                    {
                         page_token.set(next_page_token);
                     }
                 },
 
-                ul {
-                    class: "list",
+                ul { class: "list",
 
                     for log in logs() {
                         li {
                             tabindex: "0",
                             key: "{log.id}",
                             class: "list-row",
-                            onfocus: move |_| focus_log.set(Some(FocusLog { id: log.id, url: log.url.clone() })),
+                            onfocus: move |_| {
+                                focus_log
+                                    .set(
+                                        Some(FocusLog {
+                                            id: log.id,
+                                            url: log.url.clone(),
+                                        }),
+                                    )
+                            },
                             onclick: move |_| async move {
                                 let _ = open_tab(log.id).await;
                             },
 
                             Icon { url: log.icon_url.clone() }
-                            div {
-                                class: "list-col-grow",
+                            div { class: "list-col-grow",
 
-                                div {
-                                    "{log.title}"
-                                }
-                                div {
-                                    class: "text-xs opacity-60",
-                                    "{log.url}"
-                                }
+                                div { "{log.title}" }
+                                div { class: "text-xs opacity-60", "{log.url}" }
                             }
 
                             if let Some(last_time) = log.last_time {
@@ -143,7 +145,7 @@ fn Icon(url: String) -> Element {
             img {
                 class: "size-9",
                 src: "{url}",
-                onerror: move |_| url.set(DEFAULT_ICON.to_string())
+                onerror: move |_| url.set(DEFAULT_ICON.to_string()),
             }
         }
     }
@@ -154,10 +156,7 @@ fn LogTime(last_time: OffsetDateTime) -> Element {
     let last_time =
         last_time.format(format_description!("[year]-[month]-[day] [hour]:[minute]"))?;
     rsx! {
-        div {
-            class: "text-xs opacity-60",
-            "{last_time}"
-        }
+        div { class: "text-xs opacity-60", "{last_time}" }
     }
 }
 
@@ -166,9 +165,7 @@ fn Star(log_id: i64, checked: bool) -> Element {
     let mut checked = use_signal(use_reactive!(|checked| checked));
 
     rsx! {
-        label {
-            class: "swap",
-            onclick: |e| e.stop_propagation(),
+        label { class: "swap", onclick: |e| e.stop_propagation(),
 
             input {
                 tabindex: "-1",
@@ -214,12 +211,9 @@ fn Star(log_id: i64, checked: bool) -> Element {
 #[component]
 fn LogLoding() -> Element {
     rsx! {
-        div {
-            class: "flex flex-col gap-4 w-full h-full overflow-hidden",
+        div { class: "flex flex-col gap-4 w-full h-full overflow-hidden",
             for _ in 0..10 {
-                div {
-                    class: "skeleton h-16 w-full"
-                }
+                div { class: "skeleton h-16 w-full" }
             }
         }
     }

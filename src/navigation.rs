@@ -98,12 +98,8 @@ fn Reload(#[props(default)] class: String) -> Element {
 #[component]
 fn Loading(#[props(default)] class: String) -> Element {
     rsx! {
-        button {
-            tabindex: "-1",
-            class: "btn btn-square btn-ghost {class}",
-            span {
-                class: "loading loading-ring loading-lg",
-            }
+        button { tabindex: "-1", class: "btn btn-square btn-ghost {class}",
+            span { class: "loading loading-ring loading-lg" }
         }
     }
 }

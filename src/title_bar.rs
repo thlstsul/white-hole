@@ -44,8 +44,7 @@ fn TitleBarContent(#[props(default)] class: String) -> Element {
             onmousedown: |e| e.stop_propagation(),
 
             Icon { src: browser.icon_url }
-            div {
-                class: "px-2 w-full",
+            div { class: "px-2 w-full",
 
                 Title { title: browser.title }
                 Url { url: browser.url }
@@ -65,11 +64,9 @@ fn Icon(src: Memo<String>, #[props(default)] class: String) -> Element {
         }
     });
     rsx! {
-        div {
-            class: "favicon avatar select-none {class}",
+        div { class: "favicon avatar select-none {class}",
 
-            div {
-                class: "w-6 rounded",
+            div { class: "w-6 rounded",
                 img {
                     src,
                     onerror: move |_| {
@@ -84,10 +81,7 @@ fn Icon(src: Memo<String>, #[props(default)] class: String) -> Element {
 #[component]
 fn Title(title: Memo<String>) -> Element {
     rsx! {
-        div {
-            class: "title text-sm font-semibold truncate",
-            "{title}"
-        }
+        div { class: "title text-sm font-semibold truncate", "{title}" }
     }
 }
 
@@ -101,9 +95,6 @@ fn Url(url: Memo<String>) -> Element {
     });
 
     rsx! {
-        div {
-            class: "url text-xs text-blue-300 truncate",
-            "{url}"
-        }
+        div { class: "url text-xs text-blue-300 truncate", "{url}" }
     }
 }

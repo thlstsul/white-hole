@@ -39,14 +39,8 @@ pub fn SearchInput(
                     stroke_width: "2.5",
                     fill: "none",
                     stroke: "currentColor",
-                    circle {
-                        cx: "11",
-                        cy: "11",
-                        r: "8",
-                    },
-                    path {
-                        d: "m21 21-4.3-4.3",
-                    },
+                    circle { cx: "11", cy: "11", r: "8" }
+                    path { d: "m21 21-4.3-4.3" }
                 }
             }
 
@@ -62,14 +56,8 @@ pub fn SearchInput(
                 onmounted: move |element| input_element.set(Some(element.data())),
             }
 
-            kbd {
-                class: "kbd kbd-sm",
-                "CTRL",
-            }
-            kbd {
-                class: "kbd kbd-sm",
-                "L",
-            }
+            kbd { class: "kbd kbd-sm", "CTRL" }
+            kbd { class: "kbd kbd-sm", "L" }
         }
     }
 }

@@ -32,10 +32,7 @@ fn Minimize(#[props(default)] class: String) -> Element {
                 xmlns: "http://www.w3.org/2000/svg",
                 class: "size-4",
                 view_box: "0 0 24 24",
-                path {
-                    fill: "currentColor",
-                    d: "M20 14H4v-4h16",
-                }
+                path { fill: "currentColor", d: "M20 14H4v-4h16" }
             }
         }
     }
@@ -89,10 +86,7 @@ fn Maximize(#[props(default)] class: String) -> Element {
                 xmlns: "http://www.w3.org/2000/svg",
                 class: "size-4",
                 view_box: "0 0 24 24",
-                path {
-                    fill: "currentColor",
-                    d: "M4 4h16v16H4zm2 4v10h12V8z",
-                }
+                path { fill: "currentColor", d: "M4 4h16v16H4zm2 4v10h12V8z" }
             }
         }
     }
@@ -113,7 +107,7 @@ fn Unmaximize(#[props(default)] class: String) -> Element {
                 view_box: "0 0 24 24",
                 path {
                     fill: "currentColor",
-                    d: "M4 8h4V4h12v12h-4v4H4zm12 0v6h2V6h-8v2zM6 12v6h8v-6z"
+                    d: "M4 8h4V4h12v12h-4v4H4zm12 0v6h2V6h-8v2zM6 12v6h8v-6z",
                 }
             }
         }
