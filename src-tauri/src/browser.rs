@@ -192,9 +192,7 @@ impl Browser {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        let log: NavigationLog = state.into();
-        let id = self.save_navigation_log(log).await?;
-        self.tabs.insert_history(label, id).await;
+        self.save_navigation_log(state.into()).await?;
         Ok(())
     }
 
@@ -223,28 +221,26 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn push_history_state(&self, label: &str) -> Result<(), StateError> {
+    pub async fn push_history_state(&self, label: &str, length: i32) -> Result<(), StateError> {
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        let log: NavigationLog = state.into();
-        let id = self.save_navigation_log(log).await?;
-        self.tabs.insert_history(label, id).await;
+        let id = self.save_navigation_log(state.into()).await?;
+        self.tabs.insert_history(label, id, length).await;
 
         Ok(())
     }
 
-    pub async fn replace_history_state(&self, label: &str) -> Result<(), StateError> {
+    pub async fn replace_history_state(&self, label: &str, length: i32) -> Result<(), StateError> {
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        let log: NavigationLog = state.into();
-        let id = self.save_navigation_log(log).await?;
-        self.tabs.replace_history(label, id).await;
+        let id = self.save_navigation_log(state.into()).await?;
+        self.tabs.replace_history(label, id, length).await;
 
         Ok(())
     }
@@ -253,15 +249,14 @@ impl Browser {
         self.change_tab_loading_state(label, false).await
     }
 
-    pub async fn hash_changed(&self, label: &str) -> Result<(), StateError> {
+    pub async fn hash_changed(&self, label: &str, length: i32) -> Result<(), StateError> {
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        let log: NavigationLog = state.into();
-        let id = self.save_navigation_log(log).await?;
-        self.tabs.insert_history(label, id).await;
+        let id = self.save_navigation_log(state.into()).await?;
+        self.tabs.insert_history(label, id, length).await;
 
         Ok(())
     }

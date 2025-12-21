@@ -117,7 +117,7 @@ impl Tab {
             .find_map(|(i, item)| if *item == id { Some(i) } else { None })
     }
 
-    pub fn insert_history(&mut self, id: i64) {
+    pub fn insert_history(&mut self, id: i64, length: i32) {
         if id <= 0 {
             return;
         }
@@ -136,15 +136,22 @@ impl Tab {
         if i != self.history_states.len() - 1 {
             self.history_states.truncate(i + 1);
         }
-        self.history_states.push(id);
-        self.index += 1;
+
+        // 矫正数据（假设没有 history_states.length < length 的情况）
+        if self.history_states.len() == length as usize {
+            self.history_states[self.index as usize] = id;
+        } else {
+            self.history_states.push(id);
+            self.index += 1;
+        }
+
         info!(
-            "insert history, index: {}, history_states: {:?}",
-            self.index, self.history_states
+            "insert history, index: {}, history_states: {:?}, 实际历史长度: {}",
+            self.index, self.history_states, length
         );
     }
 
-    pub fn replace_history(&mut self, id: i64) {
+    pub fn replace_history(&mut self, id: i64, length: i32) {
         if id <= 0 {
             return;
         }
@@ -156,8 +163,8 @@ impl Tab {
             self.history_states[self.index as usize] = id;
         }
         info!(
-            "replace history, index: {}, history_states: {:?}",
-            self.index, self.history_states
+            "replace history, index: {}, history_states: {:?}, 实际历史长度: {}",
+            self.index, self.history_states, length
         );
     }
 
@@ -355,15 +362,15 @@ impl TabMap {
             .await;
     }
 
-    pub async fn insert_history(&self, label: &str, id: i64) {
+    pub async fn insert_history(&self, label: &str, id: i64, length: i32) {
         self.0
-            .update_async(label, |_, tab| tab.insert_history(id))
+            .update_async(label, |_, tab| tab.insert_history(id, length))
             .await;
     }
 
-    pub async fn replace_history(&self, label: &str, id: i64) {
+    pub async fn replace_history(&self, label: &str, id: i64, length: i32) {
         self.0
-            .update_async(label, |_, tab| tab.replace_history(id))
+            .update_async(label, |_, tab| tab.replace_history(id, length))
             .await;
     }
 

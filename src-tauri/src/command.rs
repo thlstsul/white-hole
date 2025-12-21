@@ -252,7 +252,7 @@ pub async fn push_history_state(
     }
 
     info!("{} webview push history state", webview.label());
-    browser.push_history_state(webview.label()).await?;
+    browser.push_history_state(webview.label(), length).await?;
     Ok(())
 }
 
@@ -267,7 +267,9 @@ pub async fn replace_history_state(
     }
 
     info!("{} webview replace history state", webview.label());
-    browser.replace_history_state(webview.label()).await?;
+    browser
+        .replace_history_state(webview.label(), length)
+        .await?;
     Ok(())
 }
 
@@ -296,7 +298,7 @@ pub async fn hash_changed(
     }
 
     info!("{} webview hash changed", webview.label());
-    browser.hash_changed(webview.label()).await?;
+    browser.hash_changed(webview.label(), length).await?;
     Ok(())
 }
 

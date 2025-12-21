@@ -34,6 +34,7 @@ if (window.self == window.top) {
   window.addEventListener(
     "DOMContentLoaded",
     function () {
+      pushHistoryState();
       iconChanged(getIcon());
     },
     false,
