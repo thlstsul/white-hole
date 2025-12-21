@@ -1,7 +1,10 @@
 use std::io::Write as _;
 
 fn main() {
-    insert_public_suffix().expect("初始化 insert_public_suffix.sql 脚本失败");
+    if is_release_build() {
+        insert_public_suffix().expect("初始化 insert_public_suffix.sql 脚本失败");
+    }
+
     tauri_build::build()
 }
 
@@ -22,4 +25,10 @@ fn insert_public_suffix() -> Result<(), Box<dyn std::error::Error>> {
     sql_file.write_all(sql.as_bytes())?;
 
     Ok(())
+}
+
+fn is_release_build() -> bool {
+    std::env::var("PROFILE")
+        .map(|p| p == "release")
+        .unwrap_or(false)
 }
