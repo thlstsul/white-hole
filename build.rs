@@ -1,4 +1,3 @@
-// build.rs
 use std::fs::File;
 use std::io;
 use std::process::{Command, Stdio};
@@ -11,33 +10,14 @@ fn main() {
         println!("cargo:rerun-if-changed=./dist");
     }
 
+    let _ = run_command_safely("dx", &["fmt"], None);
+
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
-    let pnpx = if cfg!(windows) { "pnpx.cmd" } else { "pnpx" };
 
-    // pnpm install tailwindcss @tailwindcss/cli daisyui
-    run_command_safely(
-        pnpm,
-        &["install", "tailwindcss", "@tailwindcss/cli", "daisyui"],
-        None,
-    )
-    .expect("failed to execute pnpm");
+    // pnpm install tailwindcss daisyui
+    run_command_safely(pnpm, &["install", "tailwindcss", "daisyui"], None)
+        .expect("failed to execute pnpm");
 
-    // pnpx @tailwindcss/cli -i ./tailwind.css -o ./assets/styles.css --minify
-    run_command_safely(
-        pnpx,
-        &[
-            "@tailwindcss/cli",
-            "-i",
-            "./tailwind.css",
-            "-o",
-            "./assets/styles.css",
-            "--minify",
-        ],
-        None,
-    )
-    .expect("failed to execute pnpx");
-
-    println!("cargo:rerun-if-changed=./tailwind.css");
     println!("cargo:rerun-if-changed=./src");
 }
 

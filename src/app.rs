@@ -6,7 +6,7 @@ use tauri_sys::{core::invoke_result, event::listen};
 
 use crate::{search_page::SearchPage, title_bar::TitleBar};
 
-const CSS: Asset = asset!("/assets/styles.css");
+const CSS: Asset = asset!("/assets/tailwind.css");
 
 #[component]
 pub fn App() -> Element {

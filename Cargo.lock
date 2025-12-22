@@ -2967,7 +2967,7 @@ dependencies = [
 
 [[package]]
 name = "hotkey"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "error_set",
  "hotkey-macros",
@@ -2980,7 +2980,7 @@ dependencies = [
 
 [[package]]
 name = "hotkey-macros"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6504,7 +6504,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-app-ui"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "dioxus",
  "dioxus-logger",
@@ -7798,7 +7798,7 @@ dependencies = [
 
 [[package]]
 name = "white-hole"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "cached",
  "colored 3.0.0",
