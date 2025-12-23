@@ -2,7 +2,7 @@ if (window.self == window.top) {
   history.pushState = (function (f) {
     return function pushState() {
       var ret = f.apply(this, arguments);
-      pushHistoryState();
+      pushHistoryState(arguments[2]);
       return ret;
     };
   })(history.pushState);
@@ -10,7 +10,7 @@ if (window.self == window.top) {
   history.replaceState = (function (f) {
     return function replaceState() {
       var ret = f.apply(this, arguments);
-      replaceHistoryState();
+      replaceHistoryState(arguments[2]);
       return ret;
     };
   })(history.replaceState);
@@ -45,12 +45,22 @@ function iconChanged(iconUrl) {
   window.__TAURI_INTERNALS__.invoke("icon_changed", { iconUrl });
 }
 
-function pushHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("push_history_state", { length: history.length });
+function pushHistoryState(url) {
+  if (url) {
+    url = new URL(url, window.location.href).href;
+  } else {
+    url = window.location.href;
+  }
+  window.__TAURI_INTERNALS__.invoke("push_history_state", { url: new URL(url, window.location.href).href, length: history.length });
 }
 
-function replaceHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("replace_history_state", { length: history.length });
+function replaceHistoryState(url) {
+  if (url) {
+    url = new URL(url, window.location.href).href;
+  } else {
+    url = window.location.href;
+  }
+  window.__TAURI_INTERNALS__.invoke("replace_history_state", { url: new URL(url, window.location.href).href, length: history.length });
 }
 
 function popHistoryState() {
@@ -58,7 +68,7 @@ function popHistoryState() {
 }
 
 function hashChanged() {
-  window.__TAURI_INTERNALS__.invoke("hash_changed", { length: history.length });
+  window.__TAURI_INTERNALS__.invoke("hash_changed", { url: window.location.href, length: history.length });
 }
 
 function getIcon() {

@@ -221,8 +221,14 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn push_history_state(&self, label: &str, length: i32) -> Result<(), StateError> {
-        let state = self.get_state(Some(label)).await?;
+    pub async fn push_history_state(
+        &self,
+        label: &str,
+        url: String,
+        length: i32,
+    ) -> Result<(), StateError> {
+        let mut state = self.get_state(Some(label)).await?;
+        state.url = url;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
@@ -233,8 +239,14 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn replace_history_state(&self, label: &str, length: i32) -> Result<(), StateError> {
-        let state = self.get_state(Some(label)).await?;
+    pub async fn replace_history_state(
+        &self,
+        label: &str,
+        url: String,
+        length: i32,
+    ) -> Result<(), StateError> {
+        let mut state = self.get_state(Some(label)).await?;
+        state.url = url;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
@@ -249,8 +261,14 @@ impl Browser {
         self.change_tab_loading_state(label, false).await
     }
 
-    pub async fn hash_changed(&self, label: &str, length: i32) -> Result<(), StateError> {
-        let state = self.get_state(Some(label)).await?;
+    pub async fn hash_changed(
+        &self,
+        label: &str,
+        url: String,
+        length: i32,
+    ) -> Result<(), StateError> {
+        let mut state = self.get_state(Some(label)).await?;
+        state.url = url;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
