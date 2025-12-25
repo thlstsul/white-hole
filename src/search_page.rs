@@ -51,11 +51,12 @@ pub fn SearchPage() -> Element {
                         let _ = open_tab(focus_log.id).await;
                     }
                 } else if e.key() == Key::ArrowRight {
-                    e.prevent_default();
-                    if let Some(focus_log) = focus_log() {
-                        keyword.set(focus_log.url.clone());
+                    if let Some(log) = focus_log() {
+                        e.prevent_default();
+                        keyword.set(log.url.clone());
                         if let Some(url) = input_element() {
                             let _ = url.set_focus(true).await;
+                            focus_log.set(None);
                         }
                     }
                 }
