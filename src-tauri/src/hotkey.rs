@@ -4,7 +4,7 @@ use tauri::AppHandle;
 
 use crate::browser::BrowserExt as _;
 
-#[hotkey(Modifiers::CONTROL, Code::KeyR)]
+#[hotkey([(Modifiers::CONTROL, Code::KeyR), (Modifiers::empty(), Code::F5)])]
 async fn reload(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.reload().await {

@@ -85,38 +85,26 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
                         ::tauri::async_runtime::spawn(#fn_name(app_handle));
                     }
                 });
+            }
 
-                for (_i, hotkey_tuple) in hotkeys.iter().enumerate() {
-                    if hotkey_tuple.elems.len() != 2 {
-                        return syn::Error::new(
-                            hotkey_tuple.span(),
-                            "每个热键参数必须是 (modifiers, code) 形式的元组",
-                        )
-                        .to_compile_error()
-                        .into();
-                    }
+            for (_i, hotkey_tuple) in hotkeys.iter().enumerate() {
+                if hotkey_tuple.elems.len() != 2 {
+                    return syn::Error::new(
+                        hotkey_tuple.span(),
+                        "每个热键参数必须是 (modifiers, code) 形式的元组",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
 
-                    let modifiers = &hotkey_tuple.elems[0];
-                    let code = &hotkey_tuple.elems[1];
+                let modifiers = &hotkey_tuple.elems[0];
+                let code = &hotkey_tuple.elems[1];
 
+                if fn_async {
                     calls.push(quote! {
                         manager.register(::hotkey::Hotkey::new(#modifiers, #code), #wrapper_name);
                     });
-                }
-            } else {
-                for (_i, hotkey_tuple) in hotkeys.iter().enumerate() {
-                    if hotkey_tuple.elems.len() != 2 {
-                        return syn::Error::new(
-                            hotkey_tuple.span(),
-                            "每个热键参数必须是 (modifiers, code) 形式的元组",
-                        )
-                        .to_compile_error()
-                        .into();
-                    }
-
-                    let modifiers = &hotkey_tuple.elems[0];
-                    let code = &hotkey_tuple.elems[1];
-
+                } else {
                     calls.push(quote! {
                         manager.register(::hotkey::Hotkey::new(#modifiers, #code), #fn_name);
                     });
