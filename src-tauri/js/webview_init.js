@@ -1,3 +1,5 @@
+const BING_URL = "https://cn.bing.com/?form=SPHPRE1&bbtnserp=1&bbtnfrm=";
+
 if (window.self == window.top) {
   history.pushState = (function (f) {
     return function pushState() {
@@ -9,6 +11,10 @@ if (window.self == window.top) {
 
   history.replaceState = (function (f) {
     return function replaceState() {
+      if (arguments[2] === BING_URL) {
+        // 对抗bing首页推广逻辑
+        return;
+      }
       var ret = f.apply(this, arguments);
       replaceHistoryState(arguments[2]);
       return ret;
