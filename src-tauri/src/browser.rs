@@ -120,12 +120,13 @@ impl Browser {
             self.switch_tab(&label).await?;
             self.state_changed(None).await?;
         } else {
-            self.create_tab(url, true).await?;
+            let label = self.create_tab(url, true).await?;
             let state = self.get_state(None).await?;
             self.state_changed(Some(state.clone())).await?;
             let mut log: NavigationLog = state.into();
             log.url = url.to_string();
-            self.save_navigation_log(log).await?;
+            let id = self.save_navigation_log(log).await?;
+            self.tabs.insert_history(&label, id, 1).await;
         }
 
         self.focus_changed().await?;
@@ -140,12 +141,13 @@ impl Browser {
             self.switch_tab(&label).await?;
             self.state_changed(None).await?;
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
-            self.create_tab(&Url::parse(&url)?, true).await?;
+            let label = self.create_tab(&Url::parse(&url)?, true).await?;
             let state = self.get_state(None).await?;
             self.state_changed(Some(state.clone())).await?;
             let mut log: NavigationLog = state.into();
             log.url = url;
-            self.save_navigation_log(log).await?;
+            let id = self.save_navigation_log(log).await?;
+            self.tabs.insert_history(&label, id, 1).await;
         }
 
         self.focus_changed().await?;
@@ -474,6 +476,17 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn focus_link(&self, url: String) -> Result<(), StateError> {
+        let mut state = self.get_state(None).await?;
+        state.title = "点击链接：".to_string();
+        state.url = url;
+        self.state_changed(Some(state)).await
+    }
+
+    pub async fn blur_link(&self) -> Result<(), StateError> {
+        self.state_changed(None).await
+    }
+
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
         let mut last_focus_changed = self.last_focus_changed.lock().await;
@@ -504,12 +517,12 @@ impl Browser {
         .initialization_script_for_all_frames(include_str!("../js/prevent_default_hotkey.js"))
     }
 
-    async fn create_tab(&self, url: &Url, _active: bool) -> Result<(), FrameworkError> {
+    async fn create_tab(&self, url: &Url, _active: bool) -> Result<String, FrameworkError> {
         let tab = Tab::new(&self.window, url, self.incognito.get().await)?;
         let label = tab.label().to_string();
         self.label.set(label.clone()).await;
-        self.tabs.insert(label, tab).await;
-        Ok(())
+        self.tabs.insert(label.clone(), tab).await;
+        Ok(label)
     }
 
     async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {

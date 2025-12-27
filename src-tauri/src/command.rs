@@ -340,3 +340,13 @@ pub async fn leave_picture_in_picture(
     browser.focus_changed().await?;
     Ok(())
 }
+
+#[command]
+pub async fn focus_link(browser: State<'_, Browser>, url: String) -> Result<(), StateError> {
+    browser.focus_link(url).await
+}
+
+#[command]
+pub async fn blur_link(browser: State<'_, Browser>) -> Result<(), StateError> {
+    browser.blur_link().await
+}

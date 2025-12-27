@@ -1,11 +1,3 @@
-document.addEventListener(
-  "DOMContentLoaded",
-  function () {
-    addListener2Video();
-  },
-  false,
-);
-
 document.addEventListener("fullscreenchange", function () {
   if (document.fullscreenElement) {
     fullscreenChanged(true);
@@ -14,11 +6,57 @@ document.addEventListener("fullscreenchange", function () {
   }
 });
 
-function addListener2Video() {
-  document.querySelectorAll("video").forEach(function (video) {
-    video.addEventListener("leavepictureinpicture", function () {
-      leavePictureInPicture();
+document.addEventListener(
+  "DOMContentLoaded",
+  function () {
+    document.querySelectorAll("a").forEach(addListener2Link);
+    document.querySelectorAll("video").forEach(addListener2Video);
+
+    var observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        mutation.addedNodes.forEach(function (node) {
+          if (node.nodeType === 1) {
+            // 元素节点
+            if (node.tagName === "A") {
+              addListener2Link(node);
+            }
+            // 检查节点内的a标签
+            var links = node.querySelectorAll ? node.querySelectorAll("a") : [];
+            links.forEach(addListener2Link);
+          }
+        });
+      });
     });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  },
+  false,
+);
+
+function addListener2Video(video) {
+  video.addEventListener("leavepictureinpicture", function () {
+    leavePictureInPicture();
+  });
+}
+
+function addListener2Link(link) {
+  link.addEventListener("mouseenter", function (e) {
+    focusLink(this);
+  });
+
+  link.addEventListener("mouseleave", function () {
+    blurLink();
+  });
+
+  link.addEventListener("focus", function () {
+    focusLink(this);
+  });
+
+  link.addEventListener("blur", function () {
+    blurLink();
   });
 }
 
@@ -28,4 +66,18 @@ function fullscreenChanged(isFullscreen) {
 
 function leavePictureInPicture() {
   window.__TAURI_INTERNALS__.invoke("leave_picture_in_picture");
+}
+
+function focusLink(link) {
+  var url = link.href;
+  if (!url || url == "") {
+    return;
+  }
+
+  url = new URL(url, window.location.href).href;
+  window.__TAURI_INTERNALS__.invoke("focus_link", { url });
+}
+
+function blurLink() {
+  window.__TAURI_INTERNALS__.invoke("blur_link");
 }

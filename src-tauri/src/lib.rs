@@ -93,6 +93,8 @@ pub fn run() -> Result<(), SetupError> {
             start_dragging,
             fullscreen_changed,
             leave_picture_in_picture,
+            focus_link,
+            blur_link,
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)
