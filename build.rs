@@ -5,9 +5,9 @@ use std::thread;
 
 fn main() {
     if is_release_build() {
-        // tauri 没有清空 frontendDist，会导致越编译越大
+        // dx、tauri 没有清空捆绑文件，会导致越编译越大
+        let _ = std::fs::remove_dir_all("./target/dx");
         let _ = std::fs::remove_dir_all("./dist/public");
-        println!("cargo:rerun-if-changed=./dist");
     }
 
     let _ = run_command_safely("dx", &["fmt"], None);
