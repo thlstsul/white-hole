@@ -19,10 +19,18 @@ document.addEventListener(
             // 元素节点
             if (node.tagName === "A") {
               addListener2Link(node);
+            } else if (node.tagName === "VIDEO") {
+              addListener2Video(node);
             }
+
             // 检查节点内的a标签
             var links = node.querySelectorAll ? node.querySelectorAll("a") : [];
             links.forEach(addListener2Link);
+            // 检查节点内的video标签
+            var videos = node.querySelectorAll
+              ? node.querySelectorAll("video")
+              : [];
+            videos.forEach(addListener2Video);
           }
         });
       });
