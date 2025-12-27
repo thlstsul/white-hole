@@ -57,7 +57,7 @@ function pushHistoryState(url) {
   } else {
     url = window.location.href;
   }
-  window.__TAURI_INTERNALS__.invoke("push_history_state", { url: new URL(url, window.location.href).href, length: history.length });
+  window.__TAURI_INTERNALS__.invoke("push_history_state", { url, length: history.length });
 }
 
 function replaceHistoryState(url) {
@@ -66,7 +66,7 @@ function replaceHistoryState(url) {
   } else {
     url = window.location.href;
   }
-  window.__TAURI_INTERNALS__.invoke("replace_history_state", { url: new URL(url, window.location.href).href, length: history.length });
+  window.__TAURI_INTERNALS__.invoke("replace_history_state", { url, length: history.length });
 }
 
 function popHistoryState() {
