@@ -42,6 +42,15 @@ if (window.self == window.top) {
     function () {
       pushHistoryState();
       iconChanged(getIcon());
+      DarkReader.auto({
+        darkSchemeBackgroundColor: "#1D232A",
+        darkSchemeTextColor: "#ECFAFF",
+        lightSchemeBackgroundColor: "#FFFFFF",
+        lightSchemeTextColor: "#18181B",
+        brightness: 100,
+        contrast: 90,
+        sepia: 10,
+      });
     },
     false,
   );
@@ -57,7 +66,10 @@ function pushHistoryState(url) {
   } else {
     url = window.location.href;
   }
-  window.__TAURI_INTERNALS__.invoke("push_history_state", { url, length: history.length });
+  window.__TAURI_INTERNALS__.invoke("push_history_state", {
+    url,
+    length: history.length,
+  });
 }
 
 function replaceHistoryState(url) {
@@ -66,7 +78,10 @@ function replaceHistoryState(url) {
   } else {
     url = window.location.href;
   }
-  window.__TAURI_INTERNALS__.invoke("replace_history_state", { url, length: history.length });
+  window.__TAURI_INTERNALS__.invoke("replace_history_state", {
+    url,
+    length: history.length,
+  });
 }
 
 function popHistoryState() {
@@ -74,7 +89,10 @@ function popHistoryState() {
 }
 
 function hashChanged() {
-  window.__TAURI_INTERNALS__.invoke("hash_changed", { url: window.location.href, length: history.length });
+  window.__TAURI_INTERNALS__.invoke("hash_changed", {
+    url: window.location.href,
+    length: history.length,
+  });
 }
 
 function getIcon() {

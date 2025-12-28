@@ -1,11 +1,32 @@
-use std::io::Write as _;
+use std::{io::Write as _, thread};
 
 fn main() {
     if is_release_build() {
-        insert_public_suffix().expect("初始化 insert_public_suffix.sql 脚本失败");
+        let darkreader_handler =
+            thread::spawn(|| darkreader().expect("下载 darkreader.js 脚本失败"));
+        let public_suffix = thread::spawn(|| {
+            insert_public_suffix().expect("初始化 insert_public_suffix.sql 脚本失败")
+        });
+        let (_, _) = (darkreader_handler.join(), public_suffix.join());
     }
 
     tauri_build::build()
+}
+
+fn darkreader() -> Result<(), Box<dyn std::error::Error>> {
+    println!("darkreader1");
+    let darkreader: String =
+        reqwest::blocking::get("https://unpkg.com/darkreader@latest/darkreader.js")?.text()?;
+
+    println!("darkreader2");
+    let mut darkreader_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("js/darkreader.js")?;
+    darkreader_file.write_all(darkreader.as_bytes())?;
+
+    Ok(())
 }
 
 fn insert_public_suffix() -> Result<(), Box<dyn std::error::Error>> {

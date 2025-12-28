@@ -48,6 +48,7 @@ impl Tab {
 
         let webview = window.add_child(
             tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
+                .initialization_script(include_str!("../js/darkreader.js"))
                 .initialization_script(include_str!("../js/webview_init.js"))
                 .initialization_script_for_all_frames(include_str!("../js/all_frames_init.js"))
                 .initialization_script_for_all_frames(include_str!(
