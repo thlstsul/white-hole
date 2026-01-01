@@ -51,8 +51,13 @@ function addListener2Video(video) {
 }
 
 function addListener2Link(link) {
+  var url = link.href;
+  if (!url || !url.startsWith("http") || url.endsWith("#")) {
+    return;
+  }
+
   link.addEventListener("mouseenter", function (e) {
-    focusLink(this);
+    focusLink(url);
   });
 
   link.addEventListener("mouseleave", function () {
@@ -60,7 +65,7 @@ function addListener2Link(link) {
   });
 
   link.addEventListener("focus", function () {
-    focusLink(this);
+    focusLink(url);
   });
 
   link.addEventListener("blur", function () {
@@ -76,13 +81,7 @@ function leavePictureInPicture() {
   window.__TAURI_INTERNALS__.invoke("leave_picture_in_picture");
 }
 
-function focusLink(link) {
-  var url = link.href;
-  if (!url || url == "") {
-    return;
-  }
-
-  url = new URL(url, window.location.href).href;
+function focusLink(url) {
   window.__TAURI_INTERNALS__.invoke("focus_link", { url });
 }
 
