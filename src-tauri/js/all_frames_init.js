@@ -56,7 +56,7 @@ function addListener2Link(link) {
     return;
   }
 
-  link.addEventListener("mouseenter", function (e) {
+  link.addEventListener("mouseenter", function () {
     focusLink(url);
   });
 
@@ -70,6 +70,10 @@ function addListener2Link(link) {
 
   link.addEventListener("blur", function () {
     blurLink();
+  });
+
+  link.addEventListener("click", function () {
+    clickLink(url);
   });
 }
 
@@ -87,4 +91,8 @@ function focusLink(url) {
 
 function blurLink() {
   window.__TAURI_INTERNALS__.invoke("blur_link");
+}
+
+function clickLink(url) {
+  window.__TAURI_INTERNALS__.invoke("click_link", { url });
 }

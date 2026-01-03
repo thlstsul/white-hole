@@ -34,7 +34,7 @@ fn insert_public_suffix() -> Result<(), Box<dyn std::error::Error>> {
         reqwest::blocking::get("https://publicsuffix.org/list/public_suffix_list.dat")?.text()?;
 
     let sql = format!(
-        "insert into public_suffix_list(create_time, content) values(datetime('now', 'localtime'), '{}');",
+        "insert into public_suffix_list (create_time, content) values (datetime('now', 'localtime'), '{}');",
         public_suffix.replace("'", "''")
     );
 

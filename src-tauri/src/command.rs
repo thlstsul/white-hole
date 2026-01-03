@@ -226,9 +226,10 @@ pub async fn update_star(
 }
 
 #[command]
-pub async fn icon_changed(
+pub async fn content_loaded(
     browser: State<'_, Browser>,
     webview: Webview,
+    length: i32,
     icon_url: String,
 ) -> Result<(), StateError> {
     if webview.is_main() {
@@ -236,8 +237,8 @@ pub async fn icon_changed(
     }
 
     let label = webview.label();
-    info!("{label} webview icon changed {icon_url}");
-    browser.change_tab_icon(label, icon_url).await?;
+    info!("{label} webview content loaded {icon_url}");
+    browser.content_loaded(label, length, icon_url).await?;
     Ok(())
 }
 
@@ -349,4 +350,13 @@ pub async fn focus_link(browser: State<'_, Browser>, url: String) -> Result<(), 
 #[command]
 pub async fn blur_link(browser: State<'_, Browser>) -> Result<(), StateError> {
     browser.blur_link().await
+}
+
+#[command]
+pub async fn click_link(
+    browser: State<'_, Browser>,
+    webview: Webview,
+    url: String,
+) -> Result<(), StateError> {
+    browser.click_link(webview.label(), url).await
 }

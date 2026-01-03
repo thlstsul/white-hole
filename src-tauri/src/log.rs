@@ -43,7 +43,7 @@ pub async fn save_log(
 
     let id = get_id(pool, &url).await;
     let icon_id = if !icon_url.is_empty() {
-        save_icon(pool, icon_url).await.unwrap_or(-1)
+        save_icon(pool, &icon_url).await.unwrap_or(-1)
     } else {
         -1
     };

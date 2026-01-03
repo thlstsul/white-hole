@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use crate::{
-    IsMainView,
+    IsMainView, darkreader,
     database::Database,
     error::*,
-    icon::get_icon_data_url,
+    icon::{get_cached_data_url, get_icon_data_url},
     log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
     page::PageToken,
     public_suffix::get_public_suffix_cached,
@@ -13,6 +13,7 @@ use crate::{
     task,
     url::parse_keyword,
 };
+use log::error;
 use tauri::{
     App, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl,
     Window, Wry,
@@ -121,10 +122,11 @@ impl Browser {
             self.state_changed(None).await?;
         } else {
             let label = self.create_tab(url, true).await?;
-            let state = self.get_state(None).await?;
+            let mut state = self.get_state(None).await?;
+            state.url = url.to_string();
             self.state_changed(Some(state.clone())).await?;
             let mut log: NavigationLog = state.into();
-            log.url = url.to_string();
+            log.title.clear();
             let id = self.save_navigation_log(log).await?;
             self.tabs.insert_history(&label, id, 1).await;
         }
@@ -142,10 +144,11 @@ impl Browser {
             self.state_changed(None).await?;
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             let label = self.create_tab(&Url::parse(&url)?, true).await?;
-            let state = self.get_state(None).await?;
+            let mut state = self.get_state(None).await?;
+            state.url = url;
             self.state_changed(Some(state.clone())).await?;
             let mut log: NavigationLog = state.into();
-            log.url = url;
+            log.title.clear();
             let id = self.save_navigation_log(log).await?;
             self.tabs.insert_history(&label, id, 1).await;
         }
@@ -198,15 +201,39 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn change_tab_icon(&self, label: &str, icon_url: String) -> Result<(), StateError> {
+    pub async fn content_loaded(
+        &self,
+        label: &str,
+        length: i32,
+        icon_url: String,
+    ) -> Result<(), StateError> {
         self.tabs.set_icon(label, icon_url).await;
 
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
-        self.save_navigation_log(state.into()).await?;
+
+        self.darkreader_auto_switch(label, &state.url).await;
+
+        let id = self.save_navigation_log(state.into()).await?;
+        self.tabs.insert_history(label, id, length).await;
         Ok(())
+    }
+
+    pub async fn darkreader_auto_switch(&self, label: &str, url: &str) {
+        let enable = if let Ok(url) = Url::parse(url)
+            && let Some(host) = url.host_str()
+        {
+            let pool = self.db.get().await;
+            darkreader::switch(&pool, host).await
+        } else {
+            true
+        };
+
+        if let Err(e) = self.tabs.darkreader(label, enable).await {
+            error!("切换darkreader失败：{e}");
+        }
     }
 
     pub async fn change_tab_loading_state(
@@ -223,12 +250,19 @@ impl Browser {
         Ok(())
     }
 
+    pub async fn set_loading(&self, loading: bool) {
+        self.tabs
+            .set_loading(&self.label.get().await, loading)
+            .await;
+    }
+
     pub async fn push_history_state(
         &self,
         label: &str,
         url: String,
         length: i32,
     ) -> Result<(), StateError> {
+        self.tabs.set_loading(label, false).await;
         let mut state = self.get_state(Some(label)).await?;
         state.url = url;
         if self.is_current_tab(label).await {
@@ -247,6 +281,7 @@ impl Browser {
         url: String,
         length: i32,
     ) -> Result<(), StateError> {
+        self.tabs.set_loading(label, false).await;
         let mut state = self.get_state(Some(label)).await?;
         state.url = url;
         if self.is_current_tab(label).await {
@@ -487,6 +522,13 @@ impl Browser {
         self.state_changed(None).await
     }
 
+    pub async fn click_link(&self, label: &str, url: String) -> Result<(), StateError> {
+        self.tabs.set_loading(label, true).await;
+        let mut state = self.get_state(Some(label)).await?;
+        state.url = url;
+        self.state_changed(Some(state)).await
+    }
+
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
         let mut last_focus_changed = self.last_focus_changed.lock().await;
@@ -530,9 +572,14 @@ impl Browser {
         Ok(save_log(&pool, log).await?)
     }
 
-    async fn get_icon_data_url(&self, url: &str) -> Result<String, IconError> {
+    async fn get_icon_data_url(&self, icon_url: &str) -> Result<String, IconError> {
         let pool = self.db.get().await;
-        get_icon_data_url(&pool, url).await
+        get_icon_data_url(&pool, icon_url).await
+    }
+
+    async fn get_cached_data_url(&self, url: &str) -> Option<String> {
+        let pool = self.db.get().await;
+        get_cached_data_url(&pool, url).await
     }
 
     async fn state_changed(&self, state: Option<BrowserState>) -> Result<(), StateError> {
@@ -542,7 +589,11 @@ impl Browser {
             self.get_state(None).await?
         };
 
-        if !state.icon_url.is_empty()
+        if state.icon_url.is_empty()
+            && let Some(data_url) = self.get_cached_data_url(&state.url).await
+        {
+            state.icon_url = data_url;
+        } else if state.icon_url.starts_with("http")
             && let Ok(icon_url) = self.get_icon_data_url(&state.icon_url).await
         {
             state.icon_url = icon_url;

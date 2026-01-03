@@ -40,24 +40,17 @@ if (window.self == window.top) {
   window.addEventListener(
     "DOMContentLoaded",
     function () {
-      pushHistoryState();
-      iconChanged(getIcon());
-      DarkReader.auto({
-        darkSchemeBackgroundColor: "#1D232A",
-        darkSchemeTextColor: "#ECFAFF",
-        lightSchemeBackgroundColor: "#FFFFFF",
-        lightSchemeTextColor: "#18181B",
-        brightness: 100,
-        contrast: 90,
-        sepia: 10,
-      });
+      contentLoaded();
     },
     false,
   );
 }
 
-function iconChanged(iconUrl) {
-  window.__TAURI_INTERNALS__.invoke("icon_changed", { iconUrl });
+function contentLoaded() {
+  window.__TAURI_INTERNALS__.invoke("content_loaded", {
+    iconUrl: getIcon(),
+    length: history.length,
+  });
 }
 
 function pushHistoryState(url) {

@@ -12,9 +12,15 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    IsMainView as _, browser::BrowserExt, error::FrameworkError, state::BrowserState,
+    IsMainView as _,
+    browser::BrowserExt,
+    darkreader::{DARKREADER_DISABLE_SCRIPT, DARKREADER_ENABLE_SCRIPT},
+    error::FrameworkError,
+    state::BrowserState,
     user_agent::get_user_agent,
 };
+
+const LOADING_TITLE: &str = "正在加载……";
 
 pub struct Tab {
     webview: Webview,
@@ -41,12 +47,11 @@ impl Tab {
             .inner_size()?
             .to_logical::<f64>(window.scale_factor()?);
         size.height -= Webview::TITLE_HEIGHT;
+        let position = LogicalPosition::new(0., Webview::TITLE_HEIGHT);
 
         let label = Uuid::now_v7().to_string();
-
         let app_handle = window.app_handle().clone();
-
-        let webview = window.add_child(
+        let builder =
             tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
                 .initialization_script(include_str!("../js/darkreader.js"))
                 .initialization_script(include_str!("../js/webview_init.js"))
@@ -62,15 +67,14 @@ impl Tab {
                 .on_new_window(move |url, _| on_new_window(&app_handle, url))
                 .on_document_title_changed(on_document_title_changed)
                 .on_page_load(on_page_load)
-                .on_download(on_download),
-            LogicalPosition::new(0., Webview::TITLE_HEIGHT),
-            size,
-        )?;
+                .on_download(on_download);
+
+        let webview = window.add_child(builder, position, size)?;
 
         Ok(Self {
             webview,
             label,
-            title: url.to_string(),
+            title: LOADING_TITLE.to_string(),
             icon_url: String::new(),
             loading: true,
             incognito,
@@ -105,6 +109,9 @@ impl Tab {
 
     pub fn set_loading(&mut self, loading: bool) {
         self.loading = loading;
+        if loading {
+            self.title = LOADING_TITLE.to_string();
+        }
     }
 
     pub fn incognito(&self) -> bool {
@@ -228,6 +235,14 @@ impl Tab {
             .webview
             .reload()
             .inspect_err(|e| error!("重载失败：{e}"));
+    }
+
+    pub fn darkreader(&self, enable: bool) -> Result<(), tauri::Error> {
+        if enable {
+            self.eval(DARKREADER_ENABLE_SCRIPT)
+        } else {
+            self.eval(DARKREADER_DISABLE_SCRIPT)
+        }
     }
 }
 
@@ -400,13 +415,20 @@ impl TabMap {
         self.0.update_async(label, |_, tab| tab.reload()).await;
     }
 
+    pub async fn darkreader(&self, label: &str, enable: bool) -> Result<(), tauri::Error> {
+        self.0
+            .update_async(label, |_, tab| tab.darkreader(enable))
+            .await
+            .unwrap_or(Ok(()))
+    }
+
     pub async fn get_state(&self, label: &str) -> Result<BrowserState, FrameworkError> {
         let state = self
             .0
             .read_async(label, |_, tab| {
                 let mut url = tab.url()?.to_string();
                 if url == "about:blank" {
-                    url = String::new();
+                    url.clear();
                 }
                 Ok(BrowserState {
                     icon_url: tab.icon_url().to_owned(),
@@ -492,6 +514,7 @@ fn on_new_window(app_handle: &AppHandle, url: Url) -> NewWindowResponse<Wry> {
 
         async move {
             let browser = app_handle.browser();
+            browser.set_loading(false).await;
             browser
                 .open_tab_by_url(&url, true)
                 .await

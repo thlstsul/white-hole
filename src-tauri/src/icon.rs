@@ -11,11 +11,15 @@ use crate::{error::IconError, user_agent::get_user_agent};
 
 static GET_DATA_URL: OnceLock<GetDataUrl> = OnceLock::new();
 
-#[cached(key = "String", convert = r#"{ String::from(url) }"#, result = true)]
-pub async fn get_icon_data_url(pool: &SqlitePool, url: &str) -> Result<String, IconError> {
+#[cached(
+    key = "String",
+    convert = r#"{ String::from(icon_url) }"#,
+    result = true
+)]
+pub async fn get_icon_data_url(pool: &SqlitePool, icon_url: &str) -> Result<String, IconError> {
     if let Ok(Some(record)) = sqlx::query!(
         "select data_url as 'data_url!' from icon_cached where url = ? and data_url like 'data:%' and update_time > datetime('now', '-1 month', 'localtime')",
-        url
+        icon_url
     )
     .fetch_optional(pool)
     .await
@@ -25,7 +29,7 @@ pub async fn get_icon_data_url(pool: &SqlitePool, url: &str) -> Result<String, I
 
     async_runtime::spawn({
         let pool = pool.clone();
-        let url = url.to_owned();
+        let url = icon_url.to_owned();
 
         async move {
             let get_date_url = GET_DATA_URL.get_or_init(|| {
@@ -53,7 +57,15 @@ pub async fn get_icon_data_url(pool: &SqlitePool, url: &str) -> Result<String, I
     Err(IconError::Fetching)
 }
 
-pub async fn save_icon(pool: &SqlitePool, url: String) -> Result<i64, sqlx::Error> {
+#[cached(key = "String", convert = r#"{ String::from(url) }"#, option = true)]
+pub async fn get_cached_data_url(pool: &SqlitePool, url: &str) -> Option<String> {
+    sqlx::query!(
+        "select a.data_url from icon_cached a, navigation_log b where a.id = b.icon_id and b.url = ?",
+        url
+    ).fetch_optional(pool).await.ok()?.map(|record| record.data_url)?
+}
+
+pub async fn save_icon(pool: &SqlitePool, url: &str) -> Result<i64, sqlx::Error> {
     let id = get_id(pool, &url).await;
     if let Some(id) = id {
         return Ok(id);

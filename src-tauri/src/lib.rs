@@ -17,6 +17,7 @@ use crate::{
 
 mod browser;
 mod command;
+mod darkreader;
 mod database;
 mod error;
 mod hotkey;
@@ -85,7 +86,7 @@ pub fn run() -> Result<(), SetupError> {
             replace_history_state,
             pop_history_state,
             hash_changed,
-            icon_changed,
+            content_loaded,
             minimize,
             maximize,
             unmaximize,
@@ -95,6 +96,7 @@ pub fn run() -> Result<(), SetupError> {
             leave_picture_in_picture,
             focus_link,
             blur_link,
+            click_link,
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)
