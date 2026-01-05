@@ -30,7 +30,7 @@ pub struct Tab {
     loading: bool,
     incognito: bool,
     index: isize,
-    history_states: Vec<i64>,
+    history: Vec<i64>,
 }
 
 impl Deref for Tab {
@@ -77,13 +77,13 @@ impl Tab {
             icon_url: String::new(),
             loading: true,
             incognito,
-            history_states: Vec::new(),
+            history: Vec::new(),
             index: -1,
         })
     }
 
     pub fn index(&self, id: i64) -> Option<usize> {
-        self.history_states
+        self.history
             .iter()
             .enumerate()
             .find_map(|(i, item)| if *item == id { Some(i) } else { None })
@@ -94,32 +94,32 @@ impl Tab {
             return;
         }
 
-        if self.index < 0 {
-            self.history_states.push(id);
-            self.index = (self.history_states.len() - 1) as isize;
+        let length = length as usize;
+        if self.history.len() > length {
+            self.history.truncate(length);
+        }
+
+        if self.index < 0 || self.history.len() + 1 == length {
+            self.history.push(id);
+            self.index = (self.history.len() - 1) as isize;
             return;
         }
 
         let i = self.index as usize;
-        if id == self.history_states[i] {
+        if id == self.history[i] {
             return;
         }
 
-        if i != self.history_states.len() - 1 {
-            self.history_states.truncate(i + 1);
-        }
-
-        // 矫正数据（假设没有 history_states.length < length 的情况）
-        if self.history_states.len() == length as usize {
-            self.history_states[self.index as usize] = id;
+        if self.history.len() == length {
+            self.history[self.index as usize] = id;
         } else {
-            self.history_states.push(id);
+            self.history.push(id);
             self.index += 1;
         }
 
         info!(
             "insert history, index: {}, history_states: {:?}, 实际历史长度: {}",
-            self.index, self.history_states, length
+            self.index, self.history, length
         );
     }
 
@@ -129,14 +129,14 @@ impl Tab {
         }
 
         if self.index < 0 {
-            self.history_states.push(id);
-            self.index = (self.history_states.len() - 1) as isize;
+            self.history.push(id);
+            self.index = (self.history.len() - 1) as isize;
         } else {
-            self.history_states[self.index as usize] = id;
+            self.history[self.index as usize] = id;
         }
         info!(
             "replace history, index: {}, history_states: {:?}, 实际历史长度: {}",
-            self.index, self.history_states, length
+            self.index, self.history, length
         );
     }
 
@@ -145,7 +145,7 @@ impl Tab {
     }
 
     pub fn can_forward(&self) -> bool {
-        self.index < self.history_states.len() as isize - 1
+        self.index < self.history.len() as isize - 1
     }
 
     pub fn back(&mut self) -> bool {
