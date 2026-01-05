@@ -1,4 +1,4 @@
-use sqlx::{SqlitePool, sqlite::SqliteQueryResult};
+use sqlx::SqlitePool;
 
 pub const DARKREADER_DISABLE_SCRIPT: &str = r#"DarkReader.auto(false)"#;
 pub const DARKREADER_ENABLE_SCRIPT: &str = r#"DarkReader.auto({

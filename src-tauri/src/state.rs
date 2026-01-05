@@ -1,6 +1,9 @@
 use serde::Serialize;
 use tauri::async_runtime::RwLock;
 
+const CHINESE_NAME: &str = "白洞";
+const ENGLISH_NAME: &str = "White Hole";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct BrowserState {
     pub icon_url: String,
@@ -17,8 +20,8 @@ pub struct BrowserState {
 impl Default for BrowserState {
     fn default() -> Self {
         Self {
-            title: "白洞".to_string(),
-            url: "White Hole".to_string(),
+            title: CHINESE_NAME.to_string(),
+            url: ENGLISH_NAME.to_string(),
             icon_url: String::new(),
             maximized: false,
             loading: false,

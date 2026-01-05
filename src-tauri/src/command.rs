@@ -353,10 +353,6 @@ pub async fn blur_link(browser: State<'_, Browser>) -> Result<(), StateError> {
 }
 
 #[command]
-pub async fn click_link(
-    browser: State<'_, Browser>,
-    webview: Webview,
-    url: String,
-) -> Result<(), StateError> {
-    browser.click_link(webview.label(), url).await
+pub async fn click_link(browser: State<'_, Browser>, url: String) -> Result<(), StateError> {
+    browser.click_link(url).await
 }

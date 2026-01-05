@@ -25,6 +25,7 @@ use tokio::time::Instant;
 
 const WIDTH: f64 = 800.;
 const HEIGHT: f64 = 600.;
+const FOCUS_LINK_TITLE: &str = "点击链接：";
 
 pub struct Browser {
     db: Database,
@@ -262,7 +263,6 @@ impl Browser {
         url: String,
         length: i32,
     ) -> Result<(), StateError> {
-        self.tabs.set_loading(label, false).await;
         let mut state = self.get_state(Some(label)).await?;
         state.url = url;
         if self.is_current_tab(label).await {
@@ -281,7 +281,6 @@ impl Browser {
         url: String,
         length: i32,
     ) -> Result<(), StateError> {
-        self.tabs.set_loading(label, false).await;
         let mut state = self.get_state(Some(label)).await?;
         state.url = url;
         if self.is_current_tab(label).await {
@@ -513,7 +512,7 @@ impl Browser {
 
     pub async fn focus_link(&self, url: String) -> Result<(), StateError> {
         let mut state = self.get_state(None).await?;
-        state.title = "点击链接：".to_string();
+        state.title = FOCUS_LINK_TITLE.to_string();
         state.url = url;
         self.state_changed(Some(state)).await
     }
@@ -522,10 +521,10 @@ impl Browser {
         self.state_changed(None).await
     }
 
-    pub async fn click_link(&self, label: &str, url: String) -> Result<(), StateError> {
-        self.tabs.set_loading(label, true).await;
-        let mut state = self.get_state(Some(label)).await?;
+    pub async fn click_link(&self, url: String) -> Result<(), StateError> {
+        let mut state = self.get_state(None).await?;
         state.url = url;
+        state.loading = true;
         self.state_changed(Some(state)).await
     }
 

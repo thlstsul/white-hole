@@ -21,10 +21,10 @@ use crate::{
 };
 
 const LOADING_TITLE: &str = "正在加载……";
+const BLANK_URL: &str = "about:blank";
 
 pub struct Tab {
     webview: Webview,
-    label: String,
     title: String,
     icon_url: String,
     loading: bool,
@@ -73,7 +73,6 @@ impl Tab {
 
         Ok(Self {
             webview,
-            label,
             title: LOADING_TITLE.to_string(),
             icon_url: String::new(),
             loading: true,
@@ -81,41 +80,6 @@ impl Tab {
             history_states: Vec::new(),
             index: -1,
         })
-    }
-
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-
-    pub fn title(&self) -> &str {
-        &self.title
-    }
-
-    pub fn set_title(&mut self, title: String) {
-        self.title = title;
-    }
-
-    pub fn icon_url(&self) -> &str {
-        &self.icon_url
-    }
-
-    pub fn set_icon_url(&mut self, icon_url: String) {
-        self.icon_url = icon_url;
-    }
-
-    pub fn loading(&self) -> bool {
-        self.loading
-    }
-
-    pub fn set_loading(&mut self, loading: bool) {
-        self.loading = loading;
-        if loading {
-            self.title = LOADING_TITLE.to_string();
-        }
-    }
-
-    pub fn incognito(&self) -> bool {
-        self.incognito
     }
 
     pub fn index(&self, id: i64) -> Option<usize> {
@@ -290,7 +254,7 @@ impl TabMap {
         let mut labels = Vec::new();
         self.0
             .iter_async(|l, tab| {
-                if tab.incognito() {
+                if tab.incognito {
                     labels.push(l.to_owned());
                 }
                 true
@@ -307,7 +271,7 @@ impl TabMap {
         let mut label = None;
         self.0
             .any_async(|l, tab| {
-                if tab.incognito() != incognito {
+                if tab.incognito != incognito {
                     return false;
                 }
 
@@ -361,20 +325,18 @@ impl TabMap {
     }
 
     pub async fn set_title(&self, label: &str, title: String) {
-        self.0
-            .update_async(label, |_, tab| tab.set_title(title))
-            .await;
+        self.0.update_async(label, |_, tab| tab.title = title).await;
     }
 
     pub async fn set_icon(&self, label: &str, icon_url: String) {
         self.0
-            .update_async(label, |_, tab| tab.set_icon_url(icon_url))
+            .update_async(label, |_, tab| tab.icon_url = icon_url)
             .await;
     }
 
     pub async fn set_loading(&self, label: &str, loading: bool) {
         self.0
-            .update_async(label, |_, tab| tab.set_loading(loading))
+            .update_async(label, |_, tab| tab.loading = loading)
             .await;
     }
 
@@ -427,14 +389,14 @@ impl TabMap {
             .0
             .read_async(label, |_, tab| {
                 let mut url = tab.url()?.to_string();
-                if url == "about:blank" {
+                if url == BLANK_URL {
                     url.clear();
                 }
                 Ok(BrowserState {
-                    icon_url: tab.icon_url().to_owned(),
-                    title: tab.title().to_owned(),
+                    icon_url: tab.icon_url.clone(),
+                    title: tab.title.clone(),
                     url,
-                    loading: tab.loading(),
+                    loading: tab.loading,
                     can_back: tab.can_back(),
                     can_forward: tab.can_forward(),
                     ..Default::default()
