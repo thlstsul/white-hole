@@ -8,6 +8,7 @@ fn main() {
         // dx、tauri 没有清空捆绑文件，会导致越编译越大
         let _ = std::fs::remove_dir_all("./target/dx");
         let _ = std::fs::remove_dir_all("./dist/public");
+        println!("cargo:rerun-if-changed=./");
     }
 
     let _ = run_command_safely("dx", &["fmt"], None);
@@ -17,8 +18,6 @@ fn main() {
     // pnpm install tailwindcss daisyui
     run_command_safely(pnpm, &["install", "tailwindcss", "daisyui"], None)
         .expect("failed to execute pnpm");
-
-    println!("cargo:rerun-if-changed=./src");
 }
 
 fn run_command_safely(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {
