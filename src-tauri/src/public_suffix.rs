@@ -1,17 +1,18 @@
 use std::time::Duration;
 
 use cached::proc_macro::once;
-use error_set::error_set;
 use publicsuffix::List;
 use sqlx::{SqlitePool, sqlite::SqliteQueryResult};
 
+use crate::error::{GetPublicSuffixError, SyncPublicSuffixError};
+
 #[once(time = 90000, sync_writes = true, result = true)]
-pub async fn get_public_suffix_cached(pool: &SqlitePool) -> Result<List, GetError> {
+pub async fn get_public_suffix_cached(pool: &SqlitePool) -> Result<List, GetPublicSuffixError> {
     let content = get_public_suffix(pool, false).await?;
     Ok(content.parse()?)
 }
 
-pub async fn sync_public_suffix(pool: &SqlitePool) -> Result<(), SyncError> {
+pub async fn sync_public_suffix(pool: &SqlitePool) -> Result<(), SyncPublicSuffixError> {
     if get_public_suffix(pool, true).await.is_ok() {
         return Ok(());
     }
@@ -47,15 +48,4 @@ pub async fn update_public_suffix(
     content: &str,
 ) -> Result<SqliteQueryResult, sqlx::Error> {
     sqlx::query!("delete from public_suffix_list;insert into public_suffix_list(content, create_time) values (?, datetime('now', 'localtime'))", content).execute(pool).await
-}
-
-error_set! {
-    SyncError := {
-        Get(reqwest::Error),
-        Query(sqlx::Error),
-    }
-    GetError := {
-        Parse(publicsuffix::Error),
-        Query(sqlx::Error),
-    }
 }

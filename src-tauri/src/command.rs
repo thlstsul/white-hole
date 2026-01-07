@@ -247,7 +247,7 @@ pub async fn push_history_state(
     browser: State<'_, Browser>,
     webview: Webview,
     url: String,
-    length: i32,
+    length: usize,
 ) -> Result<(), StateError> {
     if webview.is_main() {
         return Ok(());
@@ -265,7 +265,7 @@ pub async fn replace_history_state(
     browser: State<'_, Browser>,
     webview: Webview,
     url: String,
-    length: i32,
+    length: usize,
 ) -> Result<(), StateError> {
     if webview.is_main() {
         return Ok(());
@@ -297,7 +297,7 @@ pub async fn hash_changed(
     browser: State<'_, Browser>,
     webview: Webview,
     url: String,
-    length: i32,
+    length: usize,
 ) -> Result<(), StateError> {
     if webview.is_main() {
         return Ok(());

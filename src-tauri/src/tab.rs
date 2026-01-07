@@ -29,6 +29,7 @@ pub struct Tab {
     icon_url: String,
     loading: bool,
     incognito: bool,
+    darkreader: bool,
     index: isize,
     history: Vec<i64>,
 }
@@ -77,6 +78,7 @@ impl Tab {
             icon_url: String::new(),
             loading: true,
             incognito,
+            darkreader: true,
             history: Vec::new(),
             index: -1,
         })
@@ -89,14 +91,9 @@ impl Tab {
             .find_map(|(i, item)| if *item == id { Some(i) } else { None })
     }
 
-    pub fn insert_history(&mut self, id: i64, length: i32) {
+    pub fn insert_history(&mut self, id: i64, length: usize) {
         if id <= 0 {
             return;
-        }
-
-        let length = length as usize;
-        if self.history.len() > length {
-            self.history.truncate(length);
         }
 
         if self.index < 0 || self.history.len() + 1 == length {
@@ -110,12 +107,17 @@ impl Tab {
             return;
         }
 
-        if self.history.len() == length {
-            self.history[self.index as usize] = id;
-        } else {
-            self.history.push(id);
-            self.index += 1;
+        if length > 0 && self.history.len() > length {
+            self.history.truncate(length - 1);
+            self.index = (length - 2) as isize;
         }
+        if length == 0 && i != self.history.len() - 1 {
+            // 目前只有 load 时，length 为 0
+            self.history.truncate(i);
+        }
+
+        self.history.push(id);
+        self.index += 1;
 
         info!(
             "insert history, index: {}, history_states: {:?}, 实际历史长度: {}",
@@ -123,17 +125,26 @@ impl Tab {
         );
     }
 
-    pub fn replace_history(&mut self, id: i64, length: i32) {
+    pub fn replace_history(&mut self, id: i64, length: usize) {
         if id <= 0 {
             return;
         }
 
-        if self.index < 0 {
+        if length > 0 && self.history.len() > length {
+            self.history.truncate(length);
+            let max_index = (length - 1) as isize;
+            if self.index > max_index {
+                self.index = max_index;
+            }
+        }
+
+        if self.index < 0 || self.history.len() + 1 == length {
             self.history.push(id);
             self.index = (self.history.len() - 1) as isize;
         } else {
             self.history[self.index as usize] = id;
         }
+
         info!(
             "replace history, index: {}, history_states: {:?}, 实际历史长度: {}",
             self.index, self.history, length
@@ -201,12 +212,18 @@ impl Tab {
             .inspect_err(|e| error!("重载失败：{e}"));
     }
 
-    pub fn darkreader(&self, enable: bool) -> Result<(), tauri::Error> {
-        if enable {
+    pub fn darkreader(&mut self, enable: bool) -> Result<(), tauri::Error> {
+        let result = if enable {
             self.eval(DARKREADER_ENABLE_SCRIPT)
         } else {
             self.eval(DARKREADER_DISABLE_SCRIPT)
+        };
+
+        if result.is_ok() {
+            self.darkreader = enable;
         }
+
+        result
     }
 }
 
@@ -340,13 +357,13 @@ impl TabMap {
             .await;
     }
 
-    pub async fn insert_history(&self, label: &str, id: i64, length: i32) {
+    pub async fn insert_history(&self, label: &str, id: i64, length: usize) {
         self.0
             .update_async(label, |_, tab| tab.insert_history(id, length))
             .await;
     }
 
-    pub async fn replace_history(&self, label: &str, id: i64, length: i32) {
+    pub async fn replace_history(&self, label: &str, id: i64, length: usize) {
         self.0
             .update_async(label, |_, tab| tab.replace_history(id, length))
             .await;
@@ -507,16 +524,15 @@ fn on_page_load(webview: Webview, payload: PageLoadPayload) {
         info!("{label} webview page load: {event:?}");
 
         let browser = webview.browser();
-        match event {
-            tauri::webview::PageLoadEvent::Started => browser
-                .change_tab_loading_state(label, true)
-                .await
-                .inspect_err(|e| error!("{label}变更加载状态失败：{e}")),
-            tauri::webview::PageLoadEvent::Finished => browser
-                .change_tab_loading_state(label, false)
-                .await
-                .inspect_err(|e| error!("{label}变更加载状态失败：{e}")),
-        }
+        let loading = match event {
+            tauri::webview::PageLoadEvent::Started => true,
+            tauri::webview::PageLoadEvent::Finished => false,
+        };
+
+        browser
+            .on_page_load(label, loading)
+            .await
+            .inspect_err(|e| error!("{label}变更加载状态失败：{e}"))
     });
 }
 

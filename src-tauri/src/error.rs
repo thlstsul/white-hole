@@ -5,6 +5,7 @@ use crate::impl_serialize;
 error_set! {
     ParseError := {
         Url(url::ParseError),
+        PublicSuffix(publicsuffix::Error),
     }
     FrameworkError := {
         Tauri(tauri::Error),
@@ -30,6 +31,10 @@ error_set! {
         SaveIcon(sqlx::Error),
         Fetching,
     }
+    SyncPublicSuffixError := {
+        FetchPublicSuffix(reqwest::Error)
+    } || DatabaseError
+    GetPublicSuffixError := ParseError || DatabaseError
 }
 
 impl_serialize![

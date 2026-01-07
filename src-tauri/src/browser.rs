@@ -82,13 +82,14 @@ impl Browser {
     pub async fn resize(&self) -> Result<(), StateError> {
         let scale_factor = self.window.scale_factor()?;
         let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
-        if self.label.get().await.is_empty() || web_size.height < HEIGHT || web_size.width < WIDTH {
+        if !(self.label.get().await.is_empty()
+            || web_size.height < HEIGHT
+            || web_size.width < WIDTH)
+        {
             // 无TAB或最小化后，不需要变更大小
-            return Ok(());
+            web_size.height -= Webview::TITLE_HEIGHT;
+            self.tabs.set_size(web_size).await;
         }
-
-        web_size.height -= Webview::TITLE_HEIGHT;
-        self.tabs.set_size(web_size).await;
 
         self.state_changed(None).await?;
         Ok(())
@@ -205,20 +206,18 @@ impl Browser {
     pub async fn content_loaded(
         &self,
         label: &str,
-        length: i32,
+        _length: i32,
         icon_url: String,
     ) -> Result<(), StateError> {
         self.tabs.set_icon(label, icon_url).await;
 
         let state = self.get_state(Some(label)).await?;
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
         self.darkreader_auto_switch(label, &state.url).await;
 
-        let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.insert_history(label, id, length).await;
+        if self.is_current_tab(label).await {
+            self.state_changed(Some(state)).await?;
+        }
+
         Ok(())
     }
 
@@ -237,17 +236,18 @@ impl Browser {
         }
     }
 
-    pub async fn change_tab_loading_state(
-        &self,
-        label: &str,
-        loading: bool,
-    ) -> Result<(), StateError> {
+    pub async fn on_page_load(&self, label: &str, loading: bool) -> Result<(), StateError> {
         self.tabs.set_loading(label, loading).await;
 
+        let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
-            self.state_changed(None).await?;
+            self.state_changed(Some(state.clone())).await?;
         }
 
+        if loading {
+            let id = self.save_navigation_log(state.into()).await?;
+            self.tabs.insert_history(label, id, 0).await;
+        }
         Ok(())
     }
 
@@ -261,7 +261,7 @@ impl Browser {
         &self,
         label: &str,
         url: String,
-        length: i32,
+        length: usize,
     ) -> Result<(), StateError> {
         let mut state = self.get_state(Some(label)).await?;
         state.url = url;
@@ -279,7 +279,7 @@ impl Browser {
         &self,
         label: &str,
         url: String,
-        length: i32,
+        length: usize,
     ) -> Result<(), StateError> {
         let mut state = self.get_state(Some(label)).await?;
         state.url = url;
@@ -293,15 +293,15 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn pop_history_state(&self, label: &str) -> Result<(), StateError> {
-        self.change_tab_loading_state(label, false).await
+    pub async fn pop_history_state(&self, _label: &str) -> Result<(), StateError> {
+        Ok(())
     }
 
     pub async fn hash_changed(
         &self,
         label: &str,
         url: String,
-        length: i32,
+        length: usize,
     ) -> Result<(), StateError> {
         let mut state = self.get_state(Some(label)).await?;
         state.url = url;
@@ -579,6 +579,16 @@ impl Browser {
     async fn get_cached_data_url(&self, url: &str) -> Option<String> {
         let pool = self.db.get().await;
         get_cached_data_url(&pool, url).await
+    }
+
+    async fn change_tab_loading_state(&self, label: &str, loading: bool) -> Result<(), StateError> {
+        self.tabs.set_loading(label, loading).await;
+
+        if self.is_current_tab(label).await {
+            self.state_changed(None).await?;
+        }
+
+        Ok(())
     }
 
     async fn state_changed(&self, state: Option<BrowserState>) -> Result<(), StateError> {
