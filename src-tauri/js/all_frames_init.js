@@ -1,102 +1,108 @@
-document.addEventListener("fullscreenchange", function () {
-  if (document.fullscreenElement) {
-    fullscreenChanged(true);
-  } else {
-    fullscreenChanged(false);
-  }
-});
+(function () {
+  document.addEventListener("fullscreenchange", function () {
+    if (document.fullscreenElement) {
+      fullscreenChanged(true);
+    } else {
+      fullscreenChanged(false);
+    }
+  });
 
-document.addEventListener(
-  "DOMContentLoaded",
-  function () {
-    document.querySelectorAll("a").forEach(addListener2Link);
-    document.querySelectorAll("video").forEach(addListener2Video);
+  document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+      document.querySelectorAll("a").forEach(addListener2Link);
+      document.querySelectorAll("video").forEach(addListener2Video);
 
-    var observer = new MutationObserver(function (mutations) {
-      mutations.forEach(function (mutation) {
-        mutation.addedNodes.forEach(function (node) {
-          if (node.nodeType === 1) {
-            // 元素节点
-            if (node.tagName === "A") {
-              addListener2Link(node);
-            } else if (node.tagName === "VIDEO") {
-              addListener2Video(node);
+      var observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+          mutation.addedNodes.forEach(function (node) {
+            if (node.nodeType === 1) {
+              // 元素节点
+              if (node.tagName === "A") {
+                addListener2Link(node);
+              } else if (node.tagName === "VIDEO") {
+                addListener2Video(node);
+              }
+
+              // 检查节点内的a标签
+              var links = node.querySelectorAll
+                ? node.querySelectorAll("a")
+                : [];
+              links.forEach(addListener2Link);
+              // 检查节点内的video标签
+              var videos = node.querySelectorAll
+                ? node.querySelectorAll("video")
+                : [];
+              videos.forEach(addListener2Video);
             }
-
-            // 检查节点内的a标签
-            var links = node.querySelectorAll ? node.querySelectorAll("a") : [];
-            links.forEach(addListener2Link);
-            // 检查节点内的video标签
-            var videos = node.querySelectorAll
-              ? node.querySelectorAll("video")
-              : [];
-            videos.forEach(addListener2Video);
-          }
+          });
         });
       });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+    },
+    false,
+  );
+
+  function addListener2Video(video) {
+    video.addEventListener("leavepictureinpicture", function () {
+      leavePictureInPicture();
     });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-  },
-  false,
-);
-
-function addListener2Video(video) {
-  video.addEventListener("leavepictureinpicture", function () {
-    leavePictureInPicture();
-  });
-}
-
-function addListener2Link(link) {
-  var url = link.href;
-  if (!url || !url.startsWith("http") || url.endsWith("#")) {
-    return;
   }
 
-  link.addEventListener("mouseenter", function () {
-    focusLink(url);
-  });
+  function addListener2Link(link) {
+    var url = link.href;
+    if (!url || !url.startsWith("http") || url.endsWith("#")) {
+      return;
+    }
 
-  link.addEventListener("mouseleave", function () {
-    blurLink();
-  });
+    link.addEventListener("mouseenter", function () {
+      focusLink(url);
+    });
 
-  link.addEventListener("focus", function () {
-    focusLink(url);
-  });
+    link.addEventListener("mouseleave", function () {
+      blurLink();
+    });
 
-  link.addEventListener("blur", function () {
-    blurLink();
-  });
+    link.addEventListener("focus", function () {
+      focusLink(url);
+    });
 
-  link.addEventListener("click", function () {
-    clickLink(url);
-  });
-}
+    link.addEventListener("blur", function () {
+      blurLink();
+    });
 
-function invoke(cmd, payload = {}) {
-  window.__TAURI_INTERNALS__.invoke(cmd, payload, { donotUseCustomProtocol: true });
-}
+    link.addEventListener("click", function () {
+      clickLink(url);
+    });
+  }
 
-function fullscreenChanged(isFullscreen) {
-  invoke("fullscreen_changed", { isFullscreen });
-}
+  function webviewIpcInvoke(cmd, payload = {}) {
+    window.__TAURI_INTERNALS__.invoke(cmd, payload, {
+      donotUseCustomProtocol: true,
+    });
+  }
 
-function leavePictureInPicture() {
-  invoke("leave_picture_in_picture");
-}
+  function fullscreenChanged(isFullscreen) {
+    webviewIpcInvoke("fullscreen_changed", { isFullscreen });
+  }
 
-function focusLink(url) {
-  invoke("focus_link", { url });
-}
+  function leavePictureInPicture() {
+    webviewIpcInvoke("leave_picture_in_picture");
+  }
 
-function blurLink() {
-  invoke("blur_link");
-}
+  function focusLink(url) {
+    webviewIpcInvoke("focus_link", { url });
+  }
 
-function clickLink(url) {
-  invoke("click_link", { url });
-}
+  function blurLink() {
+    webviewIpcInvoke("blur_link");
+  }
+
+  function clickLink(url) {
+    webviewIpcInvoke("click_link", { url });
+  }
+})();
