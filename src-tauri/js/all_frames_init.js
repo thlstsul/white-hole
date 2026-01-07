@@ -77,22 +77,26 @@ function addListener2Link(link) {
   });
 }
 
+function invoke(cmd, payload = {}) {
+  window.__TAURI_INTERNALS__.invoke(cmd, payload, { donotUseCustomProtocol: true });
+}
+
 function fullscreenChanged(isFullscreen) {
-  window.__TAURI_INTERNALS__.invoke("fullscreen_changed", { isFullscreen });
+  invoke("fullscreen_changed", { isFullscreen });
 }
 
 function leavePictureInPicture() {
-  window.__TAURI_INTERNALS__.invoke("leave_picture_in_picture");
+  invoke("leave_picture_in_picture");
 }
 
 function focusLink(url) {
-  window.__TAURI_INTERNALS__.invoke("focus_link", { url });
+  invoke("focus_link", { url });
 }
 
 function blurLink() {
-  window.__TAURI_INTERNALS__.invoke("blur_link");
+  invoke("blur_link");
 }
 
 function clickLink(url) {
-  window.__TAURI_INTERNALS__.invoke("click_link", { url });
+  invoke("click_link", { url });
 }

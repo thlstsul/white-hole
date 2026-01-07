@@ -47,7 +47,7 @@ if (window.self == window.top) {
 }
 
 function contentLoaded() {
-  window.__TAURI_INTERNALS__.invoke("content_loaded", {
+  invoke("content_loaded", {
     iconUrl: getIcon(),
     length: history.length,
   });
@@ -59,7 +59,7 @@ function pushHistoryState(url) {
   } else {
     url = window.location.href;
   }
-  window.__TAURI_INTERNALS__.invoke("push_history_state", {
+  invoke("push_history_state", {
     url,
     length: history.length,
   });
@@ -71,18 +71,18 @@ function replaceHistoryState(url) {
   } else {
     url = window.location.href;
   }
-  window.__TAURI_INTERNALS__.invoke("replace_history_state", {
+  invoke("replace_history_state", {
     url,
     length: history.length,
   });
 }
 
 function popHistoryState() {
-  window.__TAURI_INTERNALS__.invoke("pop_history_state");
+  invoke("pop_history_state");
 }
 
 function hashChanged() {
-  window.__TAURI_INTERNALS__.invoke("hash_changed", {
+  invoke("hash_changed", {
     url: window.location.href,
     length: history.length,
   });
