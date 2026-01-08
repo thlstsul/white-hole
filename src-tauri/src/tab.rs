@@ -113,7 +113,7 @@ impl Tab {
         }
         if length == 0 && i != self.history.len() - 1 {
             // 目前只有 load 时，length 为 0
-            self.history.truncate(i);
+            self.history.truncate(i + 1);
         }
 
         self.history.push(id);
