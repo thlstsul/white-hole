@@ -1,7 +1,6 @@
-use std::time::Duration;
-
 use crate::{
-    IsMainView, darkreader,
+    IsMainView,
+    darkreader::{self, delete_blacklist, save_blacklist},
     database::Database,
     error::*,
     icon::{get_cached_data_url, get_icon_data_url},
@@ -211,8 +210,8 @@ impl Browser {
     ) -> Result<(), StateError> {
         self.tabs.set_icon(label, icon_url).await;
 
-        let state = self.get_state(Some(label)).await?;
-        self.darkreader_auto_switch(label, &state.url).await;
+        let mut state = self.get_state(Some(label)).await?;
+        self.darkreader_auto_switch(label, &mut state).await;
 
         if self.is_current_tab(label).await {
             self.state_changed(Some(state)).await?;
@@ -221,8 +220,8 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn darkreader_auto_switch(&self, label: &str, url: &str) {
-        let enable = if let Ok(url) = Url::parse(url)
+    pub async fn darkreader_auto_switch(&self, label: &str, state: &mut BrowserState) {
+        let enable = if let Ok(url) = Url::parse(&state.url)
             && let Some(host) = url.host_str()
         {
             let pool = self.db.get().await;
@@ -231,8 +230,10 @@ impl Browser {
             true
         };
 
-        if let Err(e) = self.tabs.darkreader(label, enable).await {
+        if let Err(e) = self.tabs.set_darkreader(label, enable).await {
             error!("切换darkreader失败：{e}");
+        } else {
+            state.darkreader = enable;
         }
     }
 
@@ -528,10 +529,34 @@ impl Browser {
         self.state_changed(Some(state)).await
     }
 
+    pub async fn darkreader(&self) -> Result<(), StateError> {
+        let enable = self.tabs.darkreader(&self.label.get().await).await?;
+        let state = self.get_state(None).await?;
+        if let Ok(url) = Url::parse(&state.url)
+            && let Some(host) = url.host_str()
+        {
+            let pool = self.db.get().await;
+            let host = host.to_string();
+            async_runtime::spawn(async move {
+                if enable {
+                    let _ = delete_blacklist(&pool, &host)
+                        .await
+                        .inspect_err(|e| error!("删除 darkreader 黑名单 {host} 失败: {e}"));
+                } else {
+                    let _ = save_blacklist(&pool, &host)
+                        .await
+                        .inspect_err(|e| error!("保存 darkreader 黑名单 {host} 失败: {e}"));
+                }
+            });
+        }
+        self.state_changed(Some(state)).await?;
+        Ok(())
+    }
+
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
         let mut last_focus_changed = self.last_focus_changed.lock().await;
-        if Instant::now().duration_since(*last_focus_changed) < Duration::from_millis(50) {
+        if last_focus_changed.elapsed().as_millis() < 50 {
             return Ok(false);
         }
 

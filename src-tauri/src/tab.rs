@@ -212,7 +212,7 @@ impl Tab {
             .inspect_err(|e| error!("重载失败：{e}"));
     }
 
-    pub fn darkreader(&mut self, enable: bool) -> Result<(), tauri::Error> {
+    pub fn set_darkreader(&mut self, enable: bool) -> Result<(), tauri::Error> {
         let result = if enable {
             self.eval(DARKREADER_ENABLE_SCRIPT)
         } else {
@@ -394,11 +394,20 @@ impl TabMap {
         self.0.update_async(label, |_, tab| tab.reload()).await;
     }
 
-    pub async fn darkreader(&self, label: &str, enable: bool) -> Result<(), tauri::Error> {
+    pub async fn set_darkreader(&self, label: &str, enable: bool) -> Result<(), tauri::Error> {
         self.0
-            .update_async(label, |_, tab| tab.darkreader(enable))
+            .update_async(label, |_, tab| tab.set_darkreader(enable))
             .await
             .unwrap_or(Ok(()))
+    }
+
+    pub async fn darkreader(&self, label: &str) -> Result<bool, tauri::Error> {
+        self.0
+            .update_async(label, |_, tab| {
+                tab.set_darkreader(!tab.darkreader).map(|_| tab.darkreader)
+            })
+            .await
+            .unwrap_or(Ok(true))
     }
 
     pub async fn get_state(&self, label: &str) -> Result<BrowserState, FrameworkError> {
@@ -416,6 +425,7 @@ impl TabMap {
                     loading: tab.loading,
                     can_back: tab.can_back(),
                     can_forward: tab.can_forward(),
+                    darkreader: tab.darkreader,
                     ..Default::default()
                 })
             })

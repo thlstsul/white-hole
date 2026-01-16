@@ -26,3 +26,10 @@ pub async fn save_blacklist(pool: &SqlitePool, host: &str) -> Result<i64, sqlx::
         .await
         .map(|result| result.last_insert_rowid())
 }
+
+pub async fn delete_blacklist(pool: &SqlitePool, host: &str) -> Result<u64, sqlx::Error> {
+    sqlx::query!("delete from darkreader_blacklist where host = ?", host)
+        .execute(pool)
+        .await
+        .map(|result| result.rows_affected())
+}

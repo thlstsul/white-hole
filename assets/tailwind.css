@@ -15,6 +15,9 @@
     --text-sm: 0.875rem;
     --text-sm--line-height: calc(1.25 / 0.875);
     --font-weight-semibold: 600;
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --default-transition-duration: 150ms;
+    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     --default-font-family: var(--font-sans);
     --default-mono-font-family: var(--font-mono);
   }
@@ -1845,6 +1848,9 @@
       }
     }
   }
+  .mx-3 {
+    margin-inline: calc(var(--spacing) * 3);
+  }
   .label {
     @layer daisyui.l1.l2.l3 {
       display: inline-flex;
@@ -2043,6 +2049,37 @@
   .flex-none {
     flex: none;
   }
+  .swap-rotate {
+    @layer daisyui.l1.l2 {
+      .swap-on, input:indeterminate ~ .swap-on {
+        rotate: 45deg;
+      }
+      input:is(:checked, :indeterminate) ~ .swap-on, &.swap-active .swap-on {
+        rotate: 0deg;
+      }
+      input:is(:checked, :indeterminate) ~ .swap-off, &.swap-active .swap-off {
+        rotate: calc(45deg * -1);
+      }
+    }
+  }
+  .swap-flip {
+    @layer daisyui.l1.l2 {
+      transform-style: preserve-3d;
+      perspective: 20rem;
+      .swap-on, .swap-indeterminate, input:indeterminate ~ .swap-on {
+        transform: rotateY(180deg);
+        backface-visibility: hidden;
+      }
+      input:is(:checked, :indeterminate) ~ .swap-on, &.swap-active .swap-on {
+        transform: rotateY(0deg);
+      }
+      input:is(:checked, :indeterminate) ~ .swap-off, &.swap-active .swap-off {
+        transform: rotateY(-180deg);
+        backface-visibility: hidden;
+        opacity: 100%;
+      }
+    }
+  }
   .transform {
     transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
   }
@@ -2133,6 +2170,9 @@
     @layer daisyui.l1.l2 {
       mask-image: url("data:image/svg+xml,%3Csvg width='44' height='44' viewBox='0 0 44 44' xmlns='http://www.w3.org/2000/svg' stroke='white'%3E%3Cg fill='none' fill-rule='evenodd' stroke-width='2'%3E%3Ccircle cx='22' cy='22' r='1'%3E%3Canimate attributeName='r' begin='0s' dur='1.8s' values='1;20' calcMode='spline' keyTimes='0;1' keySplines='0.165,0.84,0.44,1' repeatCount='indefinite'/%3E%3Canimate attributeName='stroke-opacity' begin='0s' dur='1.8s' values='1;0' calcMode='spline' keyTimes='0;1' keySplines='0.3,0.61,0.355,1' repeatCount='indefinite'/%3E%3C/circle%3E%3Ccircle cx='22' cy='22' r='1'%3E%3Canimate attributeName='r' begin='-0.9s' dur='1.8s' values='1;20' calcMode='spline' keyTimes='0;1' keySplines='0.165,0.84,0.44,1' repeatCount='indefinite'/%3E%3Canimate attributeName='stroke-opacity' begin='-0.9s' dur='1.8s' values='1;0' calcMode='spline' keyTimes='0;1' keySplines='0.3,0.61,0.355,1' repeatCount='indefinite'/%3E%3C/circle%3E%3C/g%3E%3C/svg%3E");
     }
+  }
+  .fill-current {
+    fill: currentcolor;
   }
   .p-2 {
     padding: calc(var(--spacing) * 2);

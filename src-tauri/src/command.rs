@@ -194,8 +194,7 @@ pub async fn incognito(browser: State<'_, Browser>, mainview: Webview) -> Result
         return Ok(());
     }
 
-    browser.incognito().await?;
-    Ok(())
+    browser.incognito().await
 }
 
 #[command(rename_all = "snake_case")]
@@ -355,4 +354,13 @@ pub async fn blur_link(browser: State<'_, Browser>) -> Result<(), StateError> {
 #[command]
 pub async fn click_link(browser: State<'_, Browser>, url: String) -> Result<(), StateError> {
     browser.click_link(url).await
+}
+
+#[command]
+pub async fn darkreader(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
+    if !mainview.is_main() {
+        return Ok(());
+    }
+
+    browser.darkreader().await
 }

@@ -75,7 +75,7 @@ pub async fn save_log(
                     .build()
                     .execute(&pool)
                     .await
-                    .inspect_err(|e| error!("update navigation log failed: {e}"));
+                    .inspect_err(|e| error!("更新浏览日志失败: {e}"));
             }
         });
 

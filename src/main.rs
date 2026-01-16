@@ -1,5 +1,7 @@
 mod api;
 mod app;
+mod darkreader;
+mod extension;
 mod navigation;
 mod search_input;
 mod search_page;

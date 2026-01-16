@@ -97,6 +97,7 @@ pub fn run() -> Result<(), SetupError> {
             focus_link,
             blur_link,
             click_link,
+            darkreader,
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)

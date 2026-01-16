@@ -119,3 +119,7 @@ pub async fn unmaximize() {
 pub async fn close() {
     invoke::<()>("close", &()).await;
 }
+
+pub async fn darkreader() {
+    invoke::<()>("darkreader", &()).await;
+}

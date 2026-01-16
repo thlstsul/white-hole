@@ -1,6 +1,7 @@
 use crate::{
     api::{focus, start_dragging},
     app::Browser,
+    extension::Extension,
     navigation::Navigator,
     url::percent_decode_str,
     window_decoration::WindowDecoration,
@@ -28,7 +29,10 @@ pub fn TitleBar() -> Element {
 
             Navigator { class: "flex-none" }
             TitleBarContent {}
-            WindowDecoration { class: "fixed top-0 right-0" }
+            div { class: "fixed top-0 right-0 join",
+                Extension { class: "join-item" }
+                WindowDecoration { class: "join-item" }
+            }
         }
     }
 }
