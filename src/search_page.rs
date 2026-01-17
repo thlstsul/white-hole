@@ -29,6 +29,7 @@ pub fn SearchPage() -> Element {
         next_page_token.set(None);
     });
 
+    #[allow(clippy::let_underscore_future)]
     let _ = use_resource(move || async move {
         let Ok(response) = query_navigation_log(keyword(), page_token()).await else {
             return;
@@ -50,14 +51,12 @@ pub fn SearchPage() -> Element {
                     if let Some(focus_log) = focus_log() {
                         let _ = open_tab(focus_log.id).await;
                     }
-                } else if e.key() == Key::ArrowRight {
-                    if let Some(log) = focus_log() {
-                        e.prevent_default();
-                        keyword.set(log.url.clone());
-                        if let Some(url) = input_element() {
-                            let _ = url.set_focus(true).await;
-                            focus_log.set(None);
-                        }
+                } else if e.key() == Key::ArrowRight && let Some(log) = focus_log() {
+                    e.prevent_default();
+                    keyword.set(log.url.clone());
+                    if let Some(url) = input_element() {
+                        let _ = url.set_focus(true).await;
+                        focus_log.set(None);
                     }
                 }
             },

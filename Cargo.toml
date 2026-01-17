@@ -52,6 +52,10 @@ git = "https://github.com/thlstsul/tauri"
 branch = "device-events"
 git = "https://github.com/thlstsul/tauri"
 
+[patch.crates-io.wry]
+branch = "ipc"
+git = "https://github.com/thlstsul/wry"
+
 [profile.android-dev]
 inherits = "dev"
 

@@ -8,7 +8,7 @@ error_set = "0.9.1"
 inventory = "0.3.21"
 keyboard-types = "0.8.3"
 log = "0.4.29"
-scc = "3.4.7"
+scc = "3.4.11"
 
 [dependencies.hotkey-macros]
 path = "../hotkey-macros"

@@ -10,6 +10,7 @@ pub fn SearchInput(
     #[props(default)] input_element: Signal<Option<Rc<MountedData>>>,
     keyword: Signal<String>,
 ) -> Element {
+    #[allow(clippy::let_underscore_future)]
     let _ = use_resource(move || async move {
         let browser = use_context::<Browser>();
         let focus = browser.focus;

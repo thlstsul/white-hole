@@ -7,26 +7,26 @@ edition = "2024"
 
 [build-dependencies.reqwest]
 features = ["blocking"]
-version = "0.12.26"
+version = "0.13.1"
 
 [build-dependencies.tauri-build]
 features = []
 version = "2.5.3"
 
 [dependencies]
-colored = "3.0.0"
+colored = "3.1.1"
 delay_timer = "0.11.6"
 error_set = "0.9"
-get-data-url = "0.2"
+get-data-url = "0.3"
 log = "0.4.29"
 percent-encoding = "2.3.2"
-reqwest = "0.12.26"
-scc = "3.4.7"
+reqwest = "0.13.1"
+scc = "3.4.11"
 serde_json = "1"
 tauri-plugin-deep-link = "2"
-tauri-plugin-log = "2.7.1"
+tauri-plugin-log = "2.8.0"
 tauri-plugin-notification = "2.3.3"
-url = "2.5.7"
+url = "2.5.8"
 
 [dependencies.cached]
 features = ["async"]
@@ -66,7 +66,7 @@ features = [
     "serde",
     "std",
 ]
-version = "0.3.44"
+version = "0.3.45"
 
 [dependencies.tokio]
 features = ["fs"]
