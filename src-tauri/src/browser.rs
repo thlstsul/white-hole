@@ -294,8 +294,8 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn pop_history_state(&self, _label: &str) -> Result<(), StateError> {
-        Ok(())
+    pub async fn pop_history_state(&self, label: &str) -> Result<(), StateError> {
+        self.change_tab_loading_state(label, false).await
     }
 
     pub async fn hash_changed(
