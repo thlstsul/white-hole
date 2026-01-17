@@ -56,10 +56,8 @@ impl Tab {
             tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
                 .initialization_script(include_str!("../js/darkreader.js"))
                 .initialization_script(include_str!("../js/webview_init.js"))
+                .initialization_script(include_str!("../js/prevent_default_hotkey.js"))
                 .initialization_script_for_all_frames(include_str!("../js/all_frames_init.js"))
-                .initialization_script_for_all_frames(include_str!(
-                    "../js/prevent_default_hotkey.js"
-                ))
                 .user_agent(&get_user_agent())
                 .incognito(incognito)
                 .devtools(true)
