@@ -8,17 +8,16 @@ fn main() {
             insert_public_suffix().expect("初始化 insert_public_suffix.sql 脚本失败")
         });
         let (_, _) = (darkreader_handler.join(), public_suffix.join());
+        println!("cargo:rerun-if-changed=./");
     }
 
     tauri_build::build()
 }
 
 fn darkreader() -> Result<(), Box<dyn std::error::Error>> {
-    println!("darkreader1");
     let darkreader: String =
         reqwest::blocking::get("https://unpkg.com/darkreader@latest/darkreader.js")?.text()?;
 
-    println!("darkreader2");
     let mut darkreader_file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
