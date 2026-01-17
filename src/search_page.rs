@@ -76,7 +76,6 @@ pub fn SearchPage() -> Element {
                     };
 
                     let (Ok(size), Ok(offset), Ok(client)) = (
-
                         main_element.get_scroll_size().await,
                         main_element.get_scroll_offset().await,
                         main_element.get_client_rect().await,
@@ -91,7 +90,6 @@ pub fn SearchPage() -> Element {
                 },
 
                 ul { class: "list",
-
                     for log in logs() {
                         li {
                             tabindex: "0",
@@ -112,7 +110,6 @@ pub fn SearchPage() -> Element {
 
                             Icon { url: log.icon_url.clone() }
                             div { class: "list-col-grow",
-
                                 div { "{log.title}" }
                                 div { class: "text-xs opacity-60", "{log.url}" }
                             }
@@ -166,7 +163,6 @@ fn Star(log_id: i64, checked: bool) -> Element {
 
     rsx! {
         label { class: "swap", onclick: |e| e.stop_propagation(),
-
             input {
                 tabindex: "-1",
                 r#type: "checkbox",

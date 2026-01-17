@@ -7,7 +7,6 @@ pub fn Settings(#[props(default)] class: String) -> Element {
     rsx! {
         div { class: "dropdown dropdown-hover dropdown-end z-1",
             div { role: "button", class: "btn btn-square btn-ghost {class}",
-
                 svg {
                     xmlns: "http://www.w3.org/2000/svg",
                     fill: "none",
@@ -27,8 +26,8 @@ pub fn Settings(#[props(default)] class: String) -> Element {
                     }
                 }
             }
-            ul { class: "dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
 
+            ul { class: "dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
                 IncognitoItem {}
             }
         }
@@ -42,7 +41,6 @@ fn IncognitoItem(#[props(default)] class: String) -> Element {
     rsx! {
         li {
             label { class: "btn btn-ghost btn-block swap {class}",
-
                 input {
                     r#type: "checkbox",
                     class: "theme-controller",

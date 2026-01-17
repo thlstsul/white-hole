@@ -69,7 +69,6 @@ fn Icon(src: Memo<String>, #[props(default)] class: String) -> Element {
     });
     rsx! {
         div { class: "favicon avatar select-none {class}",
-
             div { class: "w-6 rounded",
                 img {
                     src,
