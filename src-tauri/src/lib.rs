@@ -57,9 +57,24 @@ pub fn run() -> Result<(), SetupError> {
 
     #[cfg(desktop)]
     {
+        use tauri_plugin_prevent_default::{Flags, KeyboardShortcut};
+        let mut prevent_hotkey = tauri_plugin_prevent_default::Builder::new()
+            .with_flags(Flags::all() & !Flags::CONTEXT_MENU & !Flags::FOCUS_MOVE)
+            .shortcut(KeyboardShortcut::with_alt("ArrowLeft"))
+            .shortcut(KeyboardShortcut::with_alt("ArrowRight"))
+            .shortcut(KeyboardShortcut::new("F12"));
+        #[cfg(windows)]
+        {
+            prevent_hotkey = prevent_hotkey.platform(
+                tauri_plugin_prevent_default::PlatformOptions::new()
+                    .browser_accelerator_keys(false),
+            );
+        }
+
         builder = builder
             .plugin(tauri_plugin_single_instance::init(single_instance_init))
             .plugin(tauri_plugin_window_state::Builder::new().build())
+            .plugin(prevent_hotkey.build())
             .plugin(::hotkey::init());
     }
 

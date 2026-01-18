@@ -35,7 +35,11 @@ pub async fn get_icon_data_url(pool: &SqlitePool, icon_url: &str) -> Result<Stri
             let get_date_url = GET_DATA_URL.get_or_init(|| {
                 let user_agent = get_user_agent();
                 info!("User-Agent: {}", user_agent);
-                let Ok(client) = Client::builder().user_agent(user_agent).build() else {
+                let Ok(client) = Client::builder()
+                    .user_agent(user_agent)
+                    .referer(false)
+                    .build()
+                else {
                     return GetDataUrl::new();
                 };
                 GetDataUrl::with_client(client)
@@ -66,7 +70,7 @@ pub async fn get_cached_data_url(pool: &SqlitePool, url: &str) -> Option<String>
 }
 
 pub async fn save_icon(pool: &SqlitePool, url: &str) -> Result<i64, sqlx::Error> {
-    let id = get_id(pool, &url).await;
+    let id = get_id(pool, url).await;
     if let Some(id) = id {
         return Ok(id);
     }

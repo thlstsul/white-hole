@@ -56,7 +56,6 @@ impl Tab {
             tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
                 .initialization_script(include_str!("../js/darkreader.js"))
                 .initialization_script(include_str!("../js/webview_init.js"))
-                .initialization_script(include_str!("../js/prevent_default_hotkey.js"))
                 .initialization_script_for_all_frames(include_str!("../js/all_frames_init.js"))
                 .user_agent(&get_user_agent())
                 .incognito(incognito)
@@ -389,7 +388,7 @@ impl TabMap {
     }
 
     pub async fn reload(&self, label: &str) {
-        self.0.update_async(label, |_, tab| tab.reload()).await;
+        self.0.read_async(label, |_, tab| tab.reload()).await;
     }
 
     pub async fn set_darkreader(&self, label: &str, enable: bool) -> Result<(), tauri::Error> {
@@ -406,6 +405,27 @@ impl TabMap {
             })
             .await
             .unwrap_or(Ok(true))
+    }
+
+    pub async fn devtools(&self, label: &str) {
+        self.0
+            .read_async(label, |_, tab| {
+                if tab.is_devtools_open() {
+                    tab.close_devtools();
+                } else {
+                    tab.open_devtools();
+                }
+            })
+            .await;
+    }
+
+    pub async fn print(&self, label: &str) -> Result<(), FrameworkError> {
+        self.0
+            .read_async(label, |_, tab| tab.print())
+            .await
+            .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
+
+        Ok(())
     }
 
     pub async fn get_state(&self, label: &str) -> Result<BrowserState, FrameworkError> {

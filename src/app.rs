@@ -10,6 +10,9 @@ const CSS: Asset = asset!("/assets/tailwind.css");
 
 #[component]
 pub fn App() -> Element {
+    #[cfg(not(debug_assertions))]
+    document::eval(r#"document.addEventListener("contextmenu", e => e.preventDefault())"#);
+
     let mut browser_state = use_signal(BrowserState::default);
 
     let icon_url = use_memo(move || browser_state.read().icon_url.clone());

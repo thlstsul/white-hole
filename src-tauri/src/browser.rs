@@ -253,9 +253,12 @@ impl Browser {
     }
 
     pub async fn set_loading(&self, loading: bool) {
-        self.tabs
-            .set_loading(&self.label.get().await, loading)
-            .await;
+        let label = self.label.get().await;
+        if label.is_empty() {
+            return;
+        }
+
+        self.tabs.set_loading(&label, loading).await;
     }
 
     pub async fn push_history_state(
@@ -530,7 +533,12 @@ impl Browser {
     }
 
     pub async fn darkreader(&self) -> Result<(), StateError> {
-        let enable = self.tabs.darkreader(&self.label.get().await).await?;
+        let label = self.label.get().await;
+        if label.is_empty() {
+            return Ok(());
+        }
+
+        let enable = self.tabs.darkreader(&label).await?;
         let state = self.get_state(None).await?;
         if let Ok(url) = Url::parse(&state.url)
             && let Some(host) = url.host_str()
@@ -549,8 +557,25 @@ impl Browser {
                 }
             });
         }
-        self.state_changed(Some(state)).await?;
-        Ok(())
+        self.state_changed(Some(state)).await
+    }
+
+    pub async fn devtools(&self) {
+        let label = self.label.get().await;
+        if label.is_empty() {
+            return;
+        }
+
+        self.tabs.devtools(&label).await;
+    }
+
+    pub async fn print(&self) -> Result<(), FrameworkError> {
+        let label = self.label.get().await;
+        if label.is_empty() {
+            return Ok(());
+        }
+
+        self.tabs.print(&label).await
     }
 
     /// 重新聚焦webview
@@ -560,10 +585,11 @@ impl Browser {
             return Ok(false);
         }
 
-        if self.is_focused.get().await || self.label.get().await.is_empty() {
+        let label = self.label.get().await;
+        if self.is_focused.get().await || label.is_empty() {
             self.mainview.set_focus()?;
         } else {
-            self.tabs.set_focus(&self.label.get().await).await?;
+            self.tabs.set_focus(&label).await?;
         }
         *last_focus_changed = Instant::now();
 
@@ -580,7 +606,6 @@ impl Browser {
         .zoom_hotkeys_enabled(false)
         .focused(true)
         .devtools(cfg!(debug_assertions))
-        .initialization_script_for_all_frames(include_str!("../js/prevent_default_hotkey.js"))
     }
 
     async fn create_tab(&self, url: &Url, _active: bool) -> Result<String, FrameworkError> {

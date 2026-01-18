@@ -92,6 +92,7 @@ name = "white_hole_lib"
 tauri-plugin-single-instance = "2.3"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
+tauri-plugin-prevent-default = { version = "4", features = ["platform-windows"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies.hotkey]
 path = "../hotkey"

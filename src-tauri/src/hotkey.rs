@@ -91,6 +91,13 @@ async fn fullscreen(app_handle: AppHandle) {
     }
 }
 
+/// ？使用惯用快捷键会触发 devtools 快捷键，所以只能自定义快捷键
+#[hotkey(Modifiers::CONTROL, Code::KeyD)]
+async fn devtools(app_handle: AppHandle) {
+    let browser = app_handle.browser();
+    browser.devtools().await;
+}
+
 #[hotkey(Modifiers::CONTROL, Code::KeyI)]
 async fn incognito(app_handle: AppHandle) {
     let browser = app_handle.browser();
@@ -98,4 +105,12 @@ async fn incognito(app_handle: AppHandle) {
         error!("切换标签失败：{e}");
     }
     focus(app_handle).await;
+}
+
+#[hotkey(Modifiers::CONTROL, Code::KeyP)]
+async fn print(app_handle: AppHandle) {
+    let browser = app_handle.browser();
+    if let Err(e) = browser.print().await {
+        error!("打印失败：{e}");
+    }
 }

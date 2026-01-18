@@ -3374,6 +3374,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6306,6 +6315,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "subsecond"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6503,7 +6533,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 [[package]]
 name = "tauri"
 version = "2.9.5"
-source = "git+https://github.com/thlstsul/tauri?branch=device-events#bf35c116f4971a3c5916946a449d0653a74ee52f"
+source = "git+https://github.com/thlstsul/tauri?branch=device-events#f172df16aeaafab26df5fc7b1ab5e2f0383f817a"
 dependencies = [
  "anyhow",
  "bytes",
@@ -6592,7 +6622,7 @@ dependencies = [
 [[package]]
 name = "tauri-build"
 version = "2.5.3"
-source = "git+https://github.com/thlstsul/tauri?branch=device-events#bf35c116f4971a3c5916946a449d0653a74ee52f"
+source = "git+https://github.com/thlstsul/tauri?branch=device-events#f172df16aeaafab26df5fc7b1ab5e2f0383f817a"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -6613,7 +6643,7 @@ dependencies = [
 [[package]]
 name = "tauri-codegen"
 version = "2.5.2"
-source = "git+https://github.com/thlstsul/tauri?branch=device-events#bf35c116f4971a3c5916946a449d0653a74ee52f"
+source = "git+https://github.com/thlstsul/tauri?branch=device-events#f172df16aeaafab26df5fc7b1ab5e2f0383f817a"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6639,7 +6669,7 @@ dependencies = [
 [[package]]
 name = "tauri-macros"
 version = "2.5.2"
-source = "git+https://github.com/thlstsul/tauri?branch=device-events#bf35c116f4971a3c5916946a449d0653a74ee52f"
+source = "git+https://github.com/thlstsul/tauri?branch=device-events#f172df16aeaafab26df5fc7b1ab5e2f0383f817a"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -6729,6 +6759,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-prevent-default"
+version = "4.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f767327690b44fd3d20dbd9a3c6f09663721ece6ec9c8e18ef1c5185c2c31a11"
+dependencies = [
+ "bitflags 2.10.0",
+ "itertools",
+ "serde",
+ "strum",
+ "tauri",
+ "thiserror 2.0.17",
+ "webview2-com",
+ "windows",
+]
+
+[[package]]
 name = "tauri-plugin-single-instance"
 version = "2.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6793,7 +6839,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime"
 version = "2.9.2"
-source = "git+https://github.com/thlstsul/tauri?branch=device-events#bf35c116f4971a3c5916946a449d0653a74ee52f"
+source = "git+https://github.com/thlstsul/tauri?branch=device-events#f172df16aeaafab26df5fc7b1ab5e2f0383f817a"
 dependencies = [
  "cookie",
  "dpi",
@@ -6818,7 +6864,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime-wry"
 version = "2.9.3"
-source = "git+https://github.com/thlstsul/tauri?branch=device-events#bf35c116f4971a3c5916946a449d0653a74ee52f"
+source = "git+https://github.com/thlstsul/tauri?branch=device-events#f172df16aeaafab26df5fc7b1ab5e2f0383f817a"
 dependencies = [
  "gtk",
  "http",
@@ -6862,7 +6908,7 @@ dependencies = [
 [[package]]
 name = "tauri-utils"
 version = "2.8.1"
-source = "git+https://github.com/thlstsul/tauri?branch=device-events#bf35c116f4971a3c5916946a449d0653a74ee52f"
+source = "git+https://github.com/thlstsul/tauri?branch=device-events#f172df16aeaafab26df5fc7b1ab5e2f0383f817a"
 dependencies = [
  "anyhow",
  "brotli",
@@ -7749,9 +7795,9 @@ dependencies = [
 
 [[package]]
 name = "webkit2gtk"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76b1bc1e54c581da1e9f179d0b38512ba358fb1af2d634a1affe42e37172361a"
+checksum = "a1027150013530fb2eaf806408df88461ae4815a45c541c8975e61d6f2fc4793"
 dependencies = [
  "bitflags 1.3.2",
  "cairo-rs",
@@ -7773,9 +7819,9 @@ dependencies = [
 
 [[package]]
 name = "webkit2gtk-sys"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62daa38afc514d1f8f12b8693d30d5993ff77ced33ce30cd04deebc267a6d57c"
+checksum = "916a5f65c2ef0dfe12fff695960a2ec3d4565359fdbb2e9943c974e06c734ea5"
 dependencies = [
  "bitflags 1.3.2",
  "cairo-sys-rs",
@@ -7869,6 +7915,7 @@ dependencies = [
  "tauri-plugin-deep-link",
  "tauri-plugin-log",
  "tauri-plugin-notification",
+ "tauri-plugin-prevent-default",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
@@ -8452,8 +8499,8 @@ checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
 
 [[package]]
 name = "wry"
-version = "0.53.5"
-source = "git+https://github.com/thlstsul/wry?branch=ipc#1ed0099eec1ade5be9c6c53664e4d54a8c11c497"
+version = "0.54.0"
+source = "git+https://github.com/thlstsul/wry?branch=ipc#8fa52681ed26cbdae3c11c27c9d2472a4e967a5c"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -8718,9 +8765,9 @@ dependencies = [
 
 [[package]]
 name = "zmij"
-version = "1.0.14"
+version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd8f3f50b848df28f887acb68e41201b5aea6bc8a8dacc00fb40635ff9a72fea"
+checksum = "94f63c051f4fe3c1509da62131a678643c5b6fbdc9273b2b79d4378ebda003d2"
 
 [[package]]
 name = "zvariant"
