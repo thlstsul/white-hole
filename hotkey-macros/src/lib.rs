@@ -8,9 +8,9 @@ use syn::{ExprTuple, ItemFn, parse_macro_input, punctuated::Punctuated};
 // 定义热键参数结构 - 支持单个热键或多个热键
 enum HotkeyArgs {
     Single {
-        modifiers: syn::Expr,
+        modifiers: Box<syn::Expr>,
         _comma: Token![,],
-        code: syn::Expr,
+        code: Box<syn::Expr>,
     },
     Multiple {
         hotkeys: Punctuated<ExprTuple, Token![,]>,
@@ -87,7 +87,7 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
                 });
             }
 
-            for (_i, hotkey_tuple) in hotkeys.iter().enumerate() {
+            for hotkey_tuple in hotkeys.iter() {
                 if hotkey_tuple.elems.len() != 2 {
                     return syn::Error::new(
                         hotkey_tuple.span(),
