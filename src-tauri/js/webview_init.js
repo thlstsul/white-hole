@@ -99,7 +99,7 @@
     var iconUrl = "/favicon.ico";
     // 检查link标签
     var link = document.head.querySelector(
-      'link[rel="shortcut icon"],link[rel="icon"]',
+      'link[rel="shortcut icon"],link[rel="icon shortcut"],link[rel="icon"]',
     );
     if (link) {
       iconUrl = link.href;
