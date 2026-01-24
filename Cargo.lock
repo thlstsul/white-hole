@@ -6557,14 +6557,9 @@ dependencies = [
  "dioxus",
  "dioxus-logger",
  "futures-util",
- "js-sys",
  "serde",
- "serde-wasm-bindgen",
  "tauri-sys",
  "time",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
