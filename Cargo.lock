@@ -7847,7 +7847,7 @@ dependencies = [
 
 [[package]]
 name = "white-hole"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "cached",
  "colored 3.1.1",
