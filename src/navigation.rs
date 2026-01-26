@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     api::{back, forward, reload},
-    app::Browser,
+    app::use_browser,
 };
 
 #[component]
@@ -21,7 +21,7 @@ pub fn Navigator(#[props(default)] class: String) -> Element {
 
 #[component]
 fn Back(#[props(default)] class: String) -> Element {
-    let can_back = use_context::<Browser>().can_back;
+    let can_back = use_browser().can_back;
 
     rsx! {
         button {
@@ -43,7 +43,7 @@ fn Back(#[props(default)] class: String) -> Element {
 
 #[component]
 fn Forward(#[props(default)] class: String) -> Element {
-    let can_forward = use_context::<Browser>().can_forward;
+    let can_forward = use_browser().can_forward;
 
     rsx! {
         button {
@@ -65,7 +65,7 @@ fn Forward(#[props(default)] class: String) -> Element {
 
 #[component]
 fn ReloadOr(#[props(default)] class: String) -> Element {
-    let loading = use_context::<Browser>().loading;
+    let loading = use_browser().loading;
 
     rsx! {
         if loading() {

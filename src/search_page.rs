@@ -5,26 +5,32 @@ use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
     api::{PageToken, open_tab, query_navigation_log, update_star},
-    app::Browser,
+    app::use_browser,
     search_input::SearchInput,
     settings::Settings,
 };
 
 const DEFAULT_ICON: Asset = asset!("/assets/default_icon.svg");
 
+#[derive(Clone, Default, PartialEq)]
+struct FocusedLog {
+    id: i64,
+    url: String,
+}
+
 #[component]
 pub fn SearchPage() -> Element {
     let mut keyword = use_signal(String::new);
     let mut page_token = use_signal(PageToken::default);
     let mut next_page_token = use_signal(|| None);
-    let mut main_element = use_signal(|| None);
+    let mut main_element = use_signal::<Option<Rc<MountedData>>>(|| None);
     let mut logs = use_signal(Vec::new);
-    let mut focus_log = use_signal(|| None);
+    let mut focused_log = use_signal::<Option<FocusedLog>>(|| None);
     let input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
 
     use_effect(move || {
         // 输入关键字进行检索、切换模式时，重置页码
-        let _ = (keyword.read(), use_context::<Browser>().incognito.read());
+        let _ = (keyword.read(), use_browser().incognito.read());
         page_token.set(PageToken::default());
         next_page_token.set(None);
     });
@@ -43,52 +49,54 @@ pub fn SearchPage() -> Element {
         logs.extend(response.logs);
     });
 
-    rsx! {
-        div {
-            class: "max-h-screen flex flex-col",
-            onkeydown: move |e| async move {
-                if e.key() == Key::Enter {
-                    if let Some(focus_log) = focus_log() {
-                        let _ = open_tab(focus_log.id).await;
-                    }
-                } else if e.key() == Key::ArrowRight && let Some(log) = focus_log() {
-                    e.prevent_default();
-                    keyword.set(log.url.clone());
-                    if let Some(url) = input_element() {
-                        let _ = url.set_focus(true).await;
-                        focus_log.set(None);
-                    }
-                }
-            },
+    let hotkey = move |e: KeyboardEvent| async move {
+        if e.key() == Key::Enter {
+            if let Some(focus_log) = focused_log() {
+                open_tab(focus_log.id).await?;
+            }
+        } else if e.key() == Key::ArrowRight
+            && let Some(log) = focused_log()
+        {
+            e.prevent_default();
+            keyword.set(log.url.clone());
+            if let Some(input) = input_element() {
+                let _ = input.set_focus(true).await;
+                focused_log.set(None);
+            }
+        }
+        Ok(())
+    };
 
+    let onmounted = move |element: Event<MountedData>| main_element.set(Some(element.data()));
+    let onscroll = move |_| async move {
+        let Some(main_element) = main_element() else {
+            return;
+        };
+
+        let (Ok(size), Ok(offset), Ok(client)) = (
+            main_element.get_scroll_size().await,
+            main_element.get_scroll_offset().await,
+            main_element.get_client_rect().await,
+        ) else {
+            return;
+        };
+        if size.height - offset.y - client.size.height < 10.
+            && let Some(next_page_token) = next_page_token()
+        {
+            page_token.set(next_page_token);
+        }
+    };
+
+    rsx! {
+        div { class: "max-h-screen flex flex-col", onkeydown: hotkey,
             header {
                 div { class: "w-full join",
                     SearchInput { class: "join-item", keyword, input_element }
                     Settings { class: "join-item" }
                 }
             }
-            main {
-                class: "flex-1 overflow-auto",
-                onmounted: move |element| main_element.set(Some(element.data())),
-                onscroll: move |_| async move {
-                    let Some(main_element) = main_element() else {
-                        return;
-                    };
 
-                    let (Ok(size), Ok(offset), Ok(client)) = (
-                        main_element.get_scroll_size().await,
-                        main_element.get_scroll_offset().await,
-                        main_element.get_client_rect().await,
-                    ) else {
-                        return;
-                    };
-                    if size.height - offset.y - client.size.height < 10.
-                        && let Some(next_page_token) = next_page_token()
-                    {
-                        page_token.set(next_page_token);
-                    }
-                },
-
+            main { class: "flex-1 overflow-auto", onmounted, onscroll,
                 ul { class: "list",
                     for log in logs() {
                         li {
@@ -96,16 +104,17 @@ pub fn SearchPage() -> Element {
                             key: "{log.id}",
                             class: "list-row",
                             onfocus: move |_| {
-                                focus_log
+                                focused_log
                                     .set(
-                                        Some(FocusLog {
+                                        Some(FocusedLog {
                                             id: log.id,
                                             url: log.url.clone(),
                                         }),
                                     )
                             },
                             onclick: move |_| async move {
-                                let _ = open_tab(log.id).await;
+                                open_tab(log.id).await?;
+                                Ok(())
                             },
 
                             Icon { url: log.icon_url.clone() }
@@ -125,12 +134,6 @@ pub fn SearchPage() -> Element {
             }
         }
     }
-}
-
-#[derive(Clone, Default, PartialEq)]
-struct FocusLog {
-    id: i64,
-    url: String,
 }
 
 #[component]
@@ -161,16 +164,19 @@ fn LogTime(last_time: OffsetDateTime) -> Element {
 fn Star(log_id: i64, checked: bool) -> Element {
     let mut checked = use_signal(use_reactive!(|checked| checked));
 
+    let update_star = move |_| async move {
+        checked.set(!checked());
+        update_star(log_id).await?;
+        Ok(())
+    };
+
     rsx! {
         label { class: "swap", onclick: |e| e.stop_propagation(),
             input {
                 tabindex: "-1",
                 r#type: "checkbox",
                 checked,
-                onchange: move |_| async move {
-                    checked.set(!checked());
-                    let _ = update_star(log_id).await;
-                },
+                onchange: update_star,
             }
 
             svg {

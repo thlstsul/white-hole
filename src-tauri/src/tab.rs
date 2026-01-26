@@ -203,10 +203,9 @@ impl Tab {
     }
 
     pub fn reload(&self) {
-        let _ = self
-            .webview
-            .reload()
-            .inspect_err(|e| error!("重载失败：{e}"));
+        if let Err(e) = self.webview.reload() {
+            error!("重载失败：{e}");
+        }
     }
 
     pub fn set_darkreader(&mut self, enable: bool) -> Result<(), tauri::Error> {
@@ -319,9 +318,9 @@ impl TabMap {
     pub async fn set_size(&self, size: LogicalSize<f64>) {
         self.0
             .iter_async(|_, tab| {
-                let _ = tab
-                    .set_size(size)
-                    .inspect_err(|e| error!("设置webview大小失败：{e}"));
+                if let Err(e) = tab.set_size(size) {
+                    error!("设置webview大小失败：{e}");
+                }
                 true
             })
             .await;
@@ -330,9 +329,9 @@ impl TabMap {
     pub async fn set_position(&self, position: LogicalPosition<f64>) {
         self.0
             .iter_async(|_, tab| {
-                let _ = tab
-                    .set_position(position)
-                    .inspect_err(|e| error!("设置webview位置失败：{e}"));
+                if let Err(e) = tab.set_position(position) {
+                    error!("设置webview位置失败：{e}")
+                }
                 true
             })
             .await;

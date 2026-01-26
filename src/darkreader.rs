@@ -1,13 +1,13 @@
 use dioxus::prelude::*;
 
-use crate::app::Browser;
+use crate::app::use_browser;
 
 const MODE_DARK_ICON: Asset = asset!("/assets/mode-dark.svg");
 const MODE_LIGHT_ICON: Asset = asset!("/assets/mode-light.svg");
 
 #[component]
 pub fn Darkreader(#[props(default)] class: String) -> Element {
-    let darkreader = use_context::<Browser>().darkreader;
+    let darkreader = use_browser().darkreader;
 
     rsx! {
         label { class: "darkreader swap swap-flip {class}",

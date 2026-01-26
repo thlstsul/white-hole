@@ -1,10 +1,13 @@
 use dioxus::prelude::*;
 use dioxus_logger::tracing;
 use futures_util::StreamExt as _;
-use serde::Deserialize;
-use tauri_sys::{core::invoke_result, event::listen};
+use tauri_sys::event::listen;
 
-use crate::{search_page::SearchPage, title_bar::TitleBar};
+use crate::{
+    api::{BrowserState, get_state},
+    search_page::SearchPage,
+    title_bar::TitleBar,
+};
 
 const CSS: Asset = asset!("/assets/tailwind.css");
 
@@ -38,18 +41,20 @@ pub fn App() -> Element {
         darkreader,
     });
 
-    spawn(async move {
-        if let Ok(state) = invoke_result::<BrowserState, String>("get_state", &()).await {
-            browser_state.set(state);
-        }
-        let Ok(mut events) = listen::<BrowserState>("state-changed").await else {
-            return;
-        };
+    use_hook(|| {
+        spawn(async move {
+            if let Ok(state) = get_state().await {
+                browser_state.set(state);
+            }
+            let Ok(mut events) = listen::<BrowserState>("state-changed").await else {
+                return;
+            };
 
-        tracing::info!("listening for state-changed event");
-        while let Some(event) = events.next().await {
-            browser_state.set(event.payload);
-        }
+            tracing::info!("listening for state-changed event");
+            while let Some(event) = events.next().await {
+                browser_state.set(event.payload);
+            }
+        })
     });
 
     rsx! {
@@ -59,7 +64,7 @@ pub fn App() -> Element {
 
 #[component]
 pub fn InnerApp() -> Element {
-    let browser = use_context::<Browser>();
+    let browser = use_browser();
     let focus = browser.focus;
 
     rsx! {
@@ -73,18 +78,8 @@ pub fn InnerApp() -> Element {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-struct BrowserState {
-    icon_url: String,
-    title: String,
-    url: String,
-    maximized: bool,
-    loading: bool,
-    can_back: bool,
-    can_forward: bool,
-    focus: bool,
-    incognito: bool,
-    darkreader: bool,
+pub fn use_browser() -> Browser {
+    use_context::<Browser>()
 }
 
 #[derive(Clone)]

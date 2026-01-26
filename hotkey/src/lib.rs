@@ -68,10 +68,12 @@ impl<R: Runtime> HotkeyManager<R> {
         hotkey: Hotkey,
         callback: F,
     ) {
-        let _ = self
+        if let Err((k, _)) = self
             .hotkeys
             .insert_sync(hotkey, Arc::new(Box::new(callback)))
-            .inspect_err(|(k, _)| error!("注册快捷键 {:?} 失败", k));
+        {
+            error!("注册快捷键 {:?} 失败", k);
+        }
     }
 
     pub fn clear_pressed(&self) {
@@ -211,7 +213,7 @@ fn match_hotkey(pressed_keys: &HashSet<Code>) -> Option<Hotkey> {
             Code::ScrollLock => mods |= Modifiers::SCROLL_LOCK,
             Code::FnLock => mods |= Modifiers::FN_LOCK,
             _ => {
-                let _ = key.insert(*code);
+                key = Some(*code);
             }
         }
         true

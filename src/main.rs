@@ -2,6 +2,7 @@ mod api;
 mod app;
 mod darkreader;
 mod extension;
+mod incognito;
 mod navigation;
 mod search_input;
 mod search_page;

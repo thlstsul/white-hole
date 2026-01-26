@@ -57,7 +57,9 @@ pub fn close(window: Window, mainview: Webview) {
     if !mainview.is_main() {
         return;
     }
-    let _ = window.close().inspect_err(|e| error!("关窗失败：{e}"));
+    if let Err(e) = window.close() {
+        error!("关窗失败：{e}");
+    }
 }
 
 #[command]
@@ -189,7 +191,7 @@ pub async fn reload(browser: State<'_, Browser>, mainview: Webview) -> Result<()
 }
 
 #[command]
-pub async fn incognito(browser: State<'_, Browser>, mainview: Webview) -> Result<(), StateError> {
+pub async fn incognito(browser: State<'_, Browser>, mainview: Webview) -> Result<(), TabError> {
     if !mainview.is_main() {
         return Ok(());
     }

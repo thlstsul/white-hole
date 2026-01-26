@@ -429,12 +429,13 @@ impl Browser {
         self.change_tab_loading_state(&label, true).await
     }
 
-    pub async fn incognito(&self) -> Result<(), StateError> {
+    pub async fn incognito(&self) -> Result<(), TabError> {
         if self.incognito.get().await {
             // 退出无痕模式
             self.tabs.close_incognito().await?;
             self.db.close_memory().await?;
             self.incognito.set(false).await;
+            self.next_tab().await?;
         } else {
             // 进入无痕模式
             self.incognito.set(true).await;
@@ -547,13 +548,11 @@ impl Browser {
             let host = host.to_string();
             async_runtime::spawn(async move {
                 if enable {
-                    let _ = delete_blacklist(&pool, &host)
-                        .await
-                        .inspect_err(|e| error!("删除 darkreader 黑名单 {host} 失败: {e}"));
-                } else {
-                    let _ = save_blacklist(&pool, &host)
-                        .await
-                        .inspect_err(|e| error!("保存 darkreader 黑名单 {host} 失败: {e}"));
+                    if let Err(e) = delete_blacklist(&pool, &host).await {
+                        error!("删除 darkreader 黑名单 {host} 失败: {e}");
+                    }
+                } else if let Err(e) = save_blacklist(&pool, &host).await {
+                    error!("保存 darkreader 黑名单 {host} 失败: {e}");
                 }
             });
         }
@@ -649,6 +648,8 @@ impl Browser {
         };
 
         if state.icon_url.is_empty()
+            && !state.url.is_empty()
+            && state.url.starts_with("http")
             && let Some(data_url) = self.get_cached_data_url(&state.url).await
         {
             state.icon_url = data_url;

@@ -1,5 +1,6 @@
 use std::sync::{Arc, OnceLock};
 
+use log::error;
 use sqlx::{
     SqlitePool,
     migrate::MigrateError,
@@ -44,11 +45,15 @@ impl Database {
                 }
             }) {
                 // 99999999999999_insert_public_suffix.sql 动态脚本
-                let _ = sqlx::query("update _sqlx_migrations set checksum = ? where version = ?")
-                    .bind(checksum.into_owned())
-                    .bind(version)
-                    .execute(&pool)
-                    .await;
+                if let Err(e) =
+                    sqlx::query("update _sqlx_migrations set checksum = ? where version = ?")
+                        .bind(checksum.into_owned())
+                        .bind(version)
+                        .execute(&pool)
+                        .await
+                {
+                    error!("重置 sqlx migrations 失败: {e}");
+                }
             }
             migrator.run(&pool).await?;
         }

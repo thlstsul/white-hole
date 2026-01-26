@@ -71,11 +71,9 @@ pub async fn save_log(
             let pool = pool.clone();
 
             async move {
-                let _ = builder
-                    .build()
-                    .execute(&pool)
-                    .await
-                    .inspect_err(|e| error!("更新浏览日志失败: {e}"));
+                if let Err(e) = builder.build().execute(&pool).await {
+                    error!("更新浏览日志失败: {e}")
+                }
             }
         });
 

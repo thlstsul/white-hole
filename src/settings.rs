@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::app::Browser;
+use crate::incognito::Incognito;
 
 #[component]
 pub fn Settings(#[props(default)] class: String) -> Element {
@@ -28,30 +28,7 @@ pub fn Settings(#[props(default)] class: String) -> Element {
             }
 
             ul { class: "dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
-                IncognitoItem {}
-            }
-        }
-    }
-}
-
-#[component]
-fn IncognitoItem(#[props(default)] class: String) -> Element {
-    let incognito = use_context::<Browser>().incognito;
-
-    rsx! {
-        li {
-            label { class: "btn btn-ghost btn-block swap {class}",
-                input {
-                    r#type: "checkbox",
-                    class: "theme-controller",
-                    value: "synthwave",
-                    checked: incognito,
-                    onclick: |_| async { crate::api::incognito().await },
-                }
-
-                div { class: "swap-on", "🌑 无痕模式" }
-
-                div { class: "swap-off", "🌕 无痕模式" }
+                Incognito {}
             }
         }
     }

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     api::{close, maximize, minimize, unmaximize},
-    app::Browser,
+    app::use_browser,
 };
 
 #[component]
@@ -62,7 +62,7 @@ fn Close(#[props(default)] class: String) -> Element {
 
 #[component]
 fn MaximizeOr(#[props(default)] class: String) -> Element {
-    let maximized = use_context::<Browser>().maximized;
+    let maximized = use_browser().maximized;
 
     rsx! {
         if maximized() {

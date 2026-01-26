@@ -25,9 +25,9 @@ fn startup_task() -> Result<Task, TaskError> {
             return;
         };
 
-        let _ = sync_public_suffix(&pool)
-            .await
-            .inspect_err(|e| error!("同步 public suffix 失败：{e}"));
+        if let Err(e) = sync_public_suffix(&pool).await {
+            error!("同步 public suffix 失败：{e}");
+        }
     };
 
     task_builder
@@ -47,12 +47,13 @@ fn everyday_task() -> Result<Task, TaskError> {
             return;
         };
 
-        let _ = sync_public_suffix(&pool)
-            .await
-            .inspect_err(|e| error!("同步 public suffix 失败：{e}"));
-        let _ = crate::log::clear_log(&pool)
-            .await
-            .inspect_err(|e| error!("清理浏览记录失败：{e}"));
+        if let Err(e) = sync_public_suffix(&pool).await {
+            error!("同步 public suffix 失败：{e}");
+        }
+
+        if let Err(e) = crate::log::clear_log(&pool).await {
+            error!("清理浏览记录失败：{e}");
+        }
     };
 
     task_builder

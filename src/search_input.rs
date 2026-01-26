@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
-use crate::{api::search, app::Browser};
+use crate::{api::search, app::use_browser};
 
 #[component]
 pub fn SearchInput(
@@ -12,23 +12,24 @@ pub fn SearchInput(
 ) -> Element {
     #[allow(clippy::let_underscore_future)]
     let _ = use_resource(move || async move {
-        let browser = use_context::<Browser>();
+        let browser = use_browser();
         let focus = browser.focus;
         if let Some(url) = input_element() {
             let _ = url.set_focus(focus()).await;
         }
     });
 
-    let keypress = move |e: KeyboardEvent| async move {
+    let enter = move |e: KeyboardEvent| async move {
         if e.key() == Key::Enter {
-            let _ = search(keyword()).await;
+            search(keyword()).await?;
         }
+        Ok(())
     };
 
     rsx! {
         label {
             class: "url input input-ghost has-[:focus]:outline-none w-full {class}",
-            onkeydown: keypress,
+            onkeydown: enter,
 
             svg {
                 class: "h-[1em] opacity-50",
@@ -57,8 +58,7 @@ pub fn SearchInput(
                 onmounted: move |element| input_element.set(Some(element.data())),
             }
 
-            kbd { class: "kbd kbd-sm", "CTRL" }
-            kbd { class: "kbd kbd-sm", "L" }
+            kbd { class: "kbd kbd-sm", "ENTER" }
         }
     }
 }

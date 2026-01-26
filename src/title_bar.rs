@@ -1,6 +1,6 @@
 use crate::{
     api::{focus, start_dragging},
-    app::Browser,
+    app::use_browser,
     extension::Extension,
     navigation::Navigator,
     url::percent_decode_str,
@@ -39,19 +39,23 @@ pub fn TitleBar() -> Element {
 
 #[component]
 fn TitleBarContent(#[props(default)] class: String) -> Element {
-    let browser = use_context::<Browser>();
+    let browser = use_browser();
 
     rsx! {
         div {
-            class: "title-bar-content flex items-center max-w-2/3 {class}",
+            class: "title-bar-content flex flex-row items-center max-w-2/3 group {class}",
             onclick: |_| async { focus().await },
             onmousedown: |e| e.stop_propagation(),
 
             Icon { src: browser.icon_url }
-            div { class: "px-2 w-full",
-
+            div { class: "px-2 flex flex-col w-full",
                 Title { title: browser.title }
                 Url { url: browser.url }
+            }
+
+            div { class: "hidden group-hover:block w-full justify-center",
+                kbd { class: "kbd kbd-sm", "CTRL" }
+                kbd { class: "kbd kbd-sm", "L" }
             }
         }
     }
