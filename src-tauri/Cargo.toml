@@ -98,4 +98,4 @@ path = "../hotkey"
 
 [target."cfg(windows)".dependencies]
 webview2-com = "0.38.2"
-windows-core = "0.61.2"
+windows = "0.61.3"

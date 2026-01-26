@@ -1,7 +1,8 @@
-use log::info;
+use log::error;
 use tauri::{
     Runtime,
     plugin::{Builder, TauriPlugin},
+    webview::PlatformWebview,
 };
 use webview2_com::{
     AcceleratorKeyPressedEventHandler,
@@ -10,53 +11,69 @@ use webview2_com::{
         COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, COREWEBVIEW2_PHYSICAL_KEY_STATUS,
     },
 };
-
-// 虚拟键码常量定义
-const VK_LEFT: u32 = 0x25; // 左箭头
-const VK_RIGHT: u32 = 0x27; // 右箭头
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_F5, VK_LEFT, VK_P, VK_R, VK_RIGHT,
+};
 
 pub fn prevent_default_hotkey<R: Runtime>() -> TauriPlugin<R> {
     let mut builder = Builder::new("prevent-default-hotkey");
 
     builder = builder.on_webview_ready(move |webview| {
-        let _ = webview.with_webview(|webview| unsafe {
-            let mut token: i64 = 0;
-            let event_handler =
-                AcceleratorKeyPressedEventHandler::create(Box::new(|_sender, args| {
-                    let Some(args) = args else {
-                        return Ok(());
-                    };
-
-                    let mut key_event_type = COREWEBVIEW2_KEY_EVENT_KIND::default();
-                    args.KeyEventKind(&mut key_event_type)?;
-
-                    info!("按键拦截1: {key_event_type:?}");
-                    if key_event_type != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN
-                        && key_event_type != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN
-                    {
-                        return Ok(());
-                    }
-
-                    let mut virtual_key = 0;
-                    args.VirtualKey(&mut virtual_key)?;
-
-                    let mut physical_key_status = COREWEBVIEW2_PHYSICAL_KEY_STATUS::default();
-                    args.PhysicalKeyStatus(&mut physical_key_status)?;
-
-                    if physical_key_status.IsMenuKeyDown.as_bool()
-                        && (VK_LEFT == virtual_key || VK_RIGHT == virtual_key)
-                    {
-                        args.SetHandled(true)?;
-                    }
-
-                    Ok(())
-                }));
-
-            let _ = webview
-                .controller()
-                .add_AcceleratorKeyPressed(&event_handler, &mut token);
-        });
+        if let Err(e) = webview.with_webview(add_accelerator_key_pressed) {
+            error!("注册 Webview2 句柄失败：{e}");
+        }
     });
 
     builder.build()
+}
+
+fn add_accelerator_key_pressed(webview: PlatformWebview) {
+    let mut token: i64 = 0;
+    let event_handler =
+        AcceleratorKeyPressedEventHandler::create(Box::new(|_sender, args| unsafe {
+            let Some(args) = args else {
+                return Ok(());
+            };
+
+            let mut key_event_type = COREWEBVIEW2_KEY_EVENT_KIND::default();
+            args.KeyEventKind(&mut key_event_type)?;
+            if key_event_type != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN
+                && key_event_type != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN
+            {
+                return Ok(());
+            }
+
+            let mut physical_key_status = COREWEBVIEW2_PHYSICAL_KEY_STATUS::default();
+            args.PhysicalKeyStatus(&mut physical_key_status)?;
+            if physical_key_status.WasKeyDown.as_bool() {
+                return Ok(());
+            }
+
+            let mut virtual_key = 0;
+            args.VirtualKey(&mut virtual_key)?;
+            if (physical_key_status.IsMenuKeyDown.as_bool()
+                && matches!(VIRTUAL_KEY(virtual_key as u16), VK_LEFT | VK_RIGHT))
+                || matches!(VIRTUAL_KEY(virtual_key as u16), VK_F5)
+            {
+                args.SetHandled(true)?;
+                return Ok(());
+            }
+
+            let ctrl = (GetKeyState(VK_CONTROL.0 as i32) as i32 & 0x8000) != 0;
+            if ctrl && matches!(VIRTUAL_KEY(virtual_key as u16), VK_R | VK_P) {
+                args.SetHandled(true)?;
+                return Ok(());
+            }
+
+            Ok(())
+        }));
+
+    unsafe {
+        if let Err(e) = webview
+            .controller()
+            .add_AcceleratorKeyPressed(&event_handler, &mut token)
+        {
+            error!("注册快捷键拦截失败：{e}");
+        }
+    }
 }
