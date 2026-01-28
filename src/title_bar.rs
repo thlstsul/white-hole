@@ -62,22 +62,22 @@ fn TitleBarContent(#[props(default)] class: String) -> Element {
 }
 
 #[component]
-fn Icon(src: Memo<String>, #[props(default)] class: String) -> Element {
-    let mut error = use_signal(|| false);
-    let src = use_memo(move || {
-        if src().is_empty() || error() {
+fn Icon(src: ReadSignal<String>, #[props(default)] class: String) -> Element {
+    let mut src = use_memo(move || {
+        if src().is_empty() {
             DEFAULT_ICON.to_string()
         } else {
             src()
         }
     });
+
     rsx! {
         div { class: "favicon avatar select-none {class}",
             div { class: "w-6 rounded",
                 img {
                     src,
                     onerror: move |_| {
-                        error.set(true);
+                        src.set(DEFAULT_ICON.to_string());
                     },
                 }
             }
@@ -86,14 +86,14 @@ fn Icon(src: Memo<String>, #[props(default)] class: String) -> Element {
 }
 
 #[component]
-fn Title(title: Memo<String>) -> Element {
+fn Title(title: ReadSignal<String>) -> Element {
     rsx! {
         div { class: "title text-sm font-semibold truncate", "{title}" }
     }
 }
 
 #[component]
-fn Url(url: Memo<String>) -> Element {
+fn Url(url: ReadSignal<String>) -> Element {
     let url = use_memo(move || {
         percent_decode_str(&url())
             .decode_utf8()

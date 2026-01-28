@@ -3,7 +3,7 @@ use crate::{
     darkreader::{self, delete_blacklist, save_blacklist},
     database::Database,
     error::*,
-    icon::{get_cached_data_url, get_icon_data_url},
+    icon::{get_cached_icon, get_icon_data_url},
     log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
     page::PageToken,
     public_suffix::get_public_suffix_cached,
@@ -625,9 +625,9 @@ impl Browser {
         get_icon_data_url(&pool, icon_url).await
     }
 
-    async fn get_cached_data_url(&self, url: &str) -> Option<String> {
+    async fn get_cached_icon(&self, url: &str) -> Option<String> {
         let pool = self.db.get().await;
-        get_cached_data_url(&pool, url).await
+        get_cached_icon(&pool, url).await
     }
 
     async fn change_tab_loading_state(&self, label: &str, loading: bool) -> Result<(), StateError> {
@@ -647,16 +647,17 @@ impl Browser {
             self.get_state(None).await?
         };
 
+        // 在 emit 之前查询 icon 而不影响 state 原始数据
         if state.icon_url.is_empty()
             && !state.url.is_empty()
             && state.url.starts_with("http")
-            && let Some(data_url) = self.get_cached_data_url(&state.url).await
+            && let Some(data_url) = self.get_cached_icon(&state.url).await
         {
             state.icon_url = data_url;
         } else if state.icon_url.starts_with("http")
-            && let Ok(icon_url) = self.get_icon_data_url(&state.icon_url).await
+            && let Ok(data_url) = self.get_icon_data_url(&state.icon_url).await
         {
-            state.icon_url = icon_url;
+            state.icon_url = data_url;
         }
 
         self.window

@@ -62,7 +62,7 @@ pub async fn get_icon_data_url(pool: &SqlitePool, icon_url: &str) -> Result<Stri
 }
 
 #[cached(key = "String", convert = r#"{ String::from(url) }"#, option = true)]
-pub async fn get_cached_data_url(pool: &SqlitePool, url: &str) -> Option<String> {
+pub async fn get_cached_icon(pool: &SqlitePool, url: &str) -> Option<String> {
     sqlx::query!(
         "select a.data_url from icon_cached a, navigation_log b where a.id = b.icon_id and b.url = ?",
         url
