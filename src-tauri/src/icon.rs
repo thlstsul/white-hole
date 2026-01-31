@@ -82,6 +82,13 @@ pub async fn save_icon(pool: &SqlitePool, url: &str) -> Result<i64, sqlx::Error>
     ).execute(pool).await.map(|result| result.last_insert_rowid())
 }
 
+pub async fn clear_icon(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    sqlx::query!("delete from icon_cached where not exists (select 1 from navigation_log where icon_id = icon_cached.id)")
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 async fn upsert_data_url(
     pool: &SqlitePool,
     url: &str,

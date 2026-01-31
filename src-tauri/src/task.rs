@@ -54,6 +54,10 @@ fn everyday_task() -> Result<Task, TaskError> {
         if let Err(e) = crate::log::clear_log(&pool).await {
             error!("清理浏览记录失败：{e}");
         }
+
+        if let Err(e) = crate::icon::clear_icon(&pool).await {
+            error!("清理图标缓存失败：{e}");
+        }
     };
 
     task_builder
