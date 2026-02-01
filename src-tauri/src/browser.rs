@@ -25,6 +25,7 @@ use tokio::time::Instant;
 const WIDTH: f64 = 800.;
 const HEIGHT: f64 = 600.;
 const FOCUS_LINK_TITLE: &str = "点击链接：";
+const LOADING_TITLE: &str = "正在加载……";
 
 pub struct Browser {
     db: Database,
@@ -101,7 +102,7 @@ impl Browser {
 
         let label = self.label.get().await;
         self.tabs.close(&label).await?;
-        self.label.set(String::new()).await;
+        self.label.clear().await;
 
         if let Some(near_label) = self.tabs.near(&label).await {
             self.switch_tab(&near_label).await?;
@@ -238,7 +239,11 @@ impl Browser {
     }
 
     pub async fn on_page_load(&self, label: &str, loading: bool) -> Result<(), StateError> {
-        self.tabs.set_loading(label, loading).await;
+        if loading {
+            self.tabs.start_loading(label).await;
+        } else {
+            self.tabs.set_loading(label, loading).await;
+        }
 
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
@@ -440,7 +445,7 @@ impl Browser {
             // 进入无痕模式
             self.incognito.set(true).await;
             self.db.migrate_memory().await?;
-            self.label.set(String::new()).await;
+            self.label.clear().await;
         }
         self.state_changed(None).await?;
         Ok(())
@@ -658,6 +663,10 @@ impl Browser {
             && let Ok(data_url) = self.get_icon_data_url(&state.icon_url).await
         {
             state.icon_url = data_url;
+        }
+
+        if state.title.is_empty() {
+            state.title = LOADING_TITLE.to_string();
         }
 
         self.window

@@ -20,7 +20,6 @@ use crate::{
     user_agent::get_user_agent,
 };
 
-const LOADING_TITLE: &str = "正在加载……";
 const BLANK_URL: &str = "about:blank";
 
 pub struct Tab {
@@ -71,7 +70,7 @@ impl Tab {
 
         Ok(Self {
             webview,
-            title: LOADING_TITLE.to_string(),
+            title: String::new(),
             icon_url: String::new(),
             loading: true,
             incognito,
@@ -241,6 +240,10 @@ impl TabIndex {
     pub async fn eq(&self, label: &str) -> bool {
         *self.0.read().await == label
     }
+
+    pub async fn clear(&self) {
+        self.0.write().await.clear();
+    }
 }
 
 pub struct TabMap(HashMap<String, Tab>);
@@ -344,6 +347,17 @@ impl TabMap {
     pub async fn set_icon(&self, label: &str, icon_url: String) {
         self.0
             .update_async(label, |_, tab| tab.icon_url = icon_url)
+            .await;
+    }
+
+    pub async fn start_loading(&self, label: &str) {
+        self.0
+            .update_async(label, |_, tab| {
+                tab.loading = true;
+                // 避免污染 icon、title
+                tab.icon_url.clear();
+                tab.title.clear();
+            })
             .await;
     }
 
