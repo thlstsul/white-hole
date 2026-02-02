@@ -215,8 +215,10 @@ impl Browser {
         self.darkreader_auto_switch(label, &mut state).await;
 
         if self.is_current_tab(label).await {
-            self.state_changed(Some(state)).await?;
+            self.state_changed(Some(state.clone())).await?;
         }
+
+        self.save_navigation_log(state.into()).await?;
 
         Ok(())
     }
