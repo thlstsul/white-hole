@@ -11,6 +11,24 @@ use crate::{
 
 const CSS: Asset = asset!("/assets/tailwind.css");
 
+#[derive(Clone)]
+pub struct Browser {
+    pub icon_url: Memo<String>,
+    pub title: Memo<String>,
+    pub url: Memo<String>,
+    pub maximized: Memo<bool>,
+    pub loading: Memo<bool>,
+    pub can_back: Memo<bool>,
+    pub can_forward: Memo<bool>,
+    pub focus: Memo<bool>,
+    pub incognito: Memo<bool>,
+    pub darkreader: Memo<bool>,
+}
+
+pub fn use_browser() -> Browser {
+    use_context::<Browser>()
+}
+
 #[component]
 pub fn App() -> Element {
     #[cfg(not(debug_assertions))]
@@ -63,9 +81,8 @@ pub fn App() -> Element {
 }
 
 #[component]
-pub fn InnerApp() -> Element {
-    let browser = use_browser();
-    let focus = browser.focus;
+fn InnerApp() -> Element {
+    let focus = use_browser().focus;
 
     rsx! {
         document::Stylesheet { href: CSS }
@@ -76,22 +93,4 @@ pub fn InnerApp() -> Element {
             TitleBar {}
         }
     }
-}
-
-pub fn use_browser() -> Browser {
-    use_context::<Browser>()
-}
-
-#[derive(Clone)]
-pub struct Browser {
-    pub icon_url: Memo<String>,
-    pub title: Memo<String>,
-    pub url: Memo<String>,
-    pub maximized: Memo<bool>,
-    pub loading: Memo<bool>,
-    pub can_back: Memo<bool>,
-    pub can_forward: Memo<bool>,
-    pub focus: Memo<bool>,
-    pub incognito: Memo<bool>,
-    pub darkreader: Memo<bool>,
 }

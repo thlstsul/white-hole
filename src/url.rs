@@ -1,6 +1,15 @@
 use std::{borrow::Cow, collections::VecDeque, slice, str::Utf8Error};
 
+use dioxus::prelude::*;
+
 const KEEP_ENCODED_CHAR: &[u8] = b" \"#$%&'()*+,/:;<=>?@[\\]^`{|}";
+
+#[component]
+pub fn DecodeUrl(url: String) -> Element {
+    rsx! {
+        {{ percent_decode_str(&url).decode_utf8().map(|u| u.to_string()).unwrap_or(url) }}
+    }
+}
 
 /// Percent-decode the given string.
 ///
@@ -8,7 +17,7 @@ const KEEP_ENCODED_CHAR: &[u8] = b" \"#$%&'()*+,/:;<=>?@[\\]^`{|}";
 ///
 /// See [`percent_decode`] regarding the return type.
 #[inline]
-pub fn percent_decode_str(input: &str) -> PercentDecode<'_> {
+fn percent_decode_str(input: &str) -> PercentDecode<'_> {
     percent_decode(input.as_bytes())
 }
 
@@ -31,7 +40,7 @@ pub fn percent_decode_str(input: &str) -> PercentDecode<'_> {
 /// assert_eq!(percent_decode(b"foo%20bar%3f").decode_utf8().unwrap(), "foo bar?");
 /// ```
 #[inline]
-pub fn percent_decode(input: &[u8]) -> PercentDecode<'_> {
+fn percent_decode(input: &[u8]) -> PercentDecode<'_> {
     PercentDecode {
         bytes: input.iter(),
         temp: VecDeque::with_capacity(2),
@@ -40,7 +49,7 @@ pub fn percent_decode(input: &[u8]) -> PercentDecode<'_> {
 
 /// The return type of [`percent_decode`].
 #[derive(Clone, Debug)]
-pub struct PercentDecode<'a> {
+struct PercentDecode<'a> {
     bytes: slice::Iter<'a, u8>,
     temp: VecDeque<u8>,
 }
@@ -140,11 +149,13 @@ impl<'a> PercentDecode<'a> {
     ///
     /// Invalid UTF-8 percent-encoded byte sequences will be replaced � U+FFFD,
     /// the replacement character.
+    #[allow(dead_code)]
     pub fn decode_utf8_lossy(self) -> Cow<'a, str> {
         decode_utf8_lossy(self.clone().into())
     }
 }
 
+#[allow(dead_code)]
 fn decode_utf8_lossy(input: Cow<'_, [u8]>) -> Cow<'_, str> {
     // Note: This function is duplicated in `form_urlencoded/src/query_encoding.rs`.
     match input {

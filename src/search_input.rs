@@ -1,27 +1,15 @@
-use std::rc::Rc;
-
 use dioxus::prelude::*;
-
-use crate::{api::search, app::use_browser};
 
 #[component]
 pub fn SearchInput(
     #[props(default)] class: String,
-    #[props(default)] input_element: Signal<Option<Rc<MountedData>>>,
-    keyword: Signal<String>,
+    value: Signal<String>,
+    onenter: EventHandler<()>,
+    onmounted: EventHandler<MountedEvent>,
 ) -> Element {
-    #[allow(clippy::let_underscore_future)]
-    let _ = use_resource(move || async move {
-        let browser = use_browser();
-        let focus = browser.focus;
-        if let Some(url) = input_element() {
-            let _ = url.set_focus(focus()).await;
-        }
-    });
-
-    let enter = move |e: KeyboardEvent| async move {
+    let onkeydown = move |e: KeyboardEvent| {
         if e.key() == Key::Enter {
-            search(keyword()).await?;
+            onenter.call(());
         }
         Ok(())
     };
@@ -29,7 +17,7 @@ pub fn SearchInput(
     rsx! {
         label {
             class: "url input input-ghost has-[:focus]:outline-none w-full {class}",
-            onkeydown: enter,
+            onkeydown,
 
             svg {
                 class: "h-[1em] opacity-50",
@@ -51,11 +39,9 @@ pub fn SearchInput(
                 placeholder: "搜索",
                 autocomplete: "off",
                 autofocus: true,
-                value: keyword,
-                oninput: move |e| {
-                    keyword.set(e.value());
-                },
-                onmounted: move |element| input_element.set(Some(element.data())),
+                value,
+                onmounted,
+                oninput: move |e| value.set(e.value()),
             }
 
             kbd { class: "kbd kbd-sm", "ENTER" }

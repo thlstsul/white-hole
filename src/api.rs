@@ -1,3 +1,5 @@
+use dioxus::prelude::dioxus_stores;
+use dioxus::stores::Store;
 use serde::{Deserialize, Serialize};
 use tauri_sys::core::{invoke, invoke_result};
 use time::OffsetDateTime;
@@ -121,7 +123,7 @@ impl Default for PageToken {
     }
 }
 
-#[derive(Clone, Default, PartialEq, Deserialize)]
+#[derive(Clone, Default, PartialEq, Deserialize, Store)]
 pub struct NavigationLog {
     pub url: String,
     pub title: String,

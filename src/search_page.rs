@@ -4,10 +4,15 @@ use dioxus::prelude::*;
 use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
-    api::{PageToken, open_tab, query_navigation_log, update_star},
+    api::{
+        NavigationLog, NavigationLogStoreExt, PageToken, open_tab, query_navigation_log, search,
+        update_star,
+    },
     app::use_browser,
+    incognito::Incognito,
     search_input::SearchInput,
     settings::Settings,
+    url::DecodeUrl,
 };
 
 const DEFAULT_ICON: Asset = asset!("/assets/default_icon.svg");
@@ -24,9 +29,9 @@ pub fn SearchPage() -> Element {
     let mut page_token = use_signal(PageToken::default);
     let mut next_page_token = use_signal(|| None);
     let mut main_element = use_signal::<Option<Rc<MountedData>>>(|| None);
-    let mut logs = use_signal(Vec::new);
+    let mut logs = use_store(Vec::new);
     let mut focused_log = use_signal::<Option<FocusedLog>>(|| None);
-    let input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
+    let mut input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
 
     use_effect(move || {
         // 输入关键字进行检索、切换模式时，重置页码
@@ -35,8 +40,16 @@ pub fn SearchPage() -> Element {
         next_page_token.set(None);
     });
 
-    #[allow(clippy::let_underscore_future)]
-    let _ = use_resource(move || async move {
+    use_resource(move || async move {
+        // 自动聚焦输入框
+        let focus = use_browser().focus;
+        if let Some(input) = input_element() {
+            let _ = input.set_focus(focus()).await;
+        }
+    });
+
+    use_resource(move || async move {
+        // 检索日志
         let Ok(response) = query_navigation_log(keyword(), page_token()).await else {
             return;
         };
@@ -49,25 +62,13 @@ pub fn SearchPage() -> Element {
         logs.extend(response.logs);
     });
 
-    let hotkey = move |e: KeyboardEvent| async move {
-        if e.key() == Key::Enter {
-            if let Some(focus_log) = focused_log() {
-                open_tab(focus_log.id).await?;
-            }
-        } else if e.key() == Key::ArrowRight
-            && let Some(log) = focused_log()
-        {
-            e.prevent_default();
-            keyword.set(log.url.clone());
-            if let Some(input) = input_element() {
-                let _ = input.set_focus(true).await;
-                focused_log.set(None);
-            }
-        }
+    let oninputmounted = move |e: MountedEvent| input_element.set(Some(e.data()));
+    let onenter = move || async move {
+        search(keyword()).await?;
         Ok(())
     };
 
-    let onmounted = move |element: Event<MountedData>| main_element.set(Some(element.data()));
+    let onmainmounted = move |e: MountedEvent| main_element.set(Some(e.data()));
     let onscroll = move |_| async move {
         let Some(main_element) = main_element() else {
             return;
@@ -86,48 +87,55 @@ pub fn SearchPage() -> Element {
             page_token.set(next_page_token);
         }
     };
+    let item_hotkey = move |e: KeyboardEvent| async move {
+        if e.key() == Key::Enter {
+            if let Some(focus_log) = focused_log() {
+                open_tab(focus_log.id).await?;
+            }
+        } else if e.key() == Key::ArrowRight
+            && let Some(log) = focused_log()
+        {
+            e.prevent_default();
+            keyword.set(log.url.clone());
+            if let Some(input) = input_element() {
+                let _ = input.set_focus(true).await;
+                focused_log.set(None);
+            }
+        }
+        Ok(())
+    };
 
     rsx! {
-        div { class: "max-h-screen flex flex-col", onkeydown: hotkey,
+        div { class: "max-h-screen flex flex-col", onkeydown: item_hotkey,
             header {
                 div { class: "w-full join",
-                    SearchInput { class: "join-item", keyword, input_element }
-                    Settings { class: "join-item" }
+                    SearchInput {
+                        class: "join-item",
+                        value: keyword,
+                        onenter,
+                        onmounted: oninputmounted,
+                    }
+                    Settings { class: "join-item", Incognito {} }
                 }
             }
 
-            main { class: "flex-1 overflow-auto", onmounted, onscroll,
+            main {
+                class: "flex-1 overflow-auto",
+                onmounted: onmainmounted,
+                onscroll,
                 ul { class: "list",
-                    for log in logs() {
-                        li {
-                            tabindex: "0",
-                            key: "{log.id}",
-                            class: "list-row",
+                    for log in logs.iter() {
+                        LogItem {
+                            log,
                             onfocus: move |_| {
                                 focused_log
                                     .set(
                                         Some(FocusedLog {
-                                            id: log.id,
-                                            url: log.url.clone(),
+                                            id: log().id,
+                                            url: log().url,
                                         }),
                                     )
                             },
-                            onclick: move |_| async move {
-                                open_tab(log.id).await?;
-                                Ok(())
-                            },
-
-                            Icon { url: log.icon_url.clone() }
-                            div { class: "list-col-grow",
-                                div { "{log.title}" }
-                                div { class: "text-xs opacity-60", "{log.url}" }
-                            }
-
-                            if let Some(last_time) = log.last_time {
-                                LogTime { last_time }
-                            }
-
-                            Star { checked: log.star, log_id: log.id }
                         }
                     }
                 }
@@ -137,9 +145,33 @@ pub fn SearchPage() -> Element {
 }
 
 #[component]
-fn Icon(url: String) -> Element {
-    let mut url = use_signal(move || url);
+fn LogItem(log: Store<NavigationLog>, onfocus: EventHandler<FocusEvent>) -> Element {
+    rsx! {
+        li {
+            tabindex: "0",
+            key: "{log.id()}",
+            class: "list-row",
+            onclick: move |_| async move {
+                open_tab(log().id).await?;
+                Ok(())
+            },
+            onfocus,
 
+            Icon { url: log.icon_url() }
+            div { class: "list-col-grow",
+                div { {log.title()} }
+                Url { url: log.url() }
+            }
+
+            LogTime { last_time: log.last_time() }
+
+            Star { log_id: log.id(), checked: log.star() }
+        }
+    }
+}
+
+#[component]
+fn Icon(url: Store<String>) -> Element {
     rsx! {
         div {
             img {
@@ -152,21 +184,34 @@ fn Icon(url: String) -> Element {
 }
 
 #[component]
-fn LogTime(last_time: OffsetDateTime) -> Element {
-    let last_time =
-        last_time.format(format_description!("[year]-[month]-[day] [hour]:[minute]"))?;
+fn Url(url: ReadStore<String>) -> Element {
     rsx! {
-        div { class: "text-xs opacity-60", "{last_time}" }
+        div { class: "text-xs opacity-60",
+            DecodeUrl { url }
+        }
     }
 }
 
 #[component]
-fn Star(log_id: i64, checked: bool) -> Element {
-    let mut checked = use_signal(use_reactive!(|checked| checked));
+fn LogTime(last_time: ReadStore<Option<OffsetDateTime>>) -> Element {
+    rsx! {
+        if let Some(last_time) = last_time() {
+            div { class: "text-xs opacity-60",
+                {
+                    last_time
+                        .format(format_description!("[year]-[month]-[day] [hour]:[minute]"))
+                        .unwrap_or(last_time.to_string())
+                }
+            }
+        }
+    }
+}
 
+#[component]
+fn Star(log_id: ReadStore<i64>, checked: Store<bool>) -> Element {
     let update_star = move |_| async move {
-        checked.set(!checked());
-        update_star(log_id).await?;
+        checked.toggle();
+        update_star(log_id()).await?;
         Ok(())
     };
 

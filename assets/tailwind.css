@@ -1488,9 +1488,6 @@
       }
     }
   }
-  .mx-3 {
-    margin-inline: calc(var(--spacing) * 3);
-  }
   .mx-6 {
     margin-inline: calc(var(--spacing) * 6);
   }

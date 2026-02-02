@@ -1,9 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::incognito::Incognito;
-
 #[component]
-pub fn Settings(#[props(default)] class: String) -> Element {
+pub fn Settings(#[props(default)] class: String, children: Element) -> Element {
     rsx! {
         div { class: "dropdown dropdown-hover dropdown-end z-1",
             div { role: "button", class: "btn btn-square btn-ghost {class}",
@@ -28,7 +26,7 @@ pub fn Settings(#[props(default)] class: String) -> Element {
             }
 
             ul { class: "dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
-                Incognito {}
+                {children}
             }
         }
     }

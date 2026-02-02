@@ -1,11 +1,9 @@
 use dioxus::prelude::*;
 
-use crate::app::use_browser;
+use crate::{api::incognito, app::use_browser};
 
 #[component]
 pub fn Incognito(#[props(default)] class: String) -> Element {
-    let incognito = use_browser().incognito;
-
     rsx! {
         li {
             label { class: "btn btn-ghost btn-block swap {class}",
@@ -13,8 +11,8 @@ pub fn Incognito(#[props(default)] class: String) -> Element {
                     r#type: "checkbox",
                     class: "theme-controller",
                     value: "synthwave",
-                    checked: incognito,
-                    onclick: |_| async { crate::api::incognito().await },
+                    checked: use_browser().incognito,
+                    onclick: |_| async { incognito().await },
                 }
 
                 div { class: "swap-on", "🌑 无痕模式" }

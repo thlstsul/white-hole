@@ -1,34 +1,30 @@
 use dioxus::prelude::*;
 
-use crate::darkreader::Darkreader;
-
 #[component]
-pub fn Extension(#[props(default)] class: String) -> Element {
-    let is_open = use_signal(|| false);
+pub fn Extension(#[props(default)] class: String, children: Element) -> Element {
+    let mut is_open = use_signal(|| false);
 
     rsx! {
         div {
-            class: "extension mx-3 join {class} ",
+            class: "extension tabs {class} ",
             onmousedown: |e| e.stop_propagation(),
 
-            Switcher { class: "join-item", is_open }
             if is_open() {
-                Divide { class: "join-item" }
-                Darkreader { class: "join-item" }
+                {children}
             }
+            Switcher { class: "tab", onswitch: move || is_open.toggle() }
         }
     }
 }
 
 #[component]
-fn Switcher(#[props(default)] class: String, is_open: Signal<bool>) -> Element {
+fn Switcher(#[props(default)] class: String, onswitch: EventHandler<()>) -> Element {
     rsx! {
         label { class: "switcher swap swap-rotate {class}",
             input {
                 tabindex: "-1",
                 r#type: "checkbox",
-                checked: is_open,
-                onclick: move |_| is_open.set(!is_open()),
+                onclick: move |_| onswitch.call(()),
             }
 
             svg {
