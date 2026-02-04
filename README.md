@@ -12,6 +12,11 @@
 - **历史记录管理**: 自动保存和搜索浏览历史
 - **书签功能**: 支持网页收藏和星标管理
 - **自动更新**: 支持应用自动更新功能
+- **深色模式**: 支持系统级深色模式切换
+- **窗口状态保存**: 自动保存和恢复窗口位置及大小
+- **单实例运行**: 防止重复启动，支持命令行参数传递
+- **链接预览**: 支持链接悬停预览功能
+- **分屏浏览**: 支持画中画模式
 
 ### 技术特色
 - **跨平台支持**: 基于 Tauri 框架，支持 Windows、Linux、macOS
@@ -20,6 +25,7 @@
 - **极简**: 点击标题或图标进入唯一主界面，Tab、历史、收藏夹三合一
 - **Tailwind CSS**: 使用现代化 CSS 框架和 DaisyUI 组件库
 - **SQLite 数据库**: 本地数据存储，支持内存数据库的无痕模式
+- **热键管理**: 支持全局热键和自定义快捷键
 
 ## 📦 安装
 
@@ -45,11 +51,12 @@ cargo tauri build
 ## 🛠️ 开发
 
 ### 环境要求
-- Rust 1.70+
+- Rust 1.80+
 - Node.js 18+
 - pnpm 8+
 - Tauri CLI: `cargo install tauri-cli`
 - 系统构建工具 (Visual Studio Build Tools on Windows, build-essential on Linux, Xcode on macOS)
+- Dioxus CLI: `cargo install dioxus-cli`
 
 ### 开发模式运行
 ```bash
@@ -63,24 +70,55 @@ dx serve
 ### 项目结构
 ```
 white-hole/
-├── src/                 # 前端代码 (Dioxus)
+├── Cargo.toml          # 项目配置和依赖
+├── Dioxus.toml         # Dioxus 配置
+├── package.json        # 前端依赖配置
+├── src/                # 前端代码 (Dioxus)
 │   ├── main.rs         # 应用入口
 │   ├── app.rs          # 主应用组件
 │   ├── search_page.rs  # 搜索页面组件
+│   ├── search_input.rs # 搜索输入框组件
+│   ├── navigation.rs   # 导航栏组件
+│   ├── title_bar.rs    # 标题栏组件
+│   ├── window_decoration.rs # 窗口装饰组件
+│   ├── url.rs          # URL 处理工具
 │   ├── api.rs          # Tauri 命令接口
 │   ├── settings.rs     # 设置页面组件
+│   ├── incognito.rs    # 无痕浏览模式
+│   ├── extension.rs    # 扩展功能
+│   ├── darkreader.rs   # 深色模式实现
 │   └── ...
 ├── src-tauri/          # 后端代码 (Rust)
+│   ├── Cargo.toml      # 后端依赖配置
 │   ├── src/
 │   │   ├── lib.rs      # Tauri 应用入口
+│   │   ├── main.rs     # 主函数入口
 │   │   ├── browser.rs  # 浏览器核心逻辑
 │   │   ├── tab.rs      # 标签页管理
 │   │   ├── database.rs # 数据库操作
+│   │   ├── command.rs  # 命令处理
+│   │   ├── state.rs    # 应用状态管理
+│   │   ├── hotkey.rs   # 热键管理
+│   │   ├── update.rs   # 更新检查
+│   │   ├── url.rs      # URL 处理
+│   │   ├── user_agent.rs # 用户代理设置
+│   │   ├── page.rs     # 页面管理
+│   │   ├── icon.rs     # 图标处理
+│   │   ├── task.rs     # 任务管理
+│   │   ├── log.rs      # 日志系统
+│   │   ├── error.rs    # 错误处理
+│   │   ├── darkreader.rs # 深色模式实现
+│   │   ├── public_suffix.rs # 公共后缀处理
+│   │   ├── prevent_default.rs # 默认行为阻止 (Windows)
 │   │   └── ...
 │   ├── capabilities/   # Tauri 权限配置
 │   ├── migrations/     # 数据库迁移文件
+│   ├── windows/        # Windows 平台特定配置
 │   └── tauri.conf.json # 应用配置文件
+├── hotkey/             # 热键功能模块
+├── hotkey-macros/      # 热键宏定义
 ├── assets/             # 静态资源 (CSS, 图标等)
+├── dist/               # 构建输出目录
 ├── .github/workflows/  # GitHub Actions 自动化部署
 └── tailwind.css        # Tailwind CSS 配置
 ```
@@ -93,7 +131,14 @@ white-hole/
 | 刷新页面 | F5 或 Ctrl+R |
 | 前进 | Alt+→ |
 | 后退 | Alt+← |
-| 打开搜索 | Ctrl+L 或 Ctrl+T |
+| 打开搜索视图 | Ctrl+L |
+| 焦点离开搜索视图 | Esc |
+| 下一标签页 | Ctrl+Tab |
+| 上一标签页 | Ctrl+Shift+Tab |
+| 全屏切换 | F11 |
+| 开发者工具 | Ctrl+D 或 F12 或 Ctrl+Shift+I |
+| 无痕浏览 | Ctrl+I |
+| 打印页面 | Ctrl+P |
 
 ## 🔧 配置
 
@@ -106,6 +151,7 @@ white-hole/
 ### 自动更新
 应用支持自动更新功能：
 - 基于 Tauri Updater 插件
+- 更新地址: `https://thlstsul.github.io/white-hole-latest.json`
 - 发布新版本时自动检测和下载更新
 
 ### 构建配置
@@ -132,6 +178,15 @@ white-hole/
 - [DaisyUI](https://daisyui.com/) - Tailwind 组件库
 - [SQLx](https://github.com/launchbadge/sqlx) - 异步 SQL 数据库工具包
 - [Reqwest](https://github.com/seanmonstar/reqwest) - Rust HTTP 客户端
+- [time](https://github.com/time-rs/time) - 时间处理库
+- [tauri-plugin-log](https://github.com/tauri-apps/plugins-workspace) - 日志插件
+- [tauri-plugin-window-state](https://github.com/tauri-apps/plugins-workspace) - 窗口状态管理插件
+- [tauri-plugin-deep-link](https://github.com/tauri-apps/plugins-workspace) - 深度链接插件
+- [tauri-plugin-updater](https://github.com/tauri-apps/plugins-workspace) - 自动更新插件
+- [tauri-plugin-notification](https://github.com/tauri-apps/plugins-workspace) - 通知插件
+- [tauri-plugin-single-instance](https://github.com/tauri-apps/plugins-workspace) - 单实例运行插件
+- [colored](https://github.com/mackwic/colored) - 控制台颜色库
+- [fern](https://github.com/davidbarsky/fern) - 日志系统库
 
 ## 📞 联系方式
 
