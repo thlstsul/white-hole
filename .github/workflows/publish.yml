@@ -62,6 +62,9 @@ jobs:
       - name: Migrate database
         run: sqlx migrate run
 
+      - name: Init tailwindcss
+        run: echo > assets/tailwind.css
+
       - name: Build & Publish
         uses: tauri-apps/tauri-action@v0
         env:
