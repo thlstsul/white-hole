@@ -96,6 +96,10 @@
   }
 
   function getIcon() {
+    if (!window.location.href.startsWith("http")) {
+      return "";
+    }
+
     var iconUrl = "/favicon.ico";
     // 检查link标签
     var link = document.head.querySelector(
