@@ -354,9 +354,8 @@ impl TabMap {
         self.0
             .update_async(label, |_, tab| {
                 tab.loading = true;
-                // 避免污染 icon、title
+                // 避免污染 icon
                 tab.icon_url.clear();
-                tab.title.clear();
             })
             .await;
     }
