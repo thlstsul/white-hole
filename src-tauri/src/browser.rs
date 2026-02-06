@@ -194,7 +194,9 @@ impl Browser {
     pub async fn change_tab_title(&self, label: &str, title: String) -> Result<(), StateError> {
         self.tabs.set_title(label, title).await;
 
-        let state = self.get_state(Some(label)).await?;
+        let mut state = self.get_state(Some(label)).await?;
+        self.darkreader_auto_switch(label, &mut state).await;
+
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
@@ -221,23 +223,6 @@ impl Browser {
         self.save_navigation_log(state.into()).await?;
 
         Ok(())
-    }
-
-    pub async fn darkreader_auto_switch(&self, label: &str, state: &mut BrowserState) {
-        let enable = if let Ok(url) = Url::parse(&state.url)
-            && let Some(host) = url.host_str()
-        {
-            let pool = self.db.get().await;
-            darkreader::switch(&pool, host).await
-        } else {
-            true
-        };
-
-        if let Err(e) = self.tabs.set_darkreader(label, enable).await {
-            error!("切换darkreader失败：{e}");
-        } else {
-            state.darkreader = enable;
-        }
     }
 
     pub async fn on_page_load(&self, label: &str, loading: bool) -> Result<(), StateError> {
@@ -674,6 +659,23 @@ impl Browser {
         self.window
             .emit_to(Webview::MAINVIEW_LABEL, "state-changed", state)?;
         Ok(())
+    }
+
+    async fn darkreader_auto_switch(&self, label: &str, state: &mut BrowserState) {
+        let enable = if let Ok(url) = Url::parse(&state.url)
+            && let Some(host) = url.host_str()
+        {
+            let pool = self.db.get().await;
+            darkreader::switch(&pool, host).await
+        } else {
+            true
+        };
+
+        if let Err(e) = self.tabs.set_darkreader(label, enable).await {
+            error!("切换darkreader失败：{e}");
+        } else {
+            state.darkreader = enable;
+        }
     }
 }
 
