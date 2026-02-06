@@ -41,22 +41,23 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
     };
     let Host::Domain(host) = host else {
         // ip host
-        url.set_scheme("http").unwrap();
+        let _ = url.set_scheme("http");
         return Some(url);
     };
 
     if host.eq_ignore_ascii_case("localhost") {
+        let _ = url.set_scheme("http");
         return Some(url);
     }
 
-    if let Some(public_suffix) = public_suffix {
-        let Some(suffix) = public_suffix.suffix(host.as_bytes()) else {
-            return Some(url);
-        };
-        if suffix.typ().is_some() {
-            return Some(url);
-        }
-    } else if host.split('.').next_back().is_some() {
+    if !host.contains('.') {
+        return complete_search_url(input);
+    }
+
+    if let Some(public_suffix) = public_suffix
+        && let Some(suffix) = public_suffix.suffix(host.as_bytes())
+        && suffix.typ().is_some()
+    {
         return Some(url);
     }
 
