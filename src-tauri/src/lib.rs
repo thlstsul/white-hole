@@ -28,6 +28,7 @@ mod page;
 #[cfg(windows)]
 mod prevent_default;
 mod public_suffix;
+mod request;
 mod state;
 mod tab;
 mod task;
@@ -105,6 +106,7 @@ pub fn run() -> Result<(), SetupError> {
             blur_link,
             click_link,
             darkreader,
+            fetch,
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)

@@ -4,9 +4,10 @@ use tauri::{State, Webview, Window, command};
 use crate::{
     IsMainView as _,
     browser::Browser,
-    error::{DatabaseError, FrameworkError, StateError, TabError},
+    error::{DatabaseError, FetchError, FrameworkError, StateError, TabError},
     log::QueryLogResponse,
     page::PageToken,
+    request::{self, FetchOptions, Response},
     state::BrowserState,
 };
 
@@ -365,4 +366,9 @@ pub async fn darkreader(browser: State<'_, Browser>, mainview: Webview) -> Resul
     }
 
     browser.darkreader().await
+}
+
+#[command]
+pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<Response, FetchError> {
+    request::fetch(&url, options).await
 }

@@ -36,10 +36,13 @@ error_set! {
         #[display("图标获取中")]
         Fetching,
     }
-    SyncPublicSuffixError := {
-        #[display("无法获取公共后缀: {0}")]
-        FetchPublicSuffix(reqwest::Error)
-    } || DatabaseError
+    FetchError := {
+        #[display("网络请求失败：{0}")]
+        Fetch(reqwest::Error),
+        #[display("计算耗时失败：{0}")]
+        Time(time::error::IndeterminateOffset),
+    }
+    SyncPublicSuffixError := FetchError || DatabaseError
     GetPublicSuffixError := ParseError || DatabaseError
 }
 
@@ -48,5 +51,6 @@ impl_serialize![
     DatabaseError,
     FrameworkError,
     TabError,
-    StateError
+    StateError,
+    FetchError
 ];

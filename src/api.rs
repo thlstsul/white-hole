@@ -83,6 +83,10 @@ pub async fn darkreader() {
     invoke::<()>("darkreader", &()).await;
 }
 
+pub async fn fetch(req: HttpRequest) -> Result<HttpResponse, Error> {
+    invoke_result("fetch", &req).await
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Error(String);
 
@@ -125,11 +129,11 @@ impl Default for PageToken {
 
 #[derive(Clone, Default, PartialEq, Deserialize, Store)]
 pub struct NavigationLog {
+    pub id: i64,
     pub url: String,
     pub title: String,
     pub icon_url: String,
     pub star: bool,
-    pub id: i64,
     pub last_time: Option<OffsetDateTime>,
 }
 
@@ -153,4 +157,58 @@ struct QueryLogRequest {
 pub struct QueryLogResponse {
     pub next_page_token: Option<PageToken>,
     pub logs: Vec<NavigationLog>,
+}
+
+#[derive(Debug, PartialEq, Clone, Store, Serialize, Deserialize)]
+pub struct HttpHeader {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpRequest {
+    pub url: String,
+    pub options: Option<FetchOptions>,
+}
+
+/// fetch 函数的可选配置项，支持 JSON 序列化
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetchOptions {
+    pub method: Option<String>,
+    pub headers: Option<Vec<HttpHeader>>,
+    pub body: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HttpResponse {
+    #[serde(with = "time::serde::iso8601")]
+    pub done_date: OffsetDateTime,
+    pub status: u16,
+    pub headers: Vec<HttpHeader>,
+    pub body: Vec<u8>,
+    pub elapsed_time: i32,
+}
+
+impl HttpRequest {
+    pub fn new(url: String, method: String, header: Vec<HttpHeader>, body: String) -> Self {
+        let options = if method.is_empty() && header.is_empty() && body.is_empty() {
+            None
+        } else {
+            Some(FetchOptions {
+                method: if method.is_empty() {
+                    None
+                } else {
+                    Some(method)
+                },
+                headers: if header.is_empty() {
+                    None
+                } else {
+                    Some(header)
+                },
+                body: if body.is_empty() { None } else { Some(body) },
+            })
+        };
+
+        Self { url, options }
+    }
 }

@@ -13,6 +13,10 @@ members = [
 [dependencies]
 dioxus-logger = "0.7"
 futures-util = "0.3.31"
+encoding = "0.2.33"
+serde_json = "1.0"
+http = "1.4.0"
+mime = "0.3.17"
 
 [dependencies.dioxus]
 features = ["web"]
@@ -34,6 +38,7 @@ git = "https://github.com/JonasKruckenberg/tauri-sys"
 features = [
     "formatting",
     "macros",
+    "parsing",
     "serde",
     "wasm-bindgen",
 ]

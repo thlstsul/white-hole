@@ -1,7 +1,19 @@
 use sqlx::SqlitePool;
 
 pub const DARKREADER_DISABLE_SCRIPT: &str = r#"DarkReader.auto(false)"#;
-pub const DARKREADER_ENABLE_SCRIPT: &str = r#"DarkReader.auto({
+pub const DARKREADER_ENABLE_SCRIPT: &str = r#"
+// 设置自定义 fetch 方法，使用 Tauri invoke 调用后端 fetch 以绕过 CORS 限制
+DarkReader.setFetchMethod((url, options = {}) => {
+    return window.__TAURI_INTERNALS__.invoke('fetch', { url, options }, { donotUseCustomProtocol: true })
+        .then(resp => {
+            return new Response(resp.body, {
+                status: resp.status,
+                statusText: resp.statusText,
+                headers: resp.headers
+            });
+        });
+});
+DarkReader.auto({
   darkSchemeBackgroundColor: "\#1D232A",
   darkSchemeTextColor: "\#ECFAFF",
   lightSchemeBackgroundColor: "\#FFFFFF",

@@ -53,11 +53,6 @@ fn TitleBarContent() -> Element {
                 Title {}
                 Url {}
             }
-
-            div { class: "hidden group-hover:block w-full justify-center",
-                kbd { class: "kbd kbd-sm", "CTRL" }
-                kbd { class: "kbd kbd-sm", "L" }
-            }
         }
     }
 }

@@ -572,7 +572,7 @@ impl Browser {
     /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
         let mut last_focus_changed = self.last_focus_changed.lock().await;
-        if last_focus_changed.elapsed().as_millis() < 50 {
+        if last_focus_changed.elapsed().as_millis() < 150 {
             return Ok(false);
         }
 

@@ -44,16 +44,15 @@ pub async fn get_icon_data_url(pool: &SqlitePool, icon_url: &str) -> Result<Stri
                 };
                 GetDataUrl::with_client(client)
             });
-            let Ok(data_url) = get_date_url
+            if let Ok(data_url) = get_date_url
                 .fetch(&url)
                 .await
                 .map(|data_url| data_url.to_string())
-            else {
-                return;
-            };
-
-            if let Err(e) = upsert_data_url(&pool, &url, &data_url).await {
-                error!("更新icon失败：{e}");
+                && !data_url.starts_with("data:text")
+            {
+                if let Err(e) = upsert_data_url(&pool, &url, &data_url).await {
+                    error!("更新icon失败：{e}");
+                }
             }
         }
     });

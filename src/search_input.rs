@@ -44,6 +44,8 @@ pub fn SearchInput(
                 oninput: move |e| value.set(e.value()),
             }
 
+            kbd { class: "kbd kbd-sm", "ESC" }
+            "/"
             kbd { class: "kbd kbd-sm", "ENTER" }
         }
     }
