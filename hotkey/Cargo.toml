@@ -1,14 +1,14 @@
 [package]
 name = "hotkey"
-version = "0.3.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-error_set = "0.9.1"
-inventory = "0.3.21"
+error_set = { workspace = true }
+inventory = "0.3.24"
 keyboard-types = "0.8.3"
-log = "0.4.29"
-scc = "3.4.11"
+log = { workspace = true }
+scc = { workspace = true }
 
 [dependencies.hotkey-macros]
 path = "../hotkey-macros"
@@ -16,4 +16,4 @@ path = "../hotkey-macros"
 [dependencies.tauri]
 default-features = false
 features = ["wry"]
-version = "2.9.5"
+version = "2.11.2"

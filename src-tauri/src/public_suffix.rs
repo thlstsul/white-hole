@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use cached::proc_macro::once;
 use publicsuffix::List;
 use sqlx::{SqlitePool, sqlite::SqliteQueryResult};

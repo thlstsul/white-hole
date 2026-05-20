@@ -1,7 +1,7 @@
 [package]
 name = "tauri-app-ui"
-version = "0.3.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [workspace]
 members = [
@@ -10,21 +10,34 @@ members = [
     "src-tauri",
 ]
 
+[workspace.package]
+version = "0.3.0"
+edition = "2024"
+authors = ["thlstsul"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4.29"
+scc = "3.7.1"
+time = "0.3.47"
+reqwest = "0.13.3"
+error_set = "0.9.1"
+
 [dependencies]
 dioxus-logger = "0.7"
 encoding = "0.2.33"
-futures-util = "0.3.31"
+futures-util = "0.3.32"
 http = "1.4.0"
 mime = "0.3.17"
-serde_json = "1.0"
+serde_json = { workspace = true }
 
 [dependencies.dioxus]
 features = ["web"]
 version = "0.7"
 
 [dependencies.serde]
-features = ["derive"]
-version = "1"
+workspace = true
 
 [dependencies.tauri-sys]
 branch = "v2"
@@ -42,7 +55,7 @@ features = [
     "serde",
     "wasm-bindgen",
 ]
-version = "0.3"
+workspace = true
 
 [patch.crates-io.tauri]
 branch = "device-events"
