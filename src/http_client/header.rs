@@ -42,7 +42,7 @@ pub fn HeaderTable(#[props(default)] class: String, rows: Store<Vec<HttpHeader>>
                         }
                     }
                 }
-                for (i , item) in rows.iter().enumerate() {
+                for (i, item) in rows.iter().enumerate() {
                     tr {
                         td { class: "w-1/3",
                             HeaderNameInput { value: item.key() }

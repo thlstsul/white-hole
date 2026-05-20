@@ -34,7 +34,6 @@ pub fn HttpClientGate() -> Element {
                 div { class: "btn btn-primary btn-lg btn-circle swap-off", "🔗" }
 
                 div { class: "btn btn-secondary btn-lg btn-circle swap-on", "X" }
-            
             }
         }
     }

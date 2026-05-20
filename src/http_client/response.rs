@@ -90,7 +90,7 @@ fn Header(header: HashMap<String, String>) -> Element {
             div { class: "collapse-content",
                 table { class: "table table-xs w-full",
                     tbody {
-                        for (key , value) in header {
+                        for (key, value) in header {
                             tr {
                                 td { "{key}" }
                                 td { "{value}" }
