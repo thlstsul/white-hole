@@ -24,10 +24,7 @@ error_set! {
         Task(delay_timer::error::TaskError),
     } || DatabaseError || FrameworkError || ParseError
     TabError := StateError || FrameworkError || ParseError
-    StateError := {
-        #[display("无法获取主视图")]
-        NoMainView
-    } || FrameworkError || DatabaseError || IconError
+    StateError := FrameworkError || DatabaseError || IconError
     IconError := {
         #[display("无法获取图标数据：{0}")]
         GetDataUrl(get_data_url::Error),
