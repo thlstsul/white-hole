@@ -1,0 +1,11 @@
+{
+  "identifier": "local",
+  "description": "Local call",
+  "local": true,
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "local", "core:event:allow-listen"
+  ]
+}

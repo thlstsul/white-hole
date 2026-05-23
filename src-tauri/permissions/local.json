@@ -1,0 +1,33 @@
+{
+  "default": null,
+  "permission": [
+    {
+      "identifier": "local",
+      "description": "Local call",
+      "commands": {
+        "allow": [
+          "focus",
+          "blur",
+          "get_state",
+          "search",
+          "open_tab",
+          "back",
+          "forward",
+          "go",
+          "reload",
+          "incognito",
+          "query_navigation_log",
+          "update_star",
+          "minimize",
+          "maximize",
+          "unmaximize",
+          "close",
+          "start_dragging",
+          "darkreader",
+          "fetch"
+        ],
+        "deny": []
+      }
+    }
+  ]
+}

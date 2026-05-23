@@ -1,0 +1,25 @@
+{
+  "default": null,
+  "permission": [
+    {
+      "identifier": "remote",
+      "description": "Remote call",
+      "commands": {
+        "allow": [
+          "push_history_state",
+          "replace_history_state",
+          "pop_history_state",
+          "hash_changed",
+          "content_loaded",
+          "fullscreen_changed",
+          "leave_picture_in_picture",
+          "focus_link",
+          "blur_link",
+          "click_link",
+          "fetch"
+        ],
+        "deny": []
+      }
+    }
+  ]
+}

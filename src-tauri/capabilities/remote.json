@@ -1,0 +1,10 @@
+{
+  "identifier": "remote",
+  "description": "Remote call",
+  "windows": ["main"],
+  "permissions": ["remote"],
+  "local": false,
+  "remote": {
+    "urls": ["*://*"]
+  }
+}
