@@ -22,6 +22,14 @@ use crate::{
 
 const BLANK_URL: &str = "about:blank";
 
+pub type TabId = String;
+
+#[derive(Debug, Clone)]
+struct HistoryEntry {
+    id: i64,
+    url: String,
+}
+
 pub struct Tab {
     webview: Webview,
     title: String,
@@ -30,7 +38,7 @@ pub struct Tab {
     incognito: bool,
     darkreader: bool,
     index: isize,
-    history: Vec<i64>,
+    history: Vec<HistoryEntry>,
 }
 
 impl Deref for Tab {
@@ -84,27 +92,29 @@ impl Tab {
         self.history
             .iter()
             .enumerate()
-            .find_map(|(i, item)| if *item == id { Some(i) } else { None })
+            .find_map(|(i, item)| if item.id == id { Some(i) } else { None })
     }
 
-    pub fn insert_history(&mut self, id: i64, length: usize) {
+    pub fn insert_history(&mut self, id: i64, url: String, length: usize) {
         if id <= 0 {
             return;
         }
 
         if self.index < 0 || self.history.len() + 1 == length {
-            self.history.push(id);
+            self.history.push(HistoryEntry { id, url });
             self.index = (self.history.len() - 1) as isize;
             return;
         }
 
         let i = self.index as usize;
-        if id == self.history[i] {
+        if id == self.history[i].id {
+            self.history[i].url = url;
             return;
         }
 
         if length > 0 && self.history.len() > length {
-            self.history.truncate(length - 1);
+            let truncate_to = length - 1;
+            self.history.truncate(truncate_to);
             self.index = (length - 2) as isize;
         }
         if length == 0 && i != self.history.len() - 1 {
@@ -112,16 +122,16 @@ impl Tab {
             self.history.truncate(i + 1);
         }
 
-        self.history.push(id);
+        self.history.push(HistoryEntry { id, url });
         self.index += 1;
 
         info!(
-            "insert history, index: {}, history_states: {:?}, 实际历史长度: {}",
+            "insert history, index: {}, history: {:?}, 实际历史长度: {}",
             self.index, self.history, length
         );
     }
 
-    pub fn replace_history(&mut self, id: i64, length: usize) {
+    pub fn replace_history(&mut self, id: i64, url: String, length: usize) {
         if id <= 0 {
             return;
         }
@@ -135,14 +145,15 @@ impl Tab {
         }
 
         if self.index < 0 || self.history.len() + 1 == length {
-            self.history.push(id);
+            self.history.push(HistoryEntry { id, url });
             self.index = (self.history.len() - 1) as isize;
         } else {
-            self.history[self.index as usize] = id;
+            let i = self.index as usize;
+            self.history[i] = HistoryEntry { id, url };
         }
 
         info!(
-            "replace history, index: {}, history_states: {:?}, 实际历史长度: {}",
+            "replace history, index: {}, history: {:?}, 实际历史长度: {}",
             self.index, self.history, length
         );
     }
@@ -164,7 +175,7 @@ impl Tab {
             error!("{}后退失败{e}", self.label());
             false
         } else {
-            self.index -= 1;
+            // index 不再预更新，等待 popstate / page_load 事件回传后 sync_by_url 校准
             true
         }
     }
@@ -178,7 +189,7 @@ impl Tab {
             error!("{}前进失败{e}", self.label());
             false
         } else {
-            self.index += 1;
+            // index 不再预更新，等待 popstate / page_load 事件回传后 sync_by_url 校准
             true
         }
     }
@@ -196,9 +207,52 @@ impl Tab {
             error!("{}跳转失败{e}", self.label());
             false
         } else {
-            self.index = index;
+            // index 不再预更新，等待 webview 事件回传后 sync_by_url 校准
             true
         }
+    }
+
+    pub fn sync_by_url(&mut self, url: &str, length: usize) -> bool {
+        // 若 webview 回传的历史长度更短，截断后端多余历史
+        if length > 0 && self.history.len() > length {
+            let truncate_to = length;
+            self.history.truncate(truncate_to);
+            let max_index = (truncate_to.saturating_sub(1)) as isize;
+            if self.index > max_index {
+                self.index = max_index;
+            }
+        }
+
+        // 查找 URL 是否已存在于历史栈
+        if let Some(pos) = self.history.iter().position(|entry| entry.url == url) {
+            if self.index != pos as isize {
+                info!(
+                    "sync_by_url: URL 匹配到位置 {}，index 从 {} 修正为 {}",
+                    pos, self.index, pos
+                );
+                self.index = pos as isize;
+            }
+            return false; // 未插入新条目
+        }
+
+        // URL 不在历史栈中，说明发生了后端未感知的导航（如重定向）
+        // 截断当前位置之后的 forward 历史，然后插入新条目
+        let i = self.index as usize;
+        if i != self.history.len().saturating_sub(1) {
+            self.history.truncate(i + 1);
+        }
+        self.history.push(HistoryEntry { id: -1, url: url.to_string() });
+        self.index += 1;
+
+        info!(
+            "sync_by_url: 插入未知 URL {}，index: {}, history: {:?}",
+            url, self.index, self.history
+        );
+        true // 插入了新条目（id 占位符为 -1）
+    }
+
+    pub fn pop_history_state(&mut self, url: &str, length: usize) -> bool {
+        self.sync_by_url(url, length)
     }
 
     pub fn reload(&self) {
@@ -222,18 +276,18 @@ impl Tab {
     }
 }
 
-pub struct TabIndex(RwLock<String>);
+pub struct TabIndex(RwLock<TabId>);
 
 impl TabIndex {
     pub fn new() -> Self {
-        Self(RwLock::new(String::new()))
+        Self(RwLock::new(TabId::new()))
     }
 
-    pub async fn get(&self) -> String {
+    pub async fn get(&self) -> TabId {
         self.0.read().await.clone()
     }
 
-    pub async fn set(&self, label: String) {
+    pub async fn set(&self, label: TabId) {
         *self.0.write().await = label;
     }
 
@@ -246,14 +300,14 @@ impl TabIndex {
     }
 }
 
-pub struct TabMap(HashMap<String, Tab>);
+pub struct TabMap(HashMap<TabId, Tab>);
 
 impl TabMap {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
-    pub async fn insert(&self, label: String, tab: Tab) {
+    pub async fn insert(&self, label: TabId, tab: Tab) {
         self.0.upsert_async(label, tab).await;
     }
 
@@ -283,7 +337,7 @@ impl TabMap {
     }
 
     /// return id 所在 (label, index)
-    pub async fn any_open(&self, id: i64, incognito: bool) -> Option<(String, usize)> {
+    pub async fn any_open(&self, id: i64, incognito: bool) -> Option<(TabId, usize)> {
         let mut label = None;
         self.0
             .any_async(|l, tab| {
@@ -366,16 +420,30 @@ impl TabMap {
             .await;
     }
 
-    pub async fn insert_history(&self, label: &str, id: i64, length: usize) {
+    pub async fn insert_history(&self, label: &str, id: i64, url: String, length: usize) {
         self.0
-            .update_async(label, |_, tab| tab.insert_history(id, length))
+            .update_async(label, |_, tab| tab.insert_history(id, url, length))
             .await;
     }
 
-    pub async fn replace_history(&self, label: &str, id: i64, length: usize) {
+    pub async fn replace_history(&self, label: &str, id: i64, url: String, length: usize) {
         self.0
-            .update_async(label, |_, tab| tab.replace_history(id, length))
+            .update_async(label, |_, tab| tab.replace_history(id, url, length))
             .await;
+    }
+
+    pub async fn sync_by_url(&self, label: &str, url: String, length: usize) -> bool {
+        self.0
+            .update_async(label, |_, tab| tab.sync_by_url(&url, length))
+            .await
+            .unwrap_or(false)
+    }
+
+    pub async fn pop_history_state(&self, label: &str, url: String, length: usize) -> bool {
+        self.0
+            .update_async(label, |_, tab| tab.pop_history_state(&url, length))
+            .await
+            .unwrap_or(false)
     }
 
     pub async fn back(&self, label: &str) -> bool {
@@ -465,7 +533,7 @@ impl TabMap {
         Ok(state)
     }
 
-    pub async fn next(&self, label: &str) -> Option<String> {
+    pub async fn next(&self, label: &str) -> Option<TabId> {
         if self.0.is_empty() {
             return None;
         }
@@ -498,7 +566,7 @@ impl TabMap {
         }
     }
 
-    pub async fn near(&self, label: &str) -> Option<String> {
+    pub async fn near(&self, label: &str) -> Option<TabId> {
         if self.0.is_empty() {
             return None;
         }

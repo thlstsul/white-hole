@@ -55,6 +55,7 @@
 
   function contentLoaded() {
     webviewIpcInvoke("content_loaded", {
+      url: window.location.href,
       iconUrl: getIcon(),
       length: history.length,
     });
@@ -85,7 +86,10 @@
   }
 
   function popHistoryState() {
-    webviewIpcInvoke("pop_history_state");
+    webviewIpcInvoke("pop_history_state", {
+      url: window.location.href,
+      length: history.length,
+    });
   }
 
   function hashChanged() {

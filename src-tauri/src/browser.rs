@@ -8,7 +8,7 @@ use crate::{
     page::PageToken,
     public_suffix::get_public_suffix_cached,
     state::{Boolean, BrowserState},
-    tab::{Tab, TabIndex, TabMap},
+    tab::{Tab, TabId, TabIndex, TabMap},
     task,
     url::parse_keyword,
 };
@@ -130,7 +130,7 @@ impl Browser {
             let mut log: NavigationLog = state.into();
             log.title.clear();
             let id = self.save_navigation_log(log).await?;
-            self.tabs.insert_history(&label, id, 1).await;
+            self.tabs.insert_history(&label, id, url.to_string(), 1).await;
         }
 
         self.focus_changed().await?;
@@ -147,12 +147,12 @@ impl Browser {
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             let label = self.create_tab(&Url::parse(&url)?, true).await?;
             let mut state = self.get_state(None).await?;
-            state.url = url;
+            state.url = url.clone();
             self.state_changed(Some(state.clone())).await?;
             let mut log: NavigationLog = state.into();
             log.title.clear();
             let id = self.save_navigation_log(log).await?;
-            self.tabs.insert_history(&label, id, 1).await;
+            self.tabs.insert_history(&label, id, url, 1).await;
         }
 
         self.focus_changed().await?;
@@ -208,7 +208,8 @@ impl Browser {
     pub async fn content_loaded(
         &self,
         label: &str,
-        _length: i32,
+        url: String,
+        length: i32,
         icon_url: String,
     ) -> Result<(), StateError> {
         self.tabs.set_icon(label, icon_url).await;
@@ -220,7 +221,10 @@ impl Browser {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        self.save_navigation_log(state.into()).await?;
+        let length = length as usize;
+        self.tabs.sync_by_url(label, url.clone(), length).await;
+        let id = self.save_navigation_log(state.into()).await?;
+        self.tabs.replace_history(label, id, url, length).await;
 
         Ok(())
     }
@@ -228,19 +232,26 @@ impl Browser {
     pub async fn on_page_load(&self, label: &str, loading: bool) -> Result<(), StateError> {
         if loading {
             self.tabs.start_loading(label).await;
-        } else {
-            self.tabs.set_loading(label, loading).await;
+            return Ok(());
         }
+
+        self.tabs.set_loading(label, loading).await;
 
         let state = self.get_state(Some(label)).await?;
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        if loading {
+        // 页面加载完成时，以实际 URL 校准历史栈
+        let url = state.url.clone();
+        if !url.is_empty() && url != "about:blank" {
+            let needs_id = self.tabs.sync_by_url(label, url.clone(), 0).await;
             let id = self.save_navigation_log(state.into()).await?;
-            self.tabs.insert_history(label, id, 0).await;
+            if needs_id {
+                self.tabs.replace_history(label, id, url, 0).await;
+            }
         }
+
         Ok(())
     }
 
@@ -260,13 +271,13 @@ impl Browser {
         length: usize,
     ) -> Result<(), StateError> {
         let mut state = self.get_state(Some(label)).await?;
-        state.url = url;
+        state.url = url.clone();
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
 
         let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.insert_history(label, id, length).await;
+        self.tabs.insert_history(label, id, url, length).await;
 
         Ok(())
     }
@@ -278,18 +289,30 @@ impl Browser {
         length: usize,
     ) -> Result<(), StateError> {
         let mut state = self.get_state(Some(label)).await?;
-        state.url = url;
+        state.url = url.clone();
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
 
         let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.replace_history(label, id, length).await;
+        self.tabs.replace_history(label, id, url, length).await;
 
         Ok(())
     }
 
-    pub async fn pop_history_state(&self, label: &str) -> Result<(), StateError> {
+    pub async fn pop_history_state(
+        &self,
+        label: &str,
+        url: String,
+        length: usize,
+    ) -> Result<(), StateError> {
+        let needs_id = self.tabs.pop_history_state(label, url.clone(), length).await;
+        if needs_id {
+            let mut state = self.get_state(Some(label)).await?;
+            state.url = url.clone();
+            let id = self.save_navigation_log(state.into()).await?;
+            self.tabs.replace_history(label, id, url, length).await;
+        }
         self.change_tab_loading_state(label, false).await
     }
 
@@ -300,13 +323,13 @@ impl Browser {
         length: usize,
     ) -> Result<(), StateError> {
         let mut state = self.get_state(Some(label)).await?;
-        state.url = url;
+        state.url = url.clone();
         if self.is_current_tab(label).await {
             self.state_changed(Some(state.clone())).await?;
         }
 
         let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.insert_history(label, id, length).await;
+        self.tabs.insert_history(label, id, url, length).await;
 
         Ok(())
     }
@@ -599,7 +622,7 @@ impl Browser {
         .devtools(cfg!(debug_assertions))
     }
 
-    async fn create_tab(&self, url: &Url, _active: bool) -> Result<String, FrameworkError> {
+    async fn create_tab(&self, url: &Url, _active: bool) -> Result<TabId, FrameworkError> {
         let tab = Tab::new(&self.window, url, self.incognito.get().await)?;
         let label = tab.label().to_string();
         self.label.set(label.clone()).await;

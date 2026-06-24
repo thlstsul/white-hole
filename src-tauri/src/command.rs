@@ -136,12 +136,13 @@ pub async fn update_star(browser: State<'_, Browser>, id: i64) -> Result<(), Dat
 pub async fn content_loaded(
     browser: State<'_, Browser>,
     webview: Webview,
+    url: String,
     length: i32,
     icon_url: String,
 ) -> Result<(), StateError> {
     let label = webview.label();
-    info!("{label} webview content loaded {icon_url}");
-    browser.content_loaded(label, length, icon_url).await?;
+    info!("{label} webview content loaded {url} {icon_url}");
+    browser.content_loaded(label, url, length, icon_url).await?;
     Ok(())
 }
 
@@ -177,9 +178,11 @@ pub async fn replace_history_state(
 pub async fn pop_history_state(
     browser: State<'_, Browser>,
     webview: Webview,
+    url: String,
+    length: usize,
 ) -> Result<(), StateError> {
-    info!("{} webview pop history state", webview.label());
-    browser.pop_history_state(webview.label()).await?;
+    info!("{} webview pop history state {url}", webview.label());
+    browser.pop_history_state(webview.label(), url, length).await?;
     Ok(())
 }
 
