@@ -28,6 +28,7 @@ pub fn HttpClientGate() -> Element {
                 input {
                     tabindex: "-1",
                     r#type: "checkbox",
+                    checked: is_client,
                     onclick: move |_| is_client.toggle(),
                 }
 

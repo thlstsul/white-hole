@@ -92,9 +92,9 @@ fn InnerApp() -> Element {
     rsx! {
         document::Stylesheet { href: CSS }
 
-        HttpClientGate {}
-
         if focus() {
+            HttpClientGate {}
+
             if is_client() {
                 HttpClient {}
             } else {
