@@ -14,8 +14,8 @@ use crate::{
 };
 use log::error;
 use tauri::{
-    App, Emitter as _, LogicalPosition, Manager, State, Url, Webview, WebviewBuilder, WebviewUrl,
-    Window, Wry,
+    App, Emitter as _, LogicalPosition, Manager, State, Theme, Url, Webview, WebviewBuilder,
+    WebviewUrl, Window, Wry,
     async_runtime::{self, Mutex},
     window::Color,
 };
@@ -26,6 +26,14 @@ const WIDTH: f64 = 800.;
 const HEIGHT: f64 = 600.;
 const FOCUS_LINK_TITLE: &str = "点击链接：";
 const LOADING_TITLE: &str = "正在加载……";
+
+pub(crate) fn bg_color(is_dark: bool) -> Color {
+    if is_dark {
+        Color(29, 35, 42, 0)
+    } else {
+        Color(255, 255, 255, 255)
+    }
+}
 
 pub struct Browser {
     db: Database,
@@ -48,7 +56,6 @@ impl Browser {
                 .decorations(false)
                 .transparent(true)
                 .focused(true)
-                .background_color(Color(29, 35, 42, 0))
                 .build()?;
 
             window.restore_state(StateFlags::all())?;
@@ -58,6 +65,11 @@ impl Browser {
                 LogicalPosition::new(0., 0.),
                 window.inner_size()?,
             )?;
+
+            let is_dark = matches!(window.theme()?, Theme::Dark);
+            let bg = bg_color(is_dark);
+            let _ = window.set_background_color(Some(bg));
+            let _ = mainview.set_background_color(Some(bg));
 
             let db = Database::new(app).await?;
 
@@ -130,7 +142,9 @@ impl Browser {
             let mut log: NavigationLog = state.into();
             log.title.clear();
             let id = self.save_navigation_log(log).await?;
-            self.tabs.insert_history(&label, id, url.to_string(), 1).await;
+            self.tabs
+                .insert_history(&label, id, url.to_string(), 1)
+                .await;
         }
 
         self.focus_changed().await?;
@@ -306,7 +320,10 @@ impl Browser {
         url: String,
         length: usize,
     ) -> Result<(), StateError> {
-        let needs_id = self.tabs.pop_history_state(label, url.clone(), length).await;
+        let needs_id = self
+            .tabs
+            .pop_history_state(label, url.clone(), length)
+            .await;
         if needs_id {
             let mut state = self.get_state(Some(label)).await?;
             state.url = url.clone();
@@ -608,6 +625,16 @@ impl Browser {
         *last_focus_changed = Instant::now();
 
         Ok(true)
+    }
+
+    /// 根据系统主题更新窗口和 webview 背景色
+    pub async fn update_theme(&self, theme: Theme) {
+        let is_dark = matches!(theme, Theme::Dark);
+        let bg = bg_color(is_dark);
+        let _ = self.window.set_background_color(Some(bg));
+        let _ = self.mainview.set_background_color(Some(bg));
+        let label = self.label.get().await;
+        let _ = self.tabs.set_background_color(&label, bg).await;
     }
 
     fn init_mainview() -> WebviewBuilder<Wry> {

@@ -170,6 +170,9 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
                     let hotkey = window.hotkey();
                     hotkey.clear_pressed();
                 }
+            } else if let WindowEvent::ThemeChanged(theme) = event {
+                let browser = window.browser();
+                browser.update_theme(theme).await;
             }
         }
     });

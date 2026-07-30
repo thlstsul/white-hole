@@ -3,9 +3,10 @@ use std::ops::Deref;
 use log::{error, info};
 use scc::HashMap;
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager as _, Webview, WebviewUrl, Window, Wry,
+    AppHandle, LogicalPosition, LogicalSize, Manager as _, Theme, Webview, WebviewUrl, Window, Wry,
     async_runtime::{self, RwLock},
     webview::{DownloadEvent, NewWindowResponse, PageLoadPayload},
+    window::Color,
 };
 use tauri_plugin_notification::NotificationExt;
 use url::Url;
@@ -13,7 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     IsMainView as _,
-    browser::BrowserExt,
+    browser::{bg_color, BrowserExt},
     darkreader::{DARKREADER_DISABLE_SCRIPT, DARKREADER_ENABLE_SCRIPT},
     error::FrameworkError,
     state::BrowserState,
@@ -59,6 +60,7 @@ impl Tab {
 
         let label = Uuid::now_v7().to_string();
         let app_handle = window.app_handle().clone();
+        let is_dark = matches!(window.theme()?, Theme::Dark);
         let builder =
             tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
                 .initialization_script(include_str!("../js/darkreader.js"))
@@ -66,6 +68,7 @@ impl Tab {
                 .initialization_script_for_all_frames(include_str!("../js/all_frames_init.js"))
                 .user_agent(&get_user_agent())
                 .incognito(incognito)
+                .background_color(bg_color(is_dark))
                 .devtools(true)
                 .zoom_hotkeys_enabled(true)
                 .focused(true)
@@ -241,7 +244,10 @@ impl Tab {
         if i != self.history.len().saturating_sub(1) {
             self.history.truncate(i + 1);
         }
-        self.history.push(HistoryEntry { id: -1, url: url.to_string() });
+        self.history.push(HistoryEntry {
+            id: -1,
+            url: url.to_string(),
+        });
         self.index += 1;
 
         info!(
@@ -474,6 +480,17 @@ impl TabMap {
     pub async fn set_darkreader(&self, label: &str, enable: bool) -> Result<(), tauri::Error> {
         self.0
             .update_async(label, |_, tab| tab.set_darkreader(enable))
+            .await
+            .unwrap_or(Ok(()))
+    }
+
+    pub async fn set_background_color(
+        &self,
+        label: &str,
+        color: Color,
+    ) -> Result<(), tauri::Error> {
+        self.0
+            .update_async(label, |_, tab| tab.set_background_color(Some(color)))
             .await
             .unwrap_or(Ok(()))
     }

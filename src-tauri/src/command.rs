@@ -182,7 +182,9 @@ pub async fn pop_history_state(
     length: usize,
 ) -> Result<(), StateError> {
     info!("{} webview pop history state {url}", webview.label());
-    browser.pop_history_state(webview.label(), url, length).await?;
+    browser
+        .pop_history_state(webview.label(), url, length)
+        .await?;
     Ok(())
 }
 
