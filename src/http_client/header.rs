@@ -93,7 +93,7 @@ fn HeaderNameInput(#[props(default)] class: String, value: Store<String>) -> Ele
 
             ul {
                 tabindex: "0",
-                class: "dropdown-content menu z-[1] shadow bg-base-100 rounded-box w-full p-2",
+                class: "dropdown-content menu z-1 shadow bg-base-100 rounded-box w-full p-2",
                 for name in HEADERS {
                     if value().is_empty() || name.starts_with(&value()) {
                         li {

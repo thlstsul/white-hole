@@ -16,7 +16,7 @@ pub fn SearchInput(
 
     rsx! {
         label {
-            class: "url input input-ghost has-[:focus]:outline-none w-full {class}",
+            class: "url input input-ghost has-focus:outline-none w-full {class}",
             onkeydown,
 
             svg {
