@@ -16,7 +16,8 @@
           "focus_link",
           "blur_link",
           "click_link",
-          "fetch"
+          "fetch",
+          "history_snapshot"
         ],
         "deny": []
       }

@@ -95,6 +95,7 @@ pub fn run() -> Result<(), SetupError> {
             pop_history_state,
             hash_changed,
             content_loaded,
+            history_snapshot,
             minimize,
             maximize,
             unmaximize,

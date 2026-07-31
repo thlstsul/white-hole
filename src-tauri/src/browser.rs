@@ -8,14 +8,14 @@ use crate::{
     page::PageToken,
     public_suffix::get_public_suffix_cached,
     state::{Boolean, BrowserState},
-    tab::{Tab, TabId, TabIndex, TabMap},
+    tab::{HistorySnapshotEntry, Tab, TabId, TabIndex, TabMap},
     task,
     url::parse_keyword,
 };
 use log::error;
 use tauri::{
-    App, Emitter as _, LogicalPosition, Manager, State, Theme, Url, Webview, WebviewBuilder,
-    WebviewUrl, Window, Wry,
+    App, AppHandle, Emitter as _, LogicalPosition, Manager, State, Theme, Url, Webview,
+    WebviewBuilder, WebviewUrl, Window, Wry,
     async_runtime::{self, Mutex},
     window::Color,
 };
@@ -26,6 +26,86 @@ const WIDTH: f64 = 800.;
 const HEIGHT: f64 = 600.;
 const FOCUS_LINK_TITLE: &str = "点击链接：";
 const LOADING_TITLE: &str = "正在加载……";
+
+/// 历史事件：所有历史写入统一经 FIFO 队列由单消费者按序应用，
+/// 避免并发 IPC 命令乱序应用镜像。
+pub enum HistoryEvent {
+    Snapshot {
+        index: usize,
+        entries: Vec<HistorySnapshotEntry>,
+    },
+    Push {
+        url: String,
+        length: usize,
+    },
+    Replace {
+        url: String,
+        length: usize,
+    },
+    Pop {
+        url: String,
+        length: usize,
+    },
+    Hash {
+        url: String,
+        length: usize,
+    },
+    Load {
+        url: String,
+        icon_url: String,
+        length: usize,
+    },
+    /// 后端 on_page_load 完成时的历史校准
+    LoadFinished {
+        url: String,
+        title: String,
+        icon_url: String,
+    },
+}
+
+impl HistoryEvent {
+    /// 后退/前进类事件携带的 (url, length)：用于识别 hashchange+popstate 双事件
+    fn nav_pair(&self) -> Option<(String, usize)> {
+        match self {
+            Self::Pop { url, length, .. } | Self::Hash { url, length, .. } => {
+                Some((url.clone(), *length))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// 队列消息：标签 + 事件
+type HistoryMessage = (TabId, HistoryEvent);
+
+/// 历史事件消费者：严格按入队顺序应用；
+/// 并对 hashchange+popstate 双事件按 (url, length) 去重
+async fn consume_history(
+    mut rx: async_runtime::Receiver<HistoryMessage>,
+    last_nav: scc::HashMap<TabId, (String, usize)>,
+    app_handle: AppHandle,
+) {
+    while let Some((label, event)) = rx.recv().await {
+        // hashchange 与 popstate 会为同一次后退/前进双触发：
+        // 相同 (url, length) 的 Pop/Hash 视为同一位移，只应用一次；
+        // 新导航（push/replace/快照）使上次位移记录失效
+        if let Some((url, length)) = event.nav_pair() {
+            let dup = last_nav
+                .read_async(&label, |_, last| last.0 == url && last.1 == length)
+                .await
+                .unwrap_or(false);
+            if dup {
+                continue;
+            }
+            let _ = last_nav.insert_async(label.clone(), (url, length)).await;
+        } else {
+            let _ = last_nav.remove_async(&label).await;
+        }
+
+        let browser = app_handle.browser();
+        let _ = browser.apply_history_event(&label, event).await;
+    }
+}
 
 pub(crate) fn bg_color(is_dark: bool) -> Color {
     if is_dark {
@@ -44,6 +124,8 @@ pub struct Browser {
     is_focused: Boolean,
     incognito: Boolean,
     last_focus_changed: Mutex<Instant>,
+    /// 历史事件 FIFO 队列（单消费者按序应用）
+    history_queue: async_runtime::Sender<HistoryMessage>,
 }
 
 impl Browser {
@@ -73,6 +155,13 @@ impl Browser {
 
             let db = Database::new(app).await?;
 
+            // 历史事件单消费者：严格按入队顺序应用
+            let (history_queue, history_rx) = async_runtime::channel::<HistoryMessage>(1024);
+            // 每 tab 最近一次后退/前进事件的 (url, length)：识别 hashchange+popstate 双事件
+            let last_nav: scc::HashMap<TabId, (String, usize)> = scc::HashMap::default();
+            let app_handle = app.handle().clone();
+            async_runtime::spawn(consume_history(history_rx, last_nav, app_handle));
+
             let state = Browser {
                 db,
                 window,
@@ -82,6 +171,7 @@ impl Browser {
                 is_focused: Boolean::default(),
                 incognito: Boolean::default(),
                 last_focus_changed: Mutex::new(Instant::now()),
+                history_queue,
             };
             app.manage(state);
 
@@ -236,16 +326,23 @@ impl Browser {
         }
 
         let length = length as usize;
-        self.tabs.sync_by_url(label, url.clone(), length).await;
-        let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.replace_history(label, id, url, length).await;
+        let needs_id = self.tabs.sync_by_url(label, url.clone(), length).await;
+        if needs_id {
+            // 仅当 sync_by_url 插入了新条目（占位 id=-1）时才落库回填，
+            // 避免 URL 命中旧条目时误覆盖旧条目的 id
+            let id = self.save_navigation_log(state.into()).await?;
+            self.tabs.replace_history(label, id, url, length).await;
+        }
 
         Ok(())
     }
 
     pub async fn on_page_load(&self, label: &str, loading: bool) -> Result<(), StateError> {
         if loading {
+            // 页面已在加载中又触发 Started = 重定向链（302/meta refresh/reload）
+            let redirecting = self.tabs.is_loading(label).await;
             self.tabs.start_loading(label).await;
+            self.tabs.set_redirecting(label, redirecting).await;
             return Ok(());
         }
 
@@ -256,16 +353,19 @@ impl Browser {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        // 页面加载完成时，以实际 URL 校准历史栈
+        // 页面加载完成时，以实际 URL 校准历史栈（入队串行化，避免与 content_loaded 并发乱序）
         let url = state.url.clone();
         if !url.is_empty() && url != "about:blank" {
-            let needs_id = self.tabs.sync_by_url(label, url.clone(), 0).await;
-            let id = self.save_navigation_log(state.into()).await?;
-            if needs_id {
-                self.tabs.replace_history(label, id, url, 0).await;
-            }
+            self.enqueue_history(
+                label,
+                HistoryEvent::LoadFinished {
+                    url,
+                    title: state.title.clone(),
+                    icon_url: state.icon_url.clone(),
+                },
+            )
+            .await;
         }
-
         Ok(())
     }
 
@@ -348,6 +448,99 @@ impl Browser {
         let id = self.save_navigation_log(state.into()).await?;
         self.tabs.insert_history(label, id, url, length).await;
 
+        Ok(())
+    }
+
+    /// Navigation API 权威快照对账：全量重建镜像，新 key 条目落库并回填 id，
+    /// 最后刷新当前标签页 UI 状态（back/forward 按钮）
+    pub async fn sync_snapshot(
+        &self,
+        label: &str,
+        index: usize,
+        entries: Vec<HistorySnapshotEntry>,
+    ) -> Result<(), StateError> {
+        let needs_id = self.tabs.sync_snapshot(label, index, entries).await;
+        for (pos, url) in needs_id {
+            let id = self
+                .save_navigation_log(NavigationLog {
+                    url: url.clone(),
+                    ..Default::default()
+                })
+                .await?;
+            self.tabs.backfill_history(label, pos, id, url).await;
+        }
+        if self.is_current_tab(label).await {
+            self.state_changed(None).await?;
+        }
+        Ok(())
+    }
+
+    /// 将历史事件入队（FIFO，由单消费者按序应用；队列满时等待背压）
+    pub async fn enqueue_history(&self, label: impl Into<String>, event: HistoryEvent) {
+        let _ = self.history_queue.send((label.into(), event)).await;
+    }
+
+    /// 队列消费者：按事件类型分发到具体处理逻辑
+    async fn apply_history_event(
+        &self,
+        label: &str,
+        event: HistoryEvent,
+    ) -> Result<(), StateError> {
+        match event {
+            HistoryEvent::Snapshot { index, entries, .. } => {
+                self.sync_snapshot(label, index, entries).await
+            }
+            HistoryEvent::Push { url, length, .. } => {
+                self.push_history_state(label, url, length).await
+            }
+            HistoryEvent::Replace { url, length, .. } => {
+                self.replace_history_state(label, url, length).await
+            }
+            HistoryEvent::Pop { url, length, .. } => {
+                self.pop_history_state(label, url, length).await
+            }
+            HistoryEvent::Hash { url, length, .. } => self.hash_changed(label, url, length).await,
+            HistoryEvent::Load {
+                url,
+                icon_url,
+                length,
+                ..
+            } => {
+                self.content_loaded(label, url, length as i32, icon_url)
+                    .await
+            }
+            HistoryEvent::LoadFinished {
+                url,
+                title,
+                icon_url,
+            } => {
+                self.on_page_load_finished_history(label, url, title, icon_url)
+                    .await
+            }
+        }
+    }
+
+    /// on_page_load 完成时的历史校准（队列内执行，与前端 content_loaded 串行化）
+    async fn on_page_load_finished_history(
+        &self,
+        label: &str,
+        url: String,
+        title: String,
+        icon_url: String,
+    ) -> Result<(), StateError> {
+        let needs_id = self.tabs.sync_by_url(label, url.clone(), 0).await;
+        let id = self
+            .save_navigation_log(NavigationLog {
+                url: url.clone(),
+                title,
+                icon_url,
+                ..Default::default()
+            })
+            .await?;
+        if needs_id {
+            self.tabs.replace_history(label, id, url, 0).await;
+        }
+        self.tabs.set_redirecting(label, false).await;
         Ok(())
     }
 

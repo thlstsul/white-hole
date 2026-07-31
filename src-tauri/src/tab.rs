@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     IsMainView as _,
-    browser::{bg_color, BrowserExt},
+    browser::{BrowserExt, bg_color},
     darkreader::{DARKREADER_DISABLE_SCRIPT, DARKREADER_ENABLE_SCRIPT},
     error::FrameworkError,
     state::BrowserState,
@@ -29,6 +29,15 @@ pub type TabId = String;
 struct HistoryEntry {
     id: i64,
     url: String,
+    /// Navigation API 上报的条目身份（会话内唯一稳定）；降级路径下为 None
+    key: Option<String>,
+}
+
+/// Navigation API 快照中的一条历史条目（key 作为条目身份）
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct HistorySnapshotEntry {
+    pub key: String,
+    pub url: String,
 }
 
 pub struct Tab {
@@ -39,6 +48,9 @@ pub struct Tab {
     incognito: bool,
     darkreader: bool,
     index: isize,
+    /// 当前加载是否为重定向（reload / 302 / meta refresh）：
+    /// 浏览器对重定向是替换当前条目而非新增，sync 时据此选择语义
+    redirecting: bool,
     history: Vec<HistoryEntry>,
 }
 
@@ -86,6 +98,7 @@ impl Tab {
             loading: true,
             incognito,
             darkreader: true,
+            redirecting: false,
             history: Vec::new(),
             index: -1,
         })
@@ -104,13 +117,13 @@ impl Tab {
         }
 
         if self.index < 0 || self.history.len() + 1 == length {
-            self.history.push(HistoryEntry { id, url });
+            self.history.push(HistoryEntry { id, url, key: None });
             self.index = (self.history.len() - 1) as isize;
             return;
         }
 
         let i = self.index as usize;
-        if id == self.history[i].id {
+        if i < self.history.len() && id == self.history[i].id {
             self.history[i].url = url;
             return;
         }
@@ -120,12 +133,8 @@ impl Tab {
             self.history.truncate(truncate_to);
             self.index = (length - 2) as isize;
         }
-        if length == 0 && i != self.history.len() - 1 {
-            // 目前只有 load 时，length 为 0
-            self.history.truncate(i + 1);
-        }
 
-        self.history.push(HistoryEntry { id, url });
+        self.history.push(HistoryEntry { id, url, key: None });
         self.index += 1;
 
         info!(
@@ -148,11 +157,13 @@ impl Tab {
         }
 
         if self.index < 0 || self.history.len() + 1 == length {
-            self.history.push(HistoryEntry { id, url });
+            self.history.push(HistoryEntry { id, url, key: None });
             self.index = (self.history.len() - 1) as isize;
         } else {
             let i = self.index as usize;
-            self.history[i] = HistoryEntry { id, url };
+            if i < self.history.len() {
+                self.history[i] = HistoryEntry { id, url, key: None };
+            }
         }
 
         info!(
@@ -174,11 +185,15 @@ impl Tab {
             return false;
         }
 
-        if let Err(e) = self.webview.eval("history.back()") {
+        // 优先 Navigation API（权威导航），无则降级 history.back()
+        if let Err(e) = self
+            .webview
+            .eval("(window.navigation ? navigation.back() : history.back())")
+        {
             error!("{}后退失败{e}", self.label());
             false
         } else {
-            // index 不再预更新，等待 popstate / page_load 事件回传后 sync_by_url 校准
+            // index 不再预更新，等待 currententrychange / popstate 回传后对账校准
             true
         }
     }
@@ -188,11 +203,15 @@ impl Tab {
             return false;
         }
 
-        if let Err(e) = self.webview.eval("history.forward()") {
+        // 优先 Navigation API（权威导航），无则降级 history.forward()
+        if let Err(e) = self
+            .webview
+            .eval("(window.navigation ? navigation.forward() : history.forward())")
+        {
             error!("{}前进失败{e}", self.label());
             false
         } else {
-            // index 不再预更新，等待 popstate / page_load 事件回传后 sync_by_url 校准
+            // index 不再预更新，等待 currententrychange / popstate 回传后对账校准
             true
         }
     }
@@ -203,14 +222,23 @@ impl Tab {
             return false;
         }
 
-        if let Err(e) = self
-            .webview
-            .eval(format!("history.go({})", index - self.index))
-        {
+        // 优先按 key 精确跳转（Navigation API），key 失效或缺失时退化为相对 delta，
+        // 彻底摆脱"用镜像 index 算 delta"的漂移反馈环
+        let script = match self.history.get(index as usize).and_then(|e| e.key.clone()) {
+            Some(key) => {
+                let key = serde_json::to_string(&key).unwrap_or_default();
+                format!(
+                    "navigation.traverseTo({key}).catch(function(){{ history.go({}) }})",
+                    index - self.index
+                )
+            }
+            None => format!("history.go({})", index - self.index),
+        };
+        if let Err(e) = self.webview.eval(script) {
             error!("{}跳转失败{e}", self.label());
             false
         } else {
-            // index 不再预更新，等待 webview 事件回传后 sync_by_url 校准
+            // index 不再预更新，等待 webview 事件回传后对账校准
             true
         }
     }
@@ -226,8 +254,25 @@ impl Tab {
             }
         }
 
-        // 查找 URL 是否已存在于历史栈
-        if let Some(pos) = self.history.iter().position(|entry| entry.url == url) {
+        // 查找 URL 是否已存在于历史栈：精确匹配优先，其次容忍尾部斜杠差异；
+        // 有多个匹配时选择距离当前 index 最近的位置（最小移动量），
+        // 避免 position() 固定选第一个匹配而在 URL 重复时定位错误
+        let cur = self.index.max(0) as usize;
+        let url_trimmed = url.trim_end_matches('/');
+        let (mut best_exact, mut best_loose): (Option<usize>, Option<usize>) = (None, None);
+        for (i, entry) in self.history.iter().enumerate() {
+            if entry.url == url {
+                if best_exact.is_none_or(|b| i.abs_diff(cur) < b.abs_diff(cur)) {
+                    best_exact = Some(i);
+                }
+            } else if entry.url.trim_end_matches('/') == url_trimmed
+                && best_loose.is_none_or(|b| i.abs_diff(cur) < b.abs_diff(cur))
+            {
+                best_loose = Some(i);
+            }
+        }
+
+        if let Some(pos) = best_exact.or(best_loose) {
             if self.index != pos as isize {
                 info!(
                     "sync_by_url: URL 匹配到位置 {}，index 从 {} 修正为 {}",
@@ -238,17 +283,34 @@ impl Tab {
             return false; // 未插入新条目
         }
 
-        // URL 不在历史栈中，说明发生了后端未感知的导航（如重定向）
-        // 截断当前位置之后的 forward 历史，然后插入新条目
-        let i = self.index as usize;
+        // URL 不在历史栈中
+        if self.redirecting && self.index >= 0 {
+            // 重定向（reload/302/meta refresh）：浏览器替换当前条目而非新增，
+            // 原地更新当前条目的 URL，id 置为占位等待回填
+            let i = self.index as usize;
+            if i < self.history.len() {
+                self.history[i].url = url.to_string();
+                self.history[i].id = -1;
+                info!(
+                    "sync_by_url: 重定向替换当前条目为 {url}，index: {}，history: {:?}",
+                    self.index, self.history
+                );
+                return true; // 需要真实 id 回填
+            }
+        }
+
+        // 正常导航：截断当前位置之后的 forward 历史，然后插入新条目
+        // 防御 index 为 -1（空历史新 tab）导致的 usize 下溢
+        let i = self.index.max(0) as usize;
         if i != self.history.len().saturating_sub(1) {
             self.history.truncate(i + 1);
         }
         self.history.push(HistoryEntry {
             id: -1,
             url: url.to_string(),
+            key: None,
         });
-        self.index += 1;
+        self.index = (self.history.len() - 1) as isize;
 
         info!(
             "sync_by_url: 插入未知 URL {}，index: {}, history: {:?}",
@@ -258,7 +320,56 @@ impl Tab {
     }
 
     pub fn pop_history_state(&mut self, url: &str, length: usize) -> bool {
+        // popstate（后退/前进）不是重定向，清除残留标记防止误用替换语义
+        self.redirecting = false;
         self.sync_by_url(url, length)
+    }
+
+    /// 以 Navigation API 上报的权威快照全量重建历史镜像。
+    /// entries 按原生顺序排列；key 作为条目身份，保留已存在 key 的 id，
+    /// 新 key 置占位 -1（等待 save_navigation_log 回填）。
+    /// 返回需要回填 id 的 (位置, url) 列表。
+    pub fn sync_snapshot(
+        &mut self,
+        index: usize,
+        entries: Vec<HistorySnapshotEntry>,
+    ) -> Vec<(usize, String)> {
+        let mut id_by_key: std::collections::HashMap<&str, i64> = std::collections::HashMap::new();
+        for entry in &self.history {
+            if let Some(key) = &entry.key {
+                id_by_key.insert(key.as_str(), entry.id);
+            }
+        }
+
+        let mut needs_id = Vec::new();
+        let mut history = Vec::with_capacity(entries.len());
+        for (i, entry) in entries.into_iter().enumerate() {
+            let id = id_by_key.get(entry.key.as_str()).copied().unwrap_or(-1);
+            if id <= 0 {
+                needs_id.push((i, entry.url.clone()));
+            }
+            history.push(HistoryEntry {
+                id,
+                url: entry.url,
+                key: Some(entry.key),
+            });
+        }
+
+        self.history = history;
+        self.index = index as isize;
+        self.redirecting = false;
+        needs_id
+    }
+
+    /// 将指定位置条目的占位 id（-1）回填为真实 id（快照对账后调用）
+    pub fn backfill_history(&mut self, pos: usize, id: i64, url: String) {
+        if id <= 0 {
+            return;
+        }
+        if let Some(entry) = self.history.get_mut(pos) {
+            entry.id = id;
+            entry.url = url;
+        }
     }
 
     pub fn reload(&self) {
@@ -426,6 +537,13 @@ impl TabMap {
             .await;
     }
 
+    pub async fn is_loading(&self, label: &str) -> bool {
+        self.0
+            .read_async(label, |_, tab| tab.loading)
+            .await
+            .unwrap_or(false)
+    }
+
     pub async fn insert_history(&self, label: &str, id: i64, url: String, length: usize) {
         self.0
             .update_async(label, |_, tab| tab.insert_history(id, url, length))
@@ -445,11 +563,37 @@ impl TabMap {
             .unwrap_or(false)
     }
 
+    pub async fn set_redirecting(&self, label: &str, redirecting: bool) {
+        self.0
+            .update_async(label, |_, tab| tab.redirecting = redirecting)
+            .await;
+    }
+
     pub async fn pop_history_state(&self, label: &str, url: String, length: usize) -> bool {
         self.0
             .update_async(label, |_, tab| tab.pop_history_state(&url, length))
             .await
             .unwrap_or(false)
+    }
+
+    /// 全量对账：以权威快照重建镜像，返回需要回填 id 的 (位置, url) 列表
+    pub async fn sync_snapshot(
+        &self,
+        label: &str,
+        index: usize,
+        entries: Vec<HistorySnapshotEntry>,
+    ) -> Vec<(usize, String)> {
+        self.0
+            .update_async(label, |_, tab| tab.sync_snapshot(index, entries))
+            .await
+            .unwrap_or_default()
+    }
+
+    /// 回填指定位置条目的 id（快照对账后）
+    pub async fn backfill_history(&self, label: &str, pos: usize, id: i64, url: String) {
+        self.0
+            .update_async(label, |_, tab| tab.backfill_history(pos, id, url))
+            .await;
     }
 
     pub async fn back(&self, label: &str) -> bool {

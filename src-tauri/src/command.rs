@@ -2,12 +2,13 @@ use log::{error, info};
 use tauri::{State, Webview, Window, command};
 
 use crate::{
-    browser::Browser,
+    browser::{Browser, HistoryEvent},
     error::{DatabaseError, FetchError, FrameworkError, StateError, TabError},
     log::QueryLogResponse,
     page::PageToken,
     request::{self, FetchOptions, Response},
     state::BrowserState,
+    tab::HistorySnapshotEntry,
 };
 
 #[command]
@@ -142,7 +143,34 @@ pub async fn content_loaded(
 ) -> Result<(), StateError> {
     let label = webview.label();
     info!("{label} webview content loaded {url} {icon_url}");
-    browser.content_loaded(label, url, length, icon_url).await?;
+    browser
+        .enqueue_history(
+            label,
+            HistoryEvent::Load {
+                url,
+                length: length as usize,
+                icon_url,
+            },
+        )
+        .await;
+    Ok(())
+}
+
+#[command]
+pub async fn history_snapshot(
+    browser: State<'_, Browser>,
+    webview: Webview,
+    index: usize,
+    entries: Vec<HistorySnapshotEntry>,
+) -> Result<(), StateError> {
+    let label = webview.label();
+    info!(
+        "{label} webview history snapshot index={index} entries={}",
+        entries.len()
+    );
+    browser
+        .enqueue_history(label, HistoryEvent::Snapshot { index, entries })
+        .await;
     Ok(())
 }
 
@@ -155,8 +183,8 @@ pub async fn push_history_state(
 ) -> Result<(), StateError> {
     info!("{} webview push history state", webview.label());
     browser
-        .push_history_state(webview.label(), url, length)
-        .await?;
+        .enqueue_history(webview.label(), HistoryEvent::Push { url, length })
+        .await;
     Ok(())
 }
 
@@ -169,8 +197,8 @@ pub async fn replace_history_state(
 ) -> Result<(), StateError> {
     info!("{} webview replace history state", webview.label());
     browser
-        .replace_history_state(webview.label(), url, length)
-        .await?;
+        .enqueue_history(webview.label(), HistoryEvent::Replace { url, length })
+        .await;
     Ok(())
 }
 
@@ -183,8 +211,8 @@ pub async fn pop_history_state(
 ) -> Result<(), StateError> {
     info!("{} webview pop history state {url}", webview.label());
     browser
-        .pop_history_state(webview.label(), url, length)
-        .await?;
+        .enqueue_history(webview.label(), HistoryEvent::Pop { url, length })
+        .await;
     Ok(())
 }
 
@@ -196,7 +224,9 @@ pub async fn hash_changed(
     length: usize,
 ) -> Result<(), StateError> {
     info!("{} webview hash changed", webview.label());
-    browser.hash_changed(webview.label(), url, length).await?;
+    browser
+        .enqueue_history(webview.label(), HistoryEvent::Hash { url, length })
+        .await;
     Ok(())
 }
 
