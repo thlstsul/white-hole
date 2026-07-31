@@ -5,6 +5,6 @@
   "permissions": ["remote"],
   "local": false,
   "remote": {
-    "urls": ["*://*"]
+    "urls": ["*://*:*"]
   }
 }
