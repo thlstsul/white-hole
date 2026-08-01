@@ -2,6 +2,10 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn MethodSelect(#[props(default)] class: String, value: Signal<String>) -> Element {
+    if value.is_empty() {
+        value.set(String::from("POST"));
+    }
+
     rsx! {
         select {
             value,
@@ -11,12 +15,25 @@ pub fn MethodSelect(#[props(default)] class: String, value: Signal<String>) -> E
             },
 
             for method in METHODS {
-                option { value: *method, "{method}" }
+                if *method == value() {
+                    option {
+                        value: *method,
+                        selected: true,
+                        class: "bg-base-100 text-base-content",
+                        "{method}"
+                    }
+                } else {
+                    option {
+                        value: *method,
+                        class: "bg-base-100 text-base-content",
+                        "{method}"
+                    }
+                }
             }
         }
     }
 }
 
 const METHODS: &[&str] = &[
-    "CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE",
+    "POST", "GET", "CONNECT", "DELETE", "HEAD", "OPTIONS", "PATCH", "PUT", "TRACE",
 ];
