@@ -6,10 +6,6 @@
       "description": "Remote call",
       "commands": {
         "allow": [
-          "push_history_state",
-          "replace_history_state",
-          "pop_history_state",
-          "hash_changed",
           "content_loaded",
           "fullscreen_changed",
           "leave_picture_in_picture",

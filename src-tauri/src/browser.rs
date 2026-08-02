@@ -34,22 +34,6 @@ pub enum HistoryEvent {
         index: usize,
         entries: Vec<HistorySnapshotEntry>,
     },
-    Push {
-        url: String,
-        length: usize,
-    },
-    Replace {
-        url: String,
-        length: usize,
-    },
-    Pop {
-        url: String,
-        length: usize,
-    },
-    Hash {
-        url: String,
-        length: usize,
-    },
     Load {
         url: String,
         icon_url: String,
@@ -63,45 +47,12 @@ pub enum HistoryEvent {
     },
 }
 
-impl HistoryEvent {
-    /// 后退/前进类事件携带的 (url, length)：用于识别 hashchange+popstate 双事件
-    fn nav_pair(&self) -> Option<(String, usize)> {
-        match self {
-            Self::Pop { url, length, .. } | Self::Hash { url, length, .. } => {
-                Some((url.clone(), *length))
-            }
-            _ => None,
-        }
-    }
-}
-
 /// 队列消息：标签 + 事件
 type HistoryMessage = (TabId, HistoryEvent);
 
-/// 历史事件消费者：严格按入队顺序应用；
-/// 并对 hashchange+popstate 双事件按 (url, length) 去重
-async fn consume_history(
-    mut rx: async_runtime::Receiver<HistoryMessage>,
-    last_nav: scc::HashMap<TabId, (String, usize)>,
-    app_handle: AppHandle,
-) {
+/// 历史事件消费者：严格按入队顺序应用
+async fn consume_history(mut rx: async_runtime::Receiver<HistoryMessage>, app_handle: AppHandle) {
     while let Some((label, event)) = rx.recv().await {
-        // hashchange 与 popstate 会为同一次后退/前进双触发：
-        // 相同 (url, length) 的 Pop/Hash 视为同一位移，只应用一次；
-        // 新导航（push/replace/快照）使上次位移记录失效
-        if let Some((url, length)) = event.nav_pair() {
-            let dup = last_nav
-                .read_async(&label, |_, last| last.0 == url && last.1 == length)
-                .await
-                .unwrap_or(false);
-            if dup {
-                continue;
-            }
-            let _ = last_nav.insert_async(label.clone(), (url, length)).await;
-        } else {
-            let _ = last_nav.remove_async(&label).await;
-        }
-
         let browser = app_handle.browser();
         let _ = browser.apply_history_event(&label, event).await;
     }
@@ -109,7 +60,7 @@ async fn consume_history(
 
 pub(crate) fn bg_color(is_dark: bool) -> Color {
     if is_dark {
-        Color(29, 35, 42, 0)
+        Color(29, 35, 42, 255)
     } else {
         Color(255, 255, 255, 255)
     }
@@ -157,10 +108,8 @@ impl Browser {
 
             // 历史事件单消费者：严格按入队顺序应用
             let (history_queue, history_rx) = async_runtime::channel::<HistoryMessage>(1024);
-            // 每 tab 最近一次后退/前进事件的 (url, length)：识别 hashchange+popstate 双事件
-            let last_nav: scc::HashMap<TabId, (String, usize)> = scc::HashMap::default();
             let app_handle = app.handle().clone();
-            async_runtime::spawn(consume_history(history_rx, last_nav, app_handle));
+            async_runtime::spawn(consume_history(history_rx, app_handle));
 
             let state = Browser {
                 db,
@@ -378,81 +327,8 @@ impl Browser {
         self.tabs.set_loading(&label, loading).await;
     }
 
-    pub async fn push_history_state(
-        &self,
-        label: &str,
-        url: String,
-        length: usize,
-    ) -> Result<(), StateError> {
-        let mut state = self.get_state(Some(label)).await?;
-        state.url = url.clone();
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
-        let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.insert_history(label, id, url, length).await;
-
-        Ok(())
-    }
-
-    pub async fn replace_history_state(
-        &self,
-        label: &str,
-        url: String,
-        length: usize,
-    ) -> Result<(), StateError> {
-        let mut state = self.get_state(Some(label)).await?;
-        state.url = url.clone();
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
-        let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.replace_history(label, id, url, length).await;
-
-        Ok(())
-    }
-
-    pub async fn pop_history_state(
-        &self,
-        label: &str,
-        url: String,
-        length: usize,
-    ) -> Result<(), StateError> {
-        let needs_id = self
-            .tabs
-            .pop_history_state(label, url.clone(), length)
-            .await;
-        if needs_id {
-            let mut state = self.get_state(Some(label)).await?;
-            state.url = url.clone();
-            let id = self.save_navigation_log(state.into()).await?;
-            self.tabs.replace_history(label, id, url, length).await;
-        }
-        self.change_tab_loading_state(label, false).await
-    }
-
-    pub async fn hash_changed(
-        &self,
-        label: &str,
-        url: String,
-        length: usize,
-    ) -> Result<(), StateError> {
-        let mut state = self.get_state(Some(label)).await?;
-        state.url = url.clone();
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
-        let id = self.save_navigation_log(state.into()).await?;
-        self.tabs.insert_history(label, id, url, length).await;
-
-        Ok(())
-    }
-
-    /// Navigation API 权威快照对账：全量重建镜像，新 key 条目落库并回填 id，
-    /// 最后刷新当前标签页 UI 状态（back/forward 按钮）
+    /// Navigation API 权威快照对账：全量重建镜像，新 key 或 URL 变更（replaceState）
+    /// 条目落库并回填 id，最后刷新当前标签页 UI 状态（back/forward 按钮）
     pub async fn sync_snapshot(
         &self,
         label: &str,
@@ -460,17 +336,22 @@ impl Browser {
         entries: Vec<HistorySnapshotEntry>,
     ) -> Result<(), StateError> {
         let needs_id = self.tabs.sync_snapshot(label, index, entries).await;
+        // 快照不含 title/icon，当前条目（replaceState 改 URL）落库时从标签页取
+        let state = self.tabs.get_state(label).await?;
         for (pos, url) in needs_id {
-            let id = self
-                .save_navigation_log(NavigationLog {
-                    url: url.clone(),
-                    ..Default::default()
-                })
-                .await?;
+            let mut log = NavigationLog {
+                url: url.clone(),
+                ..Default::default()
+            };
+            if pos == index {
+                log.title = state.title.clone();
+                log.icon_url = state.icon_url.clone();
+            }
+            let id = self.save_navigation_log(log).await?;
             self.tabs.backfill_history(label, pos, id, url).await;
         }
         if self.is_current_tab(label).await {
-            self.state_changed(None).await?;
+            self.state_changed(Some(state)).await?;
         }
         Ok(())
     }
@@ -490,16 +371,6 @@ impl Browser {
             HistoryEvent::Snapshot { index, entries, .. } => {
                 self.sync_snapshot(label, index, entries).await
             }
-            HistoryEvent::Push { url, length, .. } => {
-                self.push_history_state(label, url, length).await
-            }
-            HistoryEvent::Replace { url, length, .. } => {
-                self.replace_history_state(label, url, length).await
-            }
-            HistoryEvent::Pop { url, length, .. } => {
-                self.pop_history_state(label, url, length).await
-            }
-            HistoryEvent::Hash { url, length, .. } => self.hash_changed(label, url, length).await,
             HistoryEvent::Load {
                 url,
                 icon_url,

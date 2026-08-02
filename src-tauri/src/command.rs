@@ -175,62 +175,6 @@ pub async fn history_snapshot(
 }
 
 #[command]
-pub async fn push_history_state(
-    browser: State<'_, Browser>,
-    webview: Webview,
-    url: String,
-    length: usize,
-) -> Result<(), StateError> {
-    info!("{} webview push history state", webview.label());
-    browser
-        .enqueue_history(webview.label(), HistoryEvent::Push { url, length })
-        .await;
-    Ok(())
-}
-
-#[command]
-pub async fn replace_history_state(
-    browser: State<'_, Browser>,
-    webview: Webview,
-    url: String,
-    length: usize,
-) -> Result<(), StateError> {
-    info!("{} webview replace history state", webview.label());
-    browser
-        .enqueue_history(webview.label(), HistoryEvent::Replace { url, length })
-        .await;
-    Ok(())
-}
-
-#[command]
-pub async fn pop_history_state(
-    browser: State<'_, Browser>,
-    webview: Webview,
-    url: String,
-    length: usize,
-) -> Result<(), StateError> {
-    info!("{} webview pop history state {url}", webview.label());
-    browser
-        .enqueue_history(webview.label(), HistoryEvent::Pop { url, length })
-        .await;
-    Ok(())
-}
-
-#[command]
-pub async fn hash_changed(
-    browser: State<'_, Browser>,
-    webview: Webview,
-    url: String,
-    length: usize,
-) -> Result<(), StateError> {
-    info!("{} webview hash changed", webview.label());
-    browser
-        .enqueue_history(webview.label(), HistoryEvent::Hash { url, length })
-        .await;
-    Ok(())
-}
-
-#[command]
 pub async fn fullscreen_changed(
     browser: State<'_, Browser>,
     webview: Webview,

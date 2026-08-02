@@ -180,6 +180,16 @@ impl Tab {
         self.index < self.history.len() as isize - 1
     }
 
+    /// 当前条目 URL：优先取快照对账后的镜像（SPA pushState/replaceState 下
+    /// webview 原生 URL 更新滞后，镜像才是权威值）；空镜像回退原生 URL
+    pub fn current_url(&self) -> Result<String, tauri::Error> {
+        let url = match self.history.get(self.index.max(0) as usize) {
+            Some(entry) => entry.url.clone(),
+            None => self.url()?.to_string(),
+        };
+        Ok(if url == BLANK_URL { String::new() } else { url })
+    }
+
     pub fn back(&mut self) -> bool {
         if !self.can_back() {
             return false;
@@ -319,46 +329,50 @@ impl Tab {
         true // 插入了新条目（id 占位符为 -1）
     }
 
-    pub fn pop_history_state(&mut self, url: &str, length: usize) -> bool {
-        // popstate（后退/前进）不是重定向，清除残留标记防止误用替换语义
-        self.redirecting = false;
-        self.sync_by_url(url, length)
-    }
-
     /// 以 Navigation API 上报的权威快照全量重建历史镜像。
-    /// entries 按原生顺序排列；key 作为条目身份，保留已存在 key 的 id，
-    /// 新 key 置占位 -1（等待 save_navigation_log 回填）。
+    /// entries 按原生顺序排列；key 作为条目身份，同 key 且 URL 未变的条目
+    /// 保留原 id；新 key 或同 key 但 URL 已变（replaceState 只改 URL 不改 key）
+    /// 置占位 -1（等待 save_navigation_log 回填）。
     /// 返回需要回填 id 的 (位置, url) 列表。
     pub fn sync_snapshot(
         &mut self,
         index: usize,
         entries: Vec<HistorySnapshotEntry>,
     ) -> Vec<(usize, String)> {
-        let mut id_by_key: std::collections::HashMap<&str, i64> = std::collections::HashMap::new();
-        for entry in &self.history {
-            if let Some(key) = &entry.key {
-                id_by_key.insert(key.as_str(), entry.id);
-            }
-        }
+        // key 作为条目身份：同 key 且 URL 未变的条目保留原 id，
+        // 新 key 或 URL 变更（replaceState）置占位 -1 等待回填
+        let id_by_key: std::collections::HashMap<&str, (i64, &str)> = self
+            .history
+            .iter()
+            .filter_map(|entry| {
+                entry
+                    .key
+                    .as_deref()
+                    .map(|key| (key, (entry.id, entry.url.as_str())))
+            })
+            .collect();
 
-        let mut needs_id = Vec::new();
-        let mut history = Vec::with_capacity(entries.len());
-        for (i, entry) in entries.into_iter().enumerate() {
-            let id = id_by_key.get(entry.key.as_str()).copied().unwrap_or(-1);
-            if id <= 0 {
-                needs_id.push((i, entry.url.clone()));
-            }
-            history.push(HistoryEntry {
-                id,
+        self.history = entries
+            .into_iter()
+            .map(|entry| HistoryEntry {
+                id: match id_by_key.get(entry.key.as_str()) {
+                    Some((id, url)) if *url == entry.url => *id,
+                    _ => -1,
+                },
                 url: entry.url,
                 key: Some(entry.key),
-            });
-        }
-
-        self.history = history;
+            })
+            .collect();
         self.index = index as isize;
         self.redirecting = false;
-        needs_id
+
+        // 占位条目（新 key / replaceState 改 URL）等待 save_navigation_log 回填
+        self.history
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.id <= 0)
+            .map(|(i, entry)| (i, entry.url.clone()))
+            .collect()
     }
 
     /// 将指定位置条目的占位 id（-1）回填为真实 id（快照对账后调用）
@@ -569,13 +583,6 @@ impl TabMap {
             .await;
     }
 
-    pub async fn pop_history_state(&self, label: &str, url: String, length: usize) -> bool {
-        self.0
-            .update_async(label, |_, tab| tab.pop_history_state(&url, length))
-            .await
-            .unwrap_or(false)
-    }
-
     /// 全量对账：以权威快照重建镜像，返回需要回填 id 的 (位置, url) 列表
     pub async fn sync_snapshot(
         &self,
@@ -673,14 +680,10 @@ impl TabMap {
         let state = self
             .0
             .read_async(label, |_, tab| {
-                let mut url = tab.url()?.to_string();
-                if url == BLANK_URL {
-                    url.clear();
-                }
                 Ok(BrowserState {
                     icon_url: tab.icon_url.clone(),
                     title: tab.title.clone(),
-                    url,
+                    url: tab.current_url()?,
                     loading: tab.loading,
                     can_back: tab.can_back(),
                     can_forward: tab.can_forward(),
