@@ -49,11 +49,9 @@ pub async fn get_icon_data_url(pool: &SqlitePool, icon_url: &str) -> Result<Stri
                 .await
                 .map(|data_url| data_url.to_string())
                 && !data_url.starts_with("data:text")
-            {
-                if let Err(e) = upsert_data_url(&pool, &url, &data_url).await {
+                && let Err(e) = upsert_data_url(&pool, &url, &data_url).await {
                     error!("更新icon失败：{e}");
                 }
-            }
         }
     });
 
