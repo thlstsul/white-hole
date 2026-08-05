@@ -292,6 +292,8 @@ impl Browser {
             let redirecting = self.tabs.is_loading(label).await;
             self.tabs.start_loading(label).await;
             self.tabs.set_redirecting(label, redirecting).await;
+            // 真实加载已开始，loading 交由 PageLoadEvent::Finished 清理
+            self.tabs.set_nav_pending(label, false).await;
             return Ok(());
         }
 
@@ -336,6 +338,11 @@ impl Browser {
         entries: Vec<HistorySnapshotEntry>,
     ) -> Result<(), StateError> {
         let needs_id = self.tabs.sync_snapshot(label, index, entries).await;
+        // 同文档导航（pushState/popstate）或 bfcache 恢复不触发页面加载事件，
+        // 快照到达即导航完成，清掉 back/forward/go 置起的 loading
+        if self.tabs.take_nav_pending(label).await {
+            self.tabs.set_loading(label, false).await;
+        }
         // 快照不含 title/icon，当前条目（replaceState 改 URL）落库时从标签页取
         let state = self.tabs.get_state(label).await?;
         for (pos, url) in needs_id {
@@ -738,6 +745,10 @@ impl Browser {
 
     async fn change_tab_loading_state(&self, label: &str, loading: bool) -> Result<(), StateError> {
         self.tabs.set_loading(label, loading).await;
+        if loading {
+            // 等待页面加载事件（跨文档）或 Navigation API 快照（同文档/bfcache）确认导航完成
+            self.tabs.set_nav_pending(label, true).await;
+        }
 
         if self.is_current_tab(label).await {
             self.state_changed(None).await?;

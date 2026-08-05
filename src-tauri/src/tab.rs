@@ -45,6 +45,9 @@ pub struct Tab {
     title: String,
     icon_url: String,
     loading: bool,
+    /// 等待中的同文档导航（pushState/popstate）或 bfcache 恢复：
+    /// 不触发页面加载事件，需靠 Navigation API 快照确认导航完成并清理 loading
+    nav_pending: bool,
     incognito: bool,
     darkreader: bool,
     index: isize,
@@ -96,6 +99,7 @@ impl Tab {
             title: String::new(),
             icon_url: String::new(),
             loading: true,
+            nav_pending: false,
             incognito,
             darkreader: true,
             redirecting: false,
@@ -554,6 +558,24 @@ impl TabMap {
     pub async fn is_loading(&self, label: &str) -> bool {
         self.0
             .read_async(label, |_, tab| tab.loading)
+            .await
+            .unwrap_or(false)
+    }
+
+    pub async fn set_nav_pending(&self, label: &str, pending: bool) {
+        self.0
+            .update_async(label, |_, tab| tab.nav_pending = pending)
+            .await;
+    }
+
+    /// 读取并清除待定导航标记；true 表示存在未被页面加载事件确认的导航
+    pub async fn take_nav_pending(&self, label: &str) -> bool {
+        self.0
+            .update_async(label, |_, tab| {
+                let pending = tab.nav_pending;
+                tab.nav_pending = false;
+                pending
+            })
             .await
             .unwrap_or(false)
     }
