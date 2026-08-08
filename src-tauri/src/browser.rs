@@ -245,7 +245,7 @@ impl Browser {
     }
 
     pub async fn change_tab_title(&self, label: &str, title: String) -> Result<(), StateError> {
-        self.tabs.set_title(label, title).await;
+        self.tabs.set_title(label, title.clone()).await;
 
         let mut state = self.get_state(Some(label)).await?;
         self.darkreader_auto_switch(label, &mut state).await;
@@ -254,7 +254,16 @@ impl Browser {
             self.state_changed(Some(state.clone())).await?;
         }
 
-        self.save_navigation_log(state.into()).await?;
+        // 跨文档导航进行中（loading=true）：TitleChanged 事件先于历史镜像更新到达，
+        // current_url() 仍指向旧文档，此时落库会把新标题写进旧 URL 的记录，造成标题错位；
+        // 改为记录 pending_title，待快照对账后用权威 URL 补写（同文档导航无
+        // PageLoad Finished 事件，快照是唯一确认点，不能依赖 on_page_load_finished_history）。
+        // 同文档改标题（SPA document.title，loading=false）时镜像可信，照常落库。
+        if self.tabs.is_loading(label).await {
+            self.tabs.set_pending_title(label, title).await;
+        } else {
+            self.save_navigation_log(state.into()).await?;
+        }
         Ok(())
     }
 
@@ -276,10 +285,21 @@ impl Browser {
 
         let length = length as usize;
         let needs_id = self.tabs.sync_by_url(label, url.clone(), length).await;
+        // 无条件落库：content_loaded 携带页面真实图标（此时 set_icon 已生效），
+        // 若不落库，URL 已存在于历史栈（needs_id=false）时图标永远不会保存。
+        // 用前端上报的权威 url 落库：state.url 取自同步前的镜像，无 Navigation API
+        // 的 WebView（快照不上报）上仍指向上一个文档，会把新页面的标题/图标写进旧记录
+        let id = self
+            .save_navigation_log(NavigationLog {
+                url: url.clone(),
+                title: state.title.clone(),
+                icon_url: state.icon_url.clone(),
+                ..Default::default()
+            })
+            .await?;
         if needs_id {
-            // 仅当 sync_by_url 插入了新条目（占位 id=-1）时才落库回填，
+            // 仅当 sync_by_url 插入了新条目（占位 id=-1）时才回填历史栈 id，
             // 避免 URL 命中旧条目时误覆盖旧条目的 id
-            let id = self.save_navigation_log(state.into()).await?;
             self.tabs.replace_history(label, id, url, length).await;
         }
 
@@ -356,6 +376,21 @@ impl Browser {
             }
             let id = self.save_navigation_log(log).await?;
             self.tabs.backfill_history(label, pos, id, url).await;
+        }
+        // 补写加载期间被跳过的标题：同文档导航（back/forward/go/reload 到已存在条目）
+        // 由快照确认而非 PageLoad Finished，且已存在条目不在 needs_id 中不会重存，
+        // 此处用快照对账后的权威 URL 落库，避免标题静默丢失
+        if let Some(title) = self.tabs.take_pending_title(label).await {
+            let url = state.url.clone();
+            if !url.is_empty() && url != "about:blank" {
+                self.save_navigation_log(NavigationLog {
+                    url,
+                    title,
+                    icon_url: state.icon_url.clone(),
+                    ..Default::default()
+                })
+                .await?;
+            }
         }
         if self.is_current_tab(label).await {
             self.state_changed(Some(state)).await?;

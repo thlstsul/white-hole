@@ -61,6 +61,13 @@ pub async fn save_log(
                     .push(", times = times + 1, last_time = datetime('now', 'localtime') ");
             }
             builder.push("where id = ").push_bind(id);
+        } else if icon_id != -1 {
+            // 标题未就绪（页面加载早期）但图标已到位时，也要更新图标
+            builder
+                .push("update navigation_log set icon_id = ")
+                .push_bind(icon_id)
+                .push(", last_time = datetime('now', 'localtime') where id = ")
+                .push_bind(id);
         } else {
             builder.push(
                 "update navigation_log set last_time = datetime('now', 'localtime') where id = ",

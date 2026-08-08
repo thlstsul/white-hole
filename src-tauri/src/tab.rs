@@ -48,6 +48,9 @@ pub struct Tab {
     /// 等待中的同文档导航（pushState/popstate）或 bfcache 恢复：
     /// 不触发页面加载事件，需靠 Navigation API 快照确认导航完成并清理 loading
     nav_pending: bool,
+    /// 加载期间到达但被跳过落库的标题（loading 守卫防止标题错位）：
+    /// 待快照对账后用权威 URL 补写，避免同文档导航无 PageLoad Finished 事件而丢失
+    pending_title: Option<String>,
     incognito: bool,
     darkreader: bool,
     index: isize,
@@ -100,6 +103,7 @@ impl Tab {
             icon_url: String::new(),
             loading: true,
             nav_pending: false,
+            pending_title: None,
             incognito,
             darkreader: true,
             redirecting: false,
@@ -531,6 +535,21 @@ impl TabMap {
 
     pub async fn set_title(&self, label: &str, title: String) {
         self.0.update_async(label, |_, tab| tab.title = title).await;
+    }
+
+    /// 记录加载期间被跳过落库的标题，待快照对账后用权威 URL 补写
+    pub async fn set_pending_title(&self, label: &str, title: String) {
+        self.0
+            .update_async(label, |_, tab| tab.pending_title = Some(title))
+            .await;
+    }
+
+    /// 读取并清除待补写的标题
+    pub async fn take_pending_title(&self, label: &str) -> Option<String> {
+        self.0
+            .update_async(label, |_, tab| tab.pending_title.take())
+            .await
+            .flatten()
     }
 
     pub async fn set_icon(&self, label: &str, icon_url: String) {
