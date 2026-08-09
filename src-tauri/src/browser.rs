@@ -4,7 +4,10 @@ use crate::{
     database::Database,
     error::*,
     icon::{get_cached_icon, get_icon_data_url},
-    log::{NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, update_log_star},
+    log::{
+        NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, touch_log,
+        update_log_star,
+    },
     page::PageToken,
     public_suffix::get_public_suffix_cached,
     state::{Boolean, BrowserState},
@@ -172,6 +175,10 @@ impl Browser {
         {
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
+            // 已打开的 tab 也刷新对应浏览记录的 last_time
+            if let Err(e) = touch_log(&pool, id).await {
+                log::error!("刷新浏览记录 last_time 失败: {e}");
+            }
             self.state_changed(None).await?;
         } else {
             let label = self.create_tab(url, true).await?;
@@ -196,6 +203,10 @@ impl Browser {
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
+            // 已打开的 tab 也刷新对应浏览记录的 last_time
+            if let Err(e) = touch_log(self.db.get().await.as_ref(), id).await {
+                log::error!("刷新浏览记录 last_time 失败: {e}");
+            }
             self.state_changed(None).await?;
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             let label = self.create_tab(&Url::parse(&url)?, true).await?;

@@ -167,6 +167,16 @@ pub async fn query_log(
     })
 }
 
+pub async fn touch_log(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "update navigation_log set last_time = datetime('now', 'localtime') where id = ?",
+        id
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn update_log_star(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
     sqlx::query!("update navigation_log set star = not star where id = ?", id)
         .execute(pool)
