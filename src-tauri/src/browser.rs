@@ -175,11 +175,11 @@ impl Browser {
         {
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
+            self.state_changed(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(&pool, id).await {
                 log::error!("刷新浏览记录 last_time 失败: {e}");
             }
-            self.state_changed(None).await?;
         } else {
             let label = self.create_tab(url, true).await?;
             let mut state = self.get_state(None).await?;
@@ -203,11 +203,11 @@ impl Browser {
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
             self.tabs.go(&label, index).await;
             self.switch_tab(&label).await?;
+            self.state_changed(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(self.db.get().await.as_ref(), id).await {
                 log::error!("刷新浏览记录 last_time 失败: {e}");
             }
-            self.state_changed(None).await?;
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
             let label = self.create_tab(&Url::parse(&url)?, true).await?;
             let mut state = self.get_state(None).await?;
