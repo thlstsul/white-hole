@@ -4,17 +4,16 @@ use dioxus::prelude::*;
 pub fn BodyArea(
     #[props(default)] class: String,
     value: Signal<String>,
-    contenteditable: bool,
+    #[props(default)] editable: bool,
 ) -> Element {
     rsx! {
-        div {
+        textarea {
             class: "body-area textarea textarea-ghost textarea-neutral {class}",
-            contenteditable: contenteditable.to_string(),
+            readonly: !editable,
             oninput: move |e| {
                 value.set(e.value());
             },
-
-            {value}
+            value,
         }
     }
 }

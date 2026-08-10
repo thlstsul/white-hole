@@ -77,7 +77,7 @@ pub fn HttpClient() -> Element {
                     div { class: "my-1" }
                     BodyArea {
                         value: body_value,
-                        contenteditable: body_editable(),
+                        editable: body_editable(),
                         class: "h-full w-full join-item",
                     }
                 }

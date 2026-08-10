@@ -57,6 +57,14 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
         }
         // 添加请求体
         if let Some(body) = &opts.body {
+            // 请求体看起来像 JSON 时先校验，避免把非法 JSON 发给服务器
+            if looks_like_json(body) {
+                serde_json::from_str::<serde_json::Value>(body).map_err(FetchError::InvalidJson)?;
+                // 未手动设置 Content-Type 时自动补充，否则服务端可能拒绝按 JSON 解析
+                if !has_content_type(&opts.headers) {
+                    request_builder = request_builder.header("Content-Type", "application/json");
+                }
+            }
             request_builder = request_builder.body(body.clone());
         }
     }
@@ -91,5 +99,19 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
         body,
         done_date,
         elapsed_time: (OffsetDateTime::now_local()? - done_date).whole_milliseconds() as i32,
+    })
+}
+
+/// 请求体是否按 JSON 处理：去掉前导空白后以 { 或 [ 开头
+fn looks_like_json(body: &str) -> bool {
+    let trimmed = body.trim_start();
+    trimmed.starts_with('{') || trimmed.starts_with('[')
+}
+
+/// 请求头里是否已设置 Content-Type（大小写不敏感）
+fn has_content_type(headers: &Option<Vec<HttpHeader>>) -> bool {
+    headers.iter().any(|hs| {
+        hs.iter()
+            .any(|h| h.key.eq_ignore_ascii_case("content-type"))
     })
 }

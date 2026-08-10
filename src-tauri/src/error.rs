@@ -36,6 +36,8 @@ error_set! {
     FetchError := {
         #[display("网络请求失败：{0}")]
         Fetch(reqwest::Error),
+        #[display("请求体不是合法的 JSON：{0}")]
+        InvalidJson(serde_json::Error),
         #[display("计算耗时失败：{0}")]
         Time(time::error::IndeterminateOffset),
     }
