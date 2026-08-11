@@ -9,9 +9,7 @@ use crate::{
         update_star,
     },
     app::use_browser,
-    incognito::Incognito,
     search_input::SearchInput,
-    settings::Settings,
     url::DecodeUrl,
 };
 
@@ -108,14 +106,11 @@ pub fn SearchPage() -> Element {
     rsx! {
         div { class: "max-h-screen flex flex-col", onkeydown: item_hotkey,
             header {
-                div { class: "w-full join",
-                    SearchInput {
-                        class: "join-item",
-                        value: keyword,
-                        onenter,
-                        onmounted: oninputmounted,
-                    }
-                    Settings { class: "join-item", Incognito {} }
+                SearchInput {
+                    class: "w-full",
+                    value: keyword,
+                    onenter,
+                    onmounted: oninputmounted,
                 }
             }
 

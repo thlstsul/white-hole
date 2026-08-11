@@ -3,8 +3,10 @@ use dioxus::prelude::*;
 #[component]
 pub fn Settings(#[props(default)] class: String, children: Element) -> Element {
     rsx! {
-        div { class: "dropdown dropdown-hover dropdown-end z-1",
-            div { role: "button", class: "btn btn-square btn-ghost {class}",
+        div { class: "fab",
+            div {
+                tabindex: "0",
+                class: "btn btn-circle btn-lg bg-white text-black {class}",
                 svg {
                     xmlns: "http://www.w3.org/2000/svg",
                     fill: "none",
@@ -25,9 +27,7 @@ pub fn Settings(#[props(default)] class: String, children: Element) -> Element {
                 }
             }
 
-            ul { class: "dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm",
-                {children}
-            }
+            {children}
         }
     }
 }

@@ -1,6 +1,5 @@
 mod body;
 mod header;
-// mod log;
 mod method;
 mod response;
 mod send;
@@ -23,19 +22,18 @@ pub fn HttpClientGate() -> Element {
     let mut is_client = use_browser().is_client;
 
     rsx! {
-        div { class: "fab",
-            label { class: "gate swap swap-rotate",
-                input {
-                    tabindex: "-1",
-                    r#type: "checkbox",
-                    checked: is_client,
-                    onclick: move |_| is_client.toggle(),
-                }
-
-                div { class: "btn btn-primary btn-lg btn-circle swap-off", "🔗" }
-
-                div { class: "btn btn-secondary btn-lg btn-circle swap-on", "X" }
+        label { class: "gate swap swap-rotate",
+            input {
+                tabindex: "-1",
+                r#type: "checkbox",
+                checked: is_client,
+                onclick: move |_|
+                                                    is_client.toggle(),
             }
+
+            div { class: "btn btn-lg btn-circle swap-on", "X" }
+
+            div { class: "btn btn-lg btn-circle bg-white text-black swap-off", "§" }
         }
     }
 }

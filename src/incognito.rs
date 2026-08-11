@@ -6,7 +6,7 @@ use crate::{api::incognito, app::use_browser};
 pub fn Incognito(#[props(default)] class: String) -> Element {
     rsx! {
         li {
-            label { class: "btn btn-ghost btn-block swap {class}",
+            label { class: "incognito swap swap-rotate {class}",
                 input {
                     r#type: "checkbox",
                     class: "theme-controller",
@@ -15,9 +15,9 @@ pub fn Incognito(#[props(default)] class: String) -> Element {
                     onclick: |_| async { incognito().await },
                 }
 
-                div { class: "swap-on", "🌑 无痕模式" }
+                div { class: "btn btn-lg btn-circle swap-on", "🌑" }
 
-                div { class: "swap-off", "🌕 无痕模式" }
+                div { class: "btn btn-lg btn-circle bg-white swap-off", "🌕" }
             }
         }
     }

@@ -24,7 +24,7 @@ fn Minimize(#[props(default)] class: String) -> Element {
     rsx! {
         button {
             tabindex: "-1",
-            class: "window-minimize btn btn-square btn-ghost {class}",
+            class: "window-minimize btn btn-square btn-ghost rounded-none {class}",
             id: "window-minimize",
             onclick: |_| async { minimize().await },
 
@@ -43,7 +43,7 @@ fn Close(#[props(default)] class: String) -> Element {
     rsx! {
         button {
             tabindex: "-1",
-            class: "window-close btn btn-square btn-ghost btn-secondary {class}",
+            class: "window-close btn btn-square btn-ghost btn-secondary rounded-none {class}",
             id: "window-close",
             onclick: |_| async { close().await },
 
@@ -78,7 +78,7 @@ fn Maximize(#[props(default)] class: String) -> Element {
     rsx! {
         button {
             tabindex: "-1",
-            class: "window-maximize btn btn-square btn-ghost btn-primary {class}",
+            class: "window-maximize btn btn-square btn-ghost btn-primary rounded-none {class}",
             id: "window-maximize",
             onclick: |_| async { maximize().await },
 
@@ -97,7 +97,7 @@ fn Unmaximize(#[props(default)] class: String) -> Element {
     rsx! {
         button {
             tabindex: "-1",
-            class: "window-unmaximize btn btn-square btn-ghost btn-primary {class}",
+            class: "window-unmaximize btn btn-square btn-ghost btn-primary rounded-none {class}",
             id: "window-unmaximize",
             onclick: |_| async { unmaximize().await },
 

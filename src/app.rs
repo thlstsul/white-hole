@@ -6,7 +6,9 @@ use tauri_sys::event::listen;
 use crate::{
     api::{BrowserState, get_state},
     http_client::{HttpClient, HttpClientGate},
+    incognito::Incognito,
     search_page::SearchPage,
+    settings::Settings,
     title_bar::TitleBar,
 };
 
@@ -92,16 +94,19 @@ fn InnerApp() -> Element {
     rsx! {
         document::Stylesheet { href: CSS }
 
-        if focus() {
+        Settings {
+            Incognito {}
             HttpClientGate {}
+        }
 
-            if is_client() {
-                HttpClient {}
-            } else {
-                SearchPage {}
-            }
+        if is_client() {
+            HttpClient {}
         } else {
-            TitleBar {}
+            if focus() {
+                SearchPage {}
+            } else {
+                TitleBar {}
+            }
         }
     }
 }
