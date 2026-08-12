@@ -13,7 +13,8 @@
           "blur_link",
           "click_link",
           "fetch",
-          "history_snapshot"
+          "history_snapshot",
+          "clipboard_reown"
         ],
         "deny": []
       }

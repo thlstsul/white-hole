@@ -16,6 +16,8 @@ use crate::{
 };
 
 mod browser;
+#[cfg(windows)]
+mod clipboard;
 mod command;
 mod darkreader;
 mod database;
@@ -104,6 +106,7 @@ pub fn run() -> Result<(), SetupError> {
             click_link,
             darkreader,
             fetch,
+            clipboard_reown,
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)

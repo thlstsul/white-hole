@@ -28,7 +28,7 @@ pub fn HttpClientGate() -> Element {
                 r#type: "checkbox",
                 checked: is_client,
                 onclick: move |_|
-                                                    is_client.toggle(),
+                                                                                                                                    is_client.toggle(),
             }
 
             div { class: "btn btn-lg btn-circle swap-on", "X" }
