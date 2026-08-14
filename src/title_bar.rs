@@ -31,10 +31,10 @@ pub fn TitleBar(#[props(default)] class: String) -> Element {
             Navigator { class: "flex-none" }
             TitleBarContent {}
             div { class: "fixed top-0 right-0 join",
-                Extension { class: "join-item",
+                Extension {
                     Darkreader { class: "tab" }
                 }
-                WindowDecoration { class: "join-item" }
+                WindowDecoration {}
             }
         }
     }
