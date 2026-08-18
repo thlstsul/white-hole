@@ -2,13 +2,13 @@ use log::{error, info};
 use tauri::{AppHandle, Manager, State, Webview, Window, command};
 
 use crate::{
-    browser::{Browser, HistoryEvent},
+    browser::Browser,
     error::{DatabaseError, FetchError, FrameworkError, StateError, TabError},
+    history::{HistoryEvent, HistorySnapshotEntry},
     log::QueryLogResponse,
     page::PageToken,
     request::{self, FetchOptions, Response},
     state::BrowserState,
-    tab::HistorySnapshotEntry,
 };
 
 #[command]

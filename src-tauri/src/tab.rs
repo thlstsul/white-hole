@@ -3,25 +3,32 @@ use std::ops::Deref;
 use log::{error, info};
 use scc::HashMap;
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager as _, Theme, Webview, WebviewUrl, Window, Wry,
+    LogicalPosition, LogicalSize, Manager as _, Theme, Webview, WebviewBuilder, WebviewUrl, Window,
     async_runtime::{self, RwLock},
-    webview::{DownloadEvent, NewWindowResponse, PageLoadPayload},
     window::Color,
 };
-use tauri_plugin_notification::NotificationExt;
 use url::Url;
-use uuid::Uuid;
 
 use crate::{
     IsMainView as _,
-    browser::{BrowserExt, bg_color},
     darkreader::{DARKREADER_DISABLE_SCRIPT, DARKREADER_ENABLE_SCRIPT},
     error::FrameworkError,
+    history::{HistoryEvent, HistorySnapshotEntry},
     state::BrowserState,
+    tab_service::{on_document_title_changed, on_download, on_new_window, on_page_load},
     user_agent::get_user_agent,
 };
 
 const BLANK_URL: &str = "about:blank";
+
+/// 窗口/webview 背景色（跟随系统主题）
+pub(crate) fn bg_color(is_dark: bool) -> Color {
+    if is_dark {
+        Color(29, 35, 42, 255)
+    } else {
+        Color(255, 255, 255, 255)
+    }
+}
 
 pub type TabId = String;
 
@@ -31,13 +38,6 @@ struct HistoryEntry {
     url: String,
     /// Navigation API 上报的条目身份（会话内唯一稳定）；降级路径下为 None
     key: Option<String>,
-}
-
-/// Navigation API 快照中的一条历史条目（key 作为条目身份）
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct HistorySnapshotEntry {
-    pub key: String,
-    pub url: String,
 }
 
 pub struct Tab {
@@ -57,6 +57,10 @@ pub struct Tab {
     /// 当前加载是否为重定向（reload / 302 / meta refresh）：
     /// 浏览器对重定向是替换当前条目而非新增，sync 时据此选择语义
     redirecting: bool,
+    /// 该 tab（webview）独立的历史事件 FIFO 队列：
+    /// 同 tab 内按入队顺序应用，不同 tab 互不阻塞；
+    /// 随 Tab 创建而启动专属消费者，随 Tab 销毁而关闭通道、退出消费者
+    history_queue: async_runtime::Sender<HistoryEvent>,
     history: Vec<HistoryEntry>,
 }
 
@@ -69,32 +73,36 @@ impl Deref for Tab {
 }
 
 impl Tab {
-    pub fn new(window: &Window, url: &Url, incognito: bool) -> Result<Self, FrameworkError> {
+    pub fn new(
+        window: &Window,
+        label: &str,
+        url: &Url,
+        incognito: bool,
+        history_queue: async_runtime::Sender<HistoryEvent>,
+    ) -> Result<Self, FrameworkError> {
         let mut size = window
             .inner_size()?
             .to_logical::<f64>(window.scale_factor()?);
         size.height -= Webview::TITLE_HEIGHT;
         let position = LogicalPosition::new(0., Webview::TITLE_HEIGHT);
 
-        let label = Uuid::now_v7().to_string();
         let app_handle = window.app_handle().clone();
         let is_dark = matches!(window.theme()?, Theme::Dark);
-        let builder =
-            tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
-                .initialization_script(include_str!("../js/darkreader.js"))
-                .initialization_script(include_str!("../js/webview_init.js"))
-                .initialization_script(include_str!("../js/copy_hook.js"))
-                .initialization_script_for_all_frames(include_str!("../js/all_frames_init.js"))
-                .user_agent(&get_user_agent())
-                .incognito(incognito)
-                .background_color(bg_color(is_dark))
-                .devtools(true)
-                .zoom_hotkeys_enabled(true)
-                .focused(true)
-                .on_new_window(move |url, _| on_new_window(&app_handle, url))
-                .on_document_title_changed(on_document_title_changed)
-                .on_page_load(on_page_load)
-                .on_download(on_download);
+        let builder = WebviewBuilder::new(label, WebviewUrl::External(url.clone()))
+            .initialization_script(include_str!("../js/darkreader.js"))
+            .initialization_script(include_str!("../js/webview_init.js"))
+            .initialization_script(include_str!("../js/copy_hook.js"))
+            .initialization_script_for_all_frames(include_str!("../js/all_frames_init.js"))
+            .user_agent(&get_user_agent())
+            .incognito(incognito)
+            .background_color(bg_color(is_dark))
+            .devtools(true)
+            .zoom_hotkeys_enabled(true)
+            .focused(true)
+            .on_new_window(move |url, _| on_new_window(&app_handle, url))
+            .on_document_title_changed(on_document_title_changed)
+            .on_page_load(on_page_load)
+            .on_download(on_download);
 
         let webview = window.add_child(builder, position, size)?;
 
@@ -108,6 +116,7 @@ impl Tab {
             incognito,
             darkreader: true,
             redirecting: false,
+            history_queue,
             history: Vec::new(),
             index: -1,
         })
@@ -460,7 +469,8 @@ impl TabMap {
         Ok(())
     }
 
-    pub async fn close_incognito(&self) -> Result<(), FrameworkError> {
+    /// 关闭全部无痕 tab，返回被关闭的 label（供上层清理暂存资源）
+    pub async fn close_incognito(&self) -> Result<Vec<TabId>, FrameworkError> {
         let mut labels = Vec::new();
         self.0
             .iter_async(|l, tab| {
@@ -470,10 +480,10 @@ impl TabMap {
                 true
             })
             .await;
-        for label in labels {
-            self.close(&label).await?;
+        for label in labels.iter() {
+            self.close(label).await?;
         }
-        Ok(())
+        Ok(labels)
     }
 
     /// return id 所在 (label, index)
@@ -580,6 +590,13 @@ impl TabMap {
             .read_async(label, |_, tab| tab.loading)
             .await
             .unwrap_or(false)
+    }
+
+    /// 读取该 tab 的历史事件队列发送端；tab 已关闭时为 None
+    pub async fn history_queue(&self, label: &str) -> Option<async_runtime::Sender<HistoryEvent>> {
+        self.0
+            .read_async(label, |_, tab| tab.history_queue.clone())
+            .await
     }
 
     pub async fn set_nav_pending(&self, label: &str, pending: bool) {
@@ -799,75 +816,4 @@ impl TabMap {
             rtn
         }
     }
-}
-
-fn on_new_window(app_handle: &AppHandle, url: Url) -> NewWindowResponse<Wry> {
-    async_runtime::spawn({
-        let app_handle = app_handle.clone();
-
-        async move {
-            let browser = app_handle.browser();
-            browser.set_loading(false).await;
-            browser
-                .open_tab_by_url(&url, true)
-                .await
-                .inspect_err(|e| error!("打开链接{url}失败：{e}"))
-        }
-    });
-
-    NewWindowResponse::Deny
-}
-
-fn on_document_title_changed(webview: Webview, title: String) {
-    async_runtime::spawn(async move {
-        let label = webview.label();
-        info!("{label} webview title changed: {title}");
-
-        let browser = webview.browser();
-        browser
-            .change_tab_title(label, title)
-            .await
-            .inspect_err(|e| error!("{label}变更标题失败：{e}"))
-    });
-}
-
-fn on_page_load(webview: Webview, payload: PageLoadPayload) {
-    let event = payload.event();
-    async_runtime::spawn(async move {
-        let label = webview.label();
-        info!("{label} webview page load: {event:?}");
-
-        let browser = webview.browser();
-        let loading = match event {
-            tauri::webview::PageLoadEvent::Started => true,
-            tauri::webview::PageLoadEvent::Finished => false,
-        };
-
-        browser
-            .on_page_load(label, loading)
-            .await
-            .inspect_err(|e| error!("{label}变更加载状态失败：{e}"))
-    });
-}
-
-fn on_download(webview: Webview, event: DownloadEvent) -> bool {
-    if let Err(e) = match event {
-        DownloadEvent::Requested { url, .. } => {
-            let notification = webview.notification();
-            notification.builder().title("下载").body(url).show()
-        }
-        DownloadEvent::Finished { url, success, .. } => {
-            let notification = webview.notification();
-            if success {
-                notification.builder().title("下载完成").body(url).show()
-            } else {
-                notification.builder().title("下载失败").body(url).show()
-            }
-        }
-        _ => Ok(()),
-    } {
-        error!("下载事件处理失败：{e}");
-    }
-    // TODO 使用自建下载器
-    true
 }

@@ -1,8 +1,21 @@
+use std::sync::Arc;
+
+use log::error;
+use sqlx::SqlitePool;
+use tauri::{
+    App, Emitter as _, LogicalPosition, Manager, State, Theme, Url, Webview, WebviewBuilder,
+    WebviewUrl, Window, Wry,
+    async_runtime::{self, Mutex},
+};
+use tauri_plugin_window_state::{StateFlags, WindowExt};
+use tokio::time::Instant;
+
 use crate::{
     IsMainView,
-    darkreader::{self, delete_blacklist, save_blacklist},
+    darkreader::{delete_blacklist, save_blacklist},
     database::Database,
     error::*,
+    history::HistoryEvent,
     icon::{get_cached_icon, get_icon_data_url},
     log::{
         NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, touch_log,
@@ -11,75 +24,28 @@ use crate::{
     page::PageToken,
     public_suffix::get_public_suffix_cached,
     state::{Boolean, BrowserState},
-    tab::{HistorySnapshotEntry, Tab, TabId, TabIndex, TabMap},
+    tab::bg_color,
+    tab_service::TabService,
     task,
     url::parse_keyword,
 };
-use log::error;
-use tauri::{
-    App, AppHandle, Emitter as _, LogicalPosition, Manager, State, Theme, Url, Webview,
-    WebviewBuilder, WebviewUrl, Window, Wry,
-    async_runtime::{self, Mutex},
-    window::Color,
-};
-use tauri_plugin_window_state::{StateFlags, WindowExt};
-use tokio::time::Instant;
 
 const WIDTH: f64 = 800.;
 const HEIGHT: f64 = 600.;
 const FOCUS_LINK_TITLE: &str = "点击链接：";
 const LOADING_TITLE: &str = "正在加载……";
 
-/// 历史事件：所有历史写入统一经 FIFO 队列由单消费者按序应用，
-/// 避免并发 IPC 命令乱序应用镜像。
-pub enum HistoryEvent {
-    Snapshot {
-        index: usize,
-        entries: Vec<HistorySnapshotEntry>,
-    },
-    Load {
-        url: String,
-        icon_url: String,
-        length: usize,
-    },
-    /// 后端 on_page_load 完成时的历史校准
-    LoadFinished {
-        url: String,
-        title: String,
-        icon_url: String,
-    },
-}
-
-/// 队列消息：标签 + 事件
-type HistoryMessage = (TabId, HistoryEvent);
-
-/// 历史事件消费者：严格按入队顺序应用
-async fn consume_history(mut rx: async_runtime::Receiver<HistoryMessage>, app_handle: AppHandle) {
-    while let Some((label, event)) = rx.recv().await {
-        let browser = app_handle.browser();
-        let _ = browser.apply_history_event(&label, event).await;
-    }
-}
-
-pub(crate) fn bg_color(is_dark: bool) -> Color {
-    if is_dark {
-        Color(29, 35, 42, 255)
-    } else {
-        Color(255, 255, 255, 255)
-    }
-}
-
+/// 窗口编排 + 应用门面：持有窗口/主视图/数据库与标签领域服务，
+/// 负责窗口级操作、状态发射与 IPC 委托；标签领域逻辑全部收敛在 TabService。
 pub struct Browser {
     db: Database,
     window: Window,
     mainview: Webview,
-    label: TabIndex,
-    tabs: TabMap,
+    /// 标签领域服务（标签生命周期 / 历史镜像同步 / 每 tab 命令）
+    pub(crate) tabs: TabService,
     is_focused: Boolean,
     incognito: Boolean,
     last_focus_changed: Mutex<Instant>,
-    /// 历史事件 FIFO 队列（单消费者按序应用）
-    history_queue: async_runtime::Sender<HistoryMessage>,
 }
 
 impl Browser {
@@ -109,21 +75,14 @@ impl Browser {
 
             let db = Database::new(app).await?;
 
-            // 历史事件单消费者：严格按入队顺序应用
-            let (history_queue, history_rx) = async_runtime::channel::<HistoryMessage>(1024);
-            let app_handle = app.handle().clone();
-            async_runtime::spawn(consume_history(history_rx, app_handle));
-
             let state = Browser {
                 db,
                 window,
                 mainview,
-                label: TabIndex::new(),
-                tabs: TabMap::new(),
+                tabs: TabService::new(app.handle().clone()),
                 is_focused: Boolean::default(),
                 incognito: Boolean::default(),
                 last_focus_changed: Mutex::new(Instant::now()),
-                history_queue,
             };
             app.manage(state);
 
@@ -133,10 +92,15 @@ impl Browser {
         })
     }
 
+    /// 供 TabService 复用数据库连接池
+    pub(crate) async fn db(&self) -> Arc<SqlitePool> {
+        self.db.get().await
+    }
+
     pub async fn resize(&self) -> Result<(), StateError> {
         let scale_factor = self.window.scale_factor()?;
         let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
-        if !(self.label.get().await.is_empty()
+        if !(self.tabs.current().await.is_empty()
             || web_size.height < HEIGHT
             || web_size.width < WIDTH)
         {
@@ -154,16 +118,7 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
-        self.tabs.close(&label).await?;
-        self.label.clear().await;
-
-        if let Some(near_label) = self.tabs.near(&label).await {
-            self.switch_tab(&near_label).await?;
-        }
-
-        self.state_changed(None).await?;
-        Ok(())
+        self.tabs.close_tab().await
     }
 
     pub async fn open_tab_by_url(&self, url: &Url, _active: bool) -> Result<(), TabError> {
@@ -173,15 +128,18 @@ impl Browser {
         if let Some(id) = get_id(&pool, url.as_str()).await
             && let Some((label, index)) = self.tabs.any_open(id, incognito).await
         {
-            self.tabs.go(&label, index).await;
-            self.switch_tab(&label).await?;
+            self.tabs.go_to(&label, index).await;
+            self.tabs.switch_tab(&label).await?;
             self.state_changed(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(&pool, id).await {
                 log::error!("刷新浏览记录 last_time 失败: {e}");
             }
         } else {
-            let label = self.create_tab(url, true).await?;
+            let label = self
+                .tabs
+                .create_tab(url, self.incognito.get().await)
+                .await?;
             let mut state = self.get_state(None).await?;
             state.url = url.to_string();
             self.state_changed(Some(state.clone())).await?;
@@ -201,15 +159,18 @@ impl Browser {
         let incognito = self.incognito.get().await;
         self.is_focused.set(false).await;
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
-            self.tabs.go(&label, index).await;
-            self.switch_tab(&label).await?;
+            self.tabs.go_to(&label, index).await;
+            self.tabs.switch_tab(&label).await?;
             self.state_changed(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(self.db.get().await.as_ref(), id).await {
                 log::error!("刷新浏览记录 last_time 失败: {e}");
             }
         } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
-            let label = self.create_tab(&Url::parse(&url)?, true).await?;
+            let label = self
+                .tabs
+                .create_tab(&Url::parse(&url)?, self.incognito.get().await)
+                .await?;
             let mut state = self.get_state(None).await?;
             state.url = url.clone();
             self.state_changed(Some(state.clone())).await?;
@@ -228,13 +189,7 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
-        if let Some(next_label) = self.tabs.next(&label).await {
-            self.switch_tab(&next_label).await?;
-
-            self.state_changed(None).await?;
-        }
-        Ok(())
+        self.tabs.next_tab().await
     }
 
     pub async fn near_tab(&self) -> Result<(), TabError> {
@@ -242,230 +197,26 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
-        if let Some(near_label) = self.tabs.near(&label).await {
-            self.switch_tab(&near_label).await?;
-
-            self.state_changed(None).await?;
-        }
-        Ok(())
+        self.tabs.near_tab().await
     }
 
-    pub async fn is_current_tab(&self, label: &str) -> bool {
-        self.label.eq(label).await
-    }
-
+    /// 文档标题变更（由 WebviewBuilder::on_document_title_changed 触发）
     pub async fn change_tab_title(&self, label: &str, title: String) -> Result<(), StateError> {
-        self.tabs.set_title(label, title.clone()).await;
-
-        let mut state = self.get_state(Some(label)).await?;
-        self.darkreader_auto_switch(label, &mut state).await;
-
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
-        // 跨文档导航进行中（loading=true）：TitleChanged 事件先于历史镜像更新到达，
-        // current_url() 仍指向旧文档，此时落库会把新标题写进旧 URL 的记录，造成标题错位；
-        // 改为记录 pending_title，待快照对账后用权威 URL 补写（同文档导航无
-        // PageLoad Finished 事件，快照是唯一确认点，不能依赖 on_page_load_finished_history）。
-        // 同文档改标题（SPA document.title，loading=false）时镜像可信，照常落库。
-        if self.tabs.is_loading(label).await {
-            self.tabs.set_pending_title(label, title).await;
-        } else {
-            self.save_navigation_log(state.into()).await?;
-        }
-        Ok(())
+        self.tabs.change_tab_title(label, title).await
     }
 
-    pub async fn content_loaded(
-        &self,
-        label: &str,
-        url: String,
-        length: i32,
-        icon_url: String,
-    ) -> Result<(), StateError> {
-        self.tabs.set_icon(label, icon_url).await;
-
-        let mut state = self.get_state(Some(label)).await?;
-        self.darkreader_auto_switch(label, &mut state).await;
-
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
-        let length = length as usize;
-        let needs_id = self.tabs.sync_by_url(label, url.clone(), length).await;
-        // 无条件落库：content_loaded 携带页面真实图标（此时 set_icon 已生效），
-        // 若不落库，URL 已存在于历史栈（needs_id=false）时图标永远不会保存。
-        // 用前端上报的权威 url 落库：state.url 取自同步前的镜像，无 Navigation API
-        // 的 WebView（快照不上报）上仍指向上一个文档，会把新页面的标题/图标写进旧记录
-        let id = self
-            .save_navigation_log(NavigationLog {
-                url: url.clone(),
-                title: state.title.clone(),
-                icon_url: state.icon_url.clone(),
-                ..Default::default()
-            })
-            .await?;
-        if needs_id {
-            // 仅当 sync_by_url 插入了新条目（占位 id=-1）时才回填历史栈 id，
-            // 避免 URL 命中旧条目时误覆盖旧条目的 id
-            self.tabs.replace_history(label, id, url, length).await;
-        }
-
-        Ok(())
-    }
-
+    /// 页面加载事件（由 WebviewBuilder::on_page_load 触发）
     pub async fn on_page_load(&self, label: &str, loading: bool) -> Result<(), StateError> {
-        if loading {
-            // 页面已在加载中又触发 Started = 重定向链（302/meta refresh/reload）
-            let redirecting = self.tabs.is_loading(label).await;
-            self.tabs.start_loading(label).await;
-            self.tabs.set_redirecting(label, redirecting).await;
-            // 真实加载已开始，loading 交由 PageLoadEvent::Finished 清理
-            self.tabs.set_nav_pending(label, false).await;
-            return Ok(());
-        }
-
-        self.tabs.set_loading(label, loading).await;
-
-        let state = self.get_state(Some(label)).await?;
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state.clone())).await?;
-        }
-
-        // 页面加载完成时，以实际 URL 校准历史栈（入队串行化，避免与 content_loaded 并发乱序）
-        let url = state.url.clone();
-        if !url.is_empty() && url != "about:blank" {
-            self.enqueue_history(
-                label,
-                HistoryEvent::LoadFinished {
-                    url,
-                    title: state.title.clone(),
-                    icon_url: state.icon_url.clone(),
-                },
-            )
-            .await;
-        }
-        Ok(())
+        self.tabs.on_page_load(label, loading).await
     }
 
     pub async fn set_loading(&self, loading: bool) {
-        let label = self.label.get().await;
-        if label.is_empty() {
-            return;
-        }
-
-        self.tabs.set_loading(&label, loading).await;
+        self.tabs.set_loading(loading).await;
     }
 
-    /// Navigation API 权威快照对账：全量重建镜像，新 key 或 URL 变更（replaceState）
-    /// 条目落库并回填 id，最后刷新当前标签页 UI 状态（back/forward 按钮）
-    pub async fn sync_snapshot(
-        &self,
-        label: &str,
-        index: usize,
-        entries: Vec<HistorySnapshotEntry>,
-    ) -> Result<(), StateError> {
-        let needs_id = self.tabs.sync_snapshot(label, index, entries).await;
-        // 同文档导航（pushState/popstate）或 bfcache 恢复不触发页面加载事件，
-        // 快照到达即导航完成，清掉 back/forward/go 置起的 loading
-        if self.tabs.take_nav_pending(label).await {
-            self.tabs.set_loading(label, false).await;
-        }
-        // 快照不含 title/icon，当前条目（replaceState 改 URL）落库时从标签页取
-        let state = self.tabs.get_state(label).await?;
-        for (pos, url) in needs_id {
-            let mut log = NavigationLog {
-                url: url.clone(),
-                ..Default::default()
-            };
-            if pos == index {
-                log.title = state.title.clone();
-                log.icon_url = state.icon_url.clone();
-            }
-            let id = self.save_navigation_log(log).await?;
-            self.tabs.backfill_history(label, pos, id, url).await;
-        }
-        // 补写加载期间被跳过的标题：同文档导航（back/forward/go/reload 到已存在条目）
-        // 由快照确认而非 PageLoad Finished，且已存在条目不在 needs_id 中不会重存，
-        // 此处用快照对账后的权威 URL 落库，避免标题静默丢失
-        if let Some(title) = self.tabs.take_pending_title(label).await {
-            let url = state.url.clone();
-            if !url.is_empty() && url != "about:blank" {
-                self.save_navigation_log(NavigationLog {
-                    url,
-                    title,
-                    icon_url: state.icon_url.clone(),
-                    ..Default::default()
-                })
-                .await?;
-            }
-        }
-        if self.is_current_tab(label).await {
-            self.state_changed(Some(state)).await?;
-        }
-        Ok(())
-    }
-
-    /// 将历史事件入队（FIFO，由单消费者按序应用；队列满时等待背压）
+    /// 将历史事件入队到该 tab 自己的 FIFO 队列（由 TabService 路由）
     pub async fn enqueue_history(&self, label: impl Into<String>, event: HistoryEvent) {
-        let _ = self.history_queue.send((label.into(), event)).await;
-    }
-
-    /// 队列消费者：按事件类型分发到具体处理逻辑
-    async fn apply_history_event(
-        &self,
-        label: &str,
-        event: HistoryEvent,
-    ) -> Result<(), StateError> {
-        match event {
-            HistoryEvent::Snapshot { index, entries, .. } => {
-                self.sync_snapshot(label, index, entries).await
-            }
-            HistoryEvent::Load {
-                url,
-                icon_url,
-                length,
-                ..
-            } => {
-                self.content_loaded(label, url, length as i32, icon_url)
-                    .await
-            }
-            HistoryEvent::LoadFinished {
-                url,
-                title,
-                icon_url,
-            } => {
-                self.on_page_load_finished_history(label, url, title, icon_url)
-                    .await
-            }
-        }
-    }
-
-    /// on_page_load 完成时的历史校准（队列内执行，与前端 content_loaded 串行化）
-    async fn on_page_load_finished_history(
-        &self,
-        label: &str,
-        url: String,
-        title: String,
-        icon_url: String,
-    ) -> Result<(), StateError> {
-        let needs_id = self.tabs.sync_by_url(label, url.clone(), 0).await;
-        let id = self
-            .save_navigation_log(NavigationLog {
-                url: url.clone(),
-                title,
-                icon_url,
-                ..Default::default()
-            })
-            .await?;
-        if needs_id {
-            self.tabs.replace_history(label, id, url, 0).await;
-        }
-        self.tabs.set_redirecting(label, false).await;
-        Ok(())
+        self.tabs.enqueue_history(label, event).await
     }
 
     pub async fn parse_keyword(&self, keyword: &str) -> Option<Url> {
@@ -504,9 +255,9 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
+        let label = self.tabs.current().await;
         if !label.is_empty() {
-            self.tabs.top(&label, &self.window).await?;
+            self.tabs.top(&label).await?;
         }
 
         self.state_changed(None).await?;
@@ -518,16 +269,7 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
-        if label.is_empty() {
-            return Ok(());
-        }
-
-        if self.tabs.back(&label).await {
-            self.change_tab_loading_state(&label, true).await?;
-        }
-
-        Ok(())
+        self.tabs.back().await
     }
 
     pub async fn forward(&self) -> Result<(), StateError> {
@@ -535,16 +277,7 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
-        if label.is_empty() {
-            return Ok(());
-        }
-
-        if self.tabs.forward(&label).await {
-            self.change_tab_loading_state(&label, true).await?;
-        }
-
-        Ok(())
+        self.tabs.forward().await
     }
 
     pub async fn go(&self, index: usize) -> Result<(), StateError> {
@@ -552,16 +285,7 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
-        if label.is_empty() {
-            return Ok(());
-        }
-
-        if self.tabs.go(&label, index).await {
-            self.change_tab_loading_state(&label, true).await?;
-        }
-
-        Ok(())
+        self.tabs.go(index).await
     }
 
     pub async fn reload(&self) -> Result<(), StateError> {
@@ -569,27 +293,24 @@ impl Browser {
             return Ok(());
         }
 
-        let label = self.label.get().await;
-        if label.is_empty() {
-            return Ok(());
-        }
-
-        self.tabs.reload(&label).await;
-        self.change_tab_loading_state(&label, true).await
+        self.tabs.reload().await
     }
 
     pub async fn incognito(&self) -> Result<(), TabError> {
         if self.incognito.get().await {
-            // 退出无痕模式
+            // 退出无痕模式：close_incognito 排空无痕 tab 的在途历史消费者，
+            // 确保内存库被关闭前无残留写入落回持久库
+            self.is_focused.set(false).await;
             self.tabs.close_incognito().await?;
             self.db.close_memory().await?;
             self.incognito.set(false).await;
-            self.next_tab().await?;
+            // 恢复进入无痕模式前的 tab（由 TabService 的 current 机制管理）
+            self.tabs.restore_previous_tab().await?;
         } else {
             // 进入无痕模式
             self.incognito.set(true).await;
             self.db.migrate_memory().await?;
-            self.label.clear().await;
+            self.tabs.enter_incognito().await;
         }
         self.state_changed(None).await?;
         Ok(())
@@ -601,12 +322,6 @@ impl Browser {
         }
 
         self.fullscreen_changed(!self.window.is_fullscreen()?).await
-    }
-
-    pub async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
-        self.tabs.top(label, &self.window).await?;
-        self.label.set(label.to_string()).await;
-        Ok(())
     }
 
     pub async fn query_navigation_log(
@@ -625,7 +340,7 @@ impl Browser {
     }
 
     pub async fn get_state(&self, the_label: Option<&str>) -> Result<BrowserState, StateError> {
-        let label = self.label.get().await;
+        let label = self.tabs.current().await;
         let mut state = self
             .tabs
             .get_state(the_label.unwrap_or(label.as_str()))
@@ -659,7 +374,7 @@ impl Browser {
 
     pub async fn leave_picture_in_picture(&self, label: &str) -> Result<(), StateError> {
         self.blur().await?;
-        self.switch_tab(label).await?;
+        self.tabs.switch_tab(label).await?;
         self.state_changed(None).await?;
         Ok(())
     }
@@ -683,12 +398,12 @@ impl Browser {
     }
 
     pub async fn darkreader(&self) -> Result<(), StateError> {
-        let label = self.label.get().await;
+        let label = self.tabs.current().await;
         if label.is_empty() {
             return Ok(());
         }
 
-        let enable = self.tabs.darkreader(&label).await?;
+        let enable = self.tabs.toggle_darkreader(&label).await?;
         let state = self.get_state(None).await?;
         if let Ok(url) = Url::parse(&state.url)
             && let Some(host) = url.host_str()
@@ -709,21 +424,11 @@ impl Browser {
     }
 
     pub async fn devtools(&self) {
-        let label = self.label.get().await;
-        if label.is_empty() {
-            return;
-        }
-
-        self.tabs.devtools(&label).await;
+        self.tabs.devtools().await;
     }
 
     pub async fn print(&self) -> Result<(), FrameworkError> {
-        let label = self.label.get().await;
-        if label.is_empty() {
-            return Ok(());
-        }
-
-        self.tabs.print(&label).await
+        self.tabs.print().await
     }
 
     /// 重新聚焦webview
@@ -733,7 +438,7 @@ impl Browser {
             return Ok(false);
         }
 
-        let label = self.label.get().await;
+        let label = self.tabs.current().await;
         if self.is_focused.get().await || label.is_empty() {
             self.mainview.set_focus()?;
         } else {
@@ -750,7 +455,7 @@ impl Browser {
         let bg = bg_color(is_dark);
         let _ = self.window.set_background_color(Some(bg));
         let _ = self.mainview.set_background_color(Some(bg));
-        let label = self.label.get().await;
+        let label = self.tabs.current().await;
         let _ = self.tabs.set_background_color(&label, bg).await;
     }
 
@@ -764,14 +469,6 @@ impl Browser {
         .zoom_hotkeys_enabled(false)
         .focused(true)
         .devtools(cfg!(debug_assertions))
-    }
-
-    async fn create_tab(&self, url: &Url, _active: bool) -> Result<TabId, FrameworkError> {
-        let tab = Tab::new(&self.window, url, self.incognito.get().await)?;
-        let label = tab.label().to_string();
-        self.label.set(label.clone()).await;
-        self.tabs.insert(label.clone(), tab).await;
-        Ok(label)
     }
 
     async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
@@ -789,21 +486,11 @@ impl Browser {
         get_cached_icon(&pool, url).await
     }
 
-    async fn change_tab_loading_state(&self, label: &str, loading: bool) -> Result<(), StateError> {
-        self.tabs.set_loading(label, loading).await;
-        if loading {
-            // 等待页面加载事件（跨文档）或 Navigation API 快照（同文档/bfcache）确认导航完成
-            self.tabs.set_nav_pending(label, true).await;
-        }
-
-        if self.is_current_tab(label).await {
-            self.state_changed(None).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn state_changed(&self, state: Option<BrowserState>) -> Result<(), StateError> {
+    /// 发射状态到主视图（TabService 经此通知 UI，发射与图标查询收敛于此）
+    pub(crate) async fn state_changed(
+        &self,
+        state: Option<BrowserState>,
+    ) -> Result<(), StateError> {
         let mut state = if let Some(state) = state {
             state
         } else {
@@ -830,23 +517,6 @@ impl Browser {
         self.window
             .emit_to(Webview::MAINVIEW_LABEL, "state-changed", state)?;
         Ok(())
-    }
-
-    async fn darkreader_auto_switch(&self, label: &str, state: &mut BrowserState) {
-        let enable = if let Ok(url) = Url::parse(&state.url)
-            && let Some(host) = url.host_str()
-        {
-            let pool = self.db.get().await;
-            darkreader::switch(&pool, host).await
-        } else {
-            true
-        };
-
-        if let Err(e) = self.tabs.set_darkreader(label, enable).await {
-            error!("切换darkreader失败：{e}");
-        } else {
-            state.darkreader = enable;
-        }
     }
 }
 
