@@ -1,6 +1,4 @@
 (function () {
-  const BING_URL = "https://cn.bing.com/?form=SPHPRE1&bbtnfrm=";
-
   // 只处理顶层框架（iframe 的会话历史独立，不影响顶层镜像）
   if (window.self != window.top) {
     return;
@@ -21,26 +19,37 @@
   // URL 入签使 replaceState（只改 URL 不改 key）不会被去重误吞
   let lastSnapshotKey = null;
   function reportSnapshot() {
-    let entries, keys;
+    let all;
     try {
-      const all = window.navigation.entries();
-      entries = [];
-      keys = [];
-      for (let i = 0; i < all.length; i++) {
-        entries.push({ key: all[i].key, url: all[i].url });
-        keys.push(all[i].key);
-      }
+      all = window.navigation.entries();
     } catch (e) {
       return; // 快照不可用时放弃本次上报，等待下一次事件
     }
     const current = window.navigation.currentEntry;
+    // 对抗 bing 首页推广：整条移除推广条目（不清洗成干净 URL 保留）。
+    // index 重算为当前条目在过滤后列表中的位置；若当前条目本身就是推广
+    // 条目（已被过滤），index 指向其前一个保留条目，镜像中无推广记录。
+    const entries = [];
+    const keys = [];
+    let index = 0;
+    for (let i = 0; i < all.length; i++) {
+      if (isBingPromoUrl(all[i].url)) {
+        continue;
+      }
+      entries.push({ key: all[i].key, url: all[i].url });
+      keys.push(all[i].key);
+      if (i <= current.index) {
+        index++;
+      }
+    }
+    index = Math.max(0, index - 1);
     const key = current.index + "|" + current.url + "|" + keys.join(",");
     if (key === lastSnapshotKey) {
       return;
     }
     lastSnapshotKey = key;
     webviewIpcInvoke("history_snapshot", {
-      index: current.index,
+      index,
       entries,
     });
   }
@@ -57,17 +66,6 @@
   );
   window.addEventListener("pageshow", reportSnapshot, false);
   window.navigation.addEventListener("currententrychange", reportSnapshot);
-
-  // replaceState 会触发 currententrychange 已被快照覆盖，不触发 navigate；
-  // 此处仅保留钩子用于 bing 对抗
-  const origReplaceState = history.replaceState;
-  history.replaceState = function () {
-    if (arguments[2] === BING_URL) {
-      // 对抗bing首页推广逻辑
-      return;
-    }
-    return origReplaceState.apply(this, arguments);
-  };
 
   function contentLoaded() {
     webviewIpcInvoke("content_loaded", {
@@ -92,5 +90,35 @@
     }
 
     return new URL(iconUrl, window.location.href).href;
+  }
+
+  // ===== bing 首页推广对抗 =====
+  // bing 首页在用户交互时会把地址栏改写为带跟踪参数的推广链接
+  // （形如 https://cn.bing.com/?form=SPHPRE1&bbtnfrm= ），会污染历史；
+  // 推广参数与域名（cn./www.）会变化，不能精确匹配，按 URL 特征识别。
+  function isBingPromoUrl(url) {
+    if (typeof url !== "string" || url.length === 0) {
+      return false;
+    }
+    let parsed;
+    try {
+      parsed = new URL(url, window.location.href);
+    } catch (e) {
+      return false;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (host !== "bing.com" && !host.endsWith(".bing.com")) {
+      return false;
+    }
+    const path = parsed.pathname;
+    if (path !== "/" && path !== "") {
+      return false;
+    }
+    return (
+      parsed.searchParams.has("bbtnfrm") ||
+      (parsed.searchParams.get("form") || "")
+        .toUpperCase()
+        .startsWith("SPHPRE1")
+    );
   }
 })();
