@@ -25,7 +25,6 @@ fn Minimize(#[props(default)] class: String) -> Element {
         button {
             tabindex: "-1",
             class: "window-minimize btn btn-square btn-ghost rounded-none {class}",
-            id: "window-minimize",
             onclick: |_| async { minimize().await },
 
             svg {
@@ -44,7 +43,6 @@ fn Close(#[props(default)] class: String) -> Element {
         button {
             tabindex: "-1",
             class: "window-close btn btn-square btn-ghost btn-secondary rounded-none {class}",
-            id: "window-close",
             onclick: |_| async { close().await },
 
             svg {
@@ -79,7 +77,6 @@ fn Maximize(#[props(default)] class: String) -> Element {
         button {
             tabindex: "-1",
             class: "window-maximize btn btn-square btn-ghost btn-primary rounded-none {class}",
-            id: "window-maximize",
             onclick: |_| async { maximize().await },
 
             svg {
@@ -98,7 +95,6 @@ fn Unmaximize(#[props(default)] class: String) -> Element {
         button {
             tabindex: "-1",
             class: "window-unmaximize btn btn-square btn-ghost btn-primary rounded-none {class}",
-            id: "window-unmaximize",
             onclick: |_| async { unmaximize().await },
 
             svg {

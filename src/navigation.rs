@@ -26,7 +26,7 @@ fn Back(#[props(default)] class: String) -> Element {
     rsx! {
         button {
             tabindex: "-1",
-            class: "btn btn-square btn-ghost rounded-none join-item",
+            class: "back btn btn-square btn-ghost rounded-none join-item",
             disabled: !can_back(),
             onclick: |_| async { back().await },
 
@@ -100,7 +100,7 @@ fn Loading(#[props(default)] class: String) -> Element {
     rsx! {
         button {
             tabindex: "-1",
-            class: "btn btn-square btn-ghost rounded-none {class}",
+            class: "load btn btn-square btn-ghost rounded-none {class}",
             span { class: "loading loading-ring loading-lg" }
         }
     }
