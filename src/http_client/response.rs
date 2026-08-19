@@ -73,7 +73,6 @@ fn Body(body: Vec<u8>, content_type: Option<Mime>) -> Element {
         decode(body, "utf-8")?
     };
 
-    // TODO raw body
     rsx! {
         pre { class: "p-4 rounded-md w-full overflow-x-auto",
             code { {body} }
@@ -92,8 +91,8 @@ fn Header(header: HashMap<String, String>) -> Element {
                     tbody {
                         for (key, value) in header {
                             tr {
-                                td { "{key}" }
-                                td { "{value}" }
+                                td { class: "whitespace-nowrap align-top", "{key}" }
+                                td { class: "break-all align-top", "{value}" }
                             }
                         }
                     }

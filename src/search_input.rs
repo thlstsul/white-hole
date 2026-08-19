@@ -36,7 +36,7 @@ pub fn SearchInput(
 
             input {
                 r#type: "search",
-                placeholder: "搜索",
+                placeholder: "搜索或输入 Web 地址",
                 autocomplete: "off",
                 autofocus: true,
                 value,
