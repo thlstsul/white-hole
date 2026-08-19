@@ -5,10 +5,7 @@ mod response;
 mod send;
 mod uri;
 
-use crate::{
-    api::{HttpRequest, fetch},
-    app::use_browser,
-};
+use crate::api::{HttpRequest, fetch};
 use body::BodyArea;
 use dioxus::prelude::*;
 use header::HeaderTable;
@@ -18,9 +15,7 @@ use send::SendButton;
 use uri::UriInput;
 
 #[component]
-pub fn HttpClientGate() -> Element {
-    let mut is_client = use_browser().is_client;
-
+pub fn HttpClientGate(is_client: Signal<bool>) -> Element {
     rsx! {
         label { class: "gate swap swap-rotate",
             input {
@@ -64,18 +59,18 @@ pub fn HttpClient() -> Element {
         div { class: "grid grid-cols-2 gap-4",
             div { class: "p-4 min-h-screen",
                 div { class: "join join-vertical h-full w-full",
-                    div { class: "join w-full join-item",
+                    div { class: "join w-full",
                         MethodSelect { value: method_value, class: "join-item" }
                         UriInput { value: uri_value, class: "w-full join-item" }
                         SendButton { onclick: on_submit, class: "join-item" }
                     }
                     div { class: "my-1" }
-                    HeaderTable { rows: header_value, class: "w-full join-item" }
+                    HeaderTable { rows: header_value, class: "w-full" }
                     div { class: "my-1" }
                     BodyArea {
                         value: body_value,
                         editable: body_editable(),
-                        class: "h-full w-full join-item",
+                        class: "h-full w-full",
                     }
                 }
             }
