@@ -2,10 +2,6 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn MethodSelect(#[props(default)] class: String, value: Signal<String>) -> Element {
-    if value.is_empty() {
-        value.set(String::from("POST"));
-    }
-
     rsx! {
         select {
             value,

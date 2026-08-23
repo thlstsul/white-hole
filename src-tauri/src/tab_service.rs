@@ -32,7 +32,9 @@ pub(crate) async fn consume_history(
 ) {
     while let Some(event) = rx.recv().await {
         let browser = app_handle.browser();
-        let _ = browser.tabs.apply_history_event(&label, event).await;
+        if let Err(e) = browser.tabs.apply_history_event(&label, event).await {
+            error!("{label} 应用历史事件失败：{e}");
+        }
     }
 }
 
@@ -160,7 +162,16 @@ impl TabService {
         let consumer = async_runtime::spawn(consume_history(label.clone(), history_rx, app_handle));
         self.consumers.lock().await.insert(label.clone(), consumer);
 
-        let tab = Tab::new(&window, &label, url, incognito, history_queue.clone())?;
+        let tab = match Tab::new(&window, &label, url, incognito, history_queue.clone()) {
+            Ok(tab) => tab,
+            Err(e) => {
+                // webview 创建失败：清理已注册的消费者与暂存事件，
+                // 避免 JoinHandle 与待补投事件随失败 tab 泄漏
+                self.consumers.lock().await.remove(&label);
+                self.pending_history.lock().await.clear(&label);
+                return Err(e);
+            }
+        };
         self.current.set(label.clone()).await;
         // 持锁完成"插入 + 补投"：与 enqueue_history 的"查表 + 暂存"串行化，
         // 注册窗口期的事件要么在补投前入暂存、要么在插入后直接发送——不丢失、不乱序

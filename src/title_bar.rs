@@ -3,6 +3,8 @@ use crate::{
     app::use_browser,
     darkreader::Darkreader,
     extension::Extension,
+    http_client::HttpClientGate,
+    incognito::Incognito,
     navigation::Navigator,
     url::DecodeUrl,
     window_decoration::WindowDecoration,
@@ -32,6 +34,8 @@ pub fn TitleBar(#[props(default)] class: String) -> Element {
             TitleBarContent {}
             div { class: "fixed top-0 right-0 join",
                 Extension {
+                    Incognito { class: "tab" }
+                    HttpClientGate { class: "tab" }
                     Darkreader { class: "tab" }
                 }
                 WindowDecoration {}

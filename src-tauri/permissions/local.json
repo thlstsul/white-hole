@@ -16,6 +16,7 @@
           "go",
           "reload",
           "incognito",
+          "http_client",
           "query_navigation_log",
           "update_star",
           "minimize",

@@ -79,6 +79,10 @@ pub fn run() -> Result<(), SetupError> {
         .setup(|app| {
             Browser::setup(app)?;
             update::update(app.handle().clone());
+            // 后端监听剪贴板序列号：检测到本应用 WebView2 复制后自行重接管
+            // （不暴露 clipboard 相关命令给页面，页面无权触发）
+            #[cfg(windows)]
+            clipboard::watch(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -92,6 +96,7 @@ pub fn run() -> Result<(), SetupError> {
             go,
             reload,
             incognito,
+            http_client,
             query_navigation_log,
             update_star,
             content_loaded,
@@ -108,7 +113,6 @@ pub fn run() -> Result<(), SetupError> {
             click_link,
             darkreader,
             fetch,
-            clipboard_reown,
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)

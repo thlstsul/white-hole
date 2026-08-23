@@ -1,5 +1,5 @@
 use log::{error, info};
-use tauri::{AppHandle, Manager, State, Webview, Window, command};
+use tauri::{State, Webview, Window, command};
 
 use crate::{
     browser::Browser,
@@ -116,7 +116,16 @@ pub async fn reload(browser: State<'_, Browser>) -> Result<(), StateError> {
 
 #[command]
 pub async fn incognito(browser: State<'_, Browser>) -> Result<(), TabError> {
-    browser.incognito().await
+    browser.incognito().await?;
+    browser.focus_changed().await?;
+    Ok(())
+}
+
+#[command]
+pub async fn http_client(browser: State<'_, Browser>) -> Result<(), StateError> {
+    browser.http_client().await?;
+    browser.focus_changed().await?;
+    Ok(())
 }
 
 #[command(rename_all = "snake_case")]
@@ -223,28 +232,4 @@ pub async fn darkreader(browser: State<'_, Browser>) -> Result<(), StateError> {
 #[command]
 pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<Response, FetchError> {
     request::fetch(&url, options).await
-}
-
-/// 复制完成后由宿主重新接管剪贴板，使内容出现在 Win+V 剪贴板历史中
-#[command]
-pub async fn clipboard_reown(app: AppHandle) {
-    #[cfg(windows)]
-    {
-        use windows::Win32::Foundation::HWND;
-
-        // 无有效窗口句柄时放弃（reown 需要非空所有者，否则会清空剪贴板）
-        let Some(hwnd) = app.get_window("main").and_then(|w| w.hwnd().ok()) else {
-            return;
-        };
-        // HWND 不是 Send，先取原始值，在线程内重建
-        let raw = hwnd.0 as isize;
-        // 剪贴板枚举/复制工作放后台线程，避免阻塞主线程（UI 线程）
-        if let Err(e) = tauri::async_runtime::spawn_blocking(move || {
-            crate::clipboard::reown(Some(HWND(raw as *mut std::ffi::c_void)));
-        })
-        .await
-        {
-            error!("剪贴板接管失败：{e}");
-        }
-    }
 }

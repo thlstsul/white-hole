@@ -57,13 +57,10 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
         }
         // 添加请求体
         if let Some(body) = &opts.body {
-            // 请求体看起来像 JSON 时先校验，避免把非法 JSON 发给服务器
-            if looks_like_json(body) {
+            // 仅当请求方已显式声明 JSON Content-Type 时才做 JSON 校验，
+            // 避免误伤以 { 或 [ 开头的普通原始报文（YAML、JSON5、测试畸形数据等）
+            if has_json_content_type(&opts.headers) {
                 serde_json::from_str::<serde_json::Value>(body).map_err(FetchError::InvalidJson)?;
-                // 未手动设置 Content-Type 时自动补充，否则服务端可能拒绝按 JSON 解析
-                if !has_content_type(&opts.headers) {
-                    request_builder = request_builder.header("Content-Type", "application/json");
-                }
             }
             request_builder = request_builder.body(body.clone());
         }
@@ -102,16 +99,16 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
     })
 }
 
-/// 请求体是否按 JSON 处理：去掉前导空白后以 { 或 [ 开头
-fn looks_like_json(body: &str) -> bool {
-    let trimmed = body.trim_start();
-    trimmed.starts_with('{') || trimmed.starts_with('[')
-}
-
-/// 请求头里是否已设置 Content-Type（大小写不敏感）
-fn has_content_type(headers: &Option<Vec<HttpHeader>>) -> bool {
+/// 请求头里是否已声明 JSON Content-Type（key 与 value 均大小写不敏感；
+/// value 取分号前的媒体类型，兼容 `application/json; charset=utf-8` 等带参数写法）
+fn has_json_content_type(headers: &Option<Vec<HttpHeader>>) -> bool {
     headers.iter().any(|hs| {
-        hs.iter()
-            .any(|h| h.key.eq_ignore_ascii_case("content-type"))
+        hs.iter().any(|h| {
+            h.key.eq_ignore_ascii_case("content-type")
+                && h.value
+                    .split(';')
+                    .next()
+                    .is_some_and(|v| v.trim().eq_ignore_ascii_case("application/json"))
+        })
     })
 }

@@ -65,7 +65,29 @@
     false,
   );
   window.addEventListener("pageshow", reportSnapshot, false);
-  window.navigation.addEventListener("currententrychange", reportSnapshot);
+
+  if (window.navigation) {
+    // Navigation API（Chromium 102+ / WebView2）提供权威完整会话历史
+    window.navigation.addEventListener("currententrychange", reportSnapshot);
+  } else {
+    // 非 Chromium 引擎（macOS WKWebView / Linux WebKitGTK）没有 Navigation API：
+    // 退化为 popstate / hashchange / 历史 API 包装兜底上报，保证同文档导航
+    // （前进后退、hash 变化、SPA pushState）能更新镜像中的当前 URL 与导航记录
+    window.addEventListener("popstate", reportFallback, false);
+    window.addEventListener("hashchange", reportFallback, false);
+    // pushState/replaceState 不触发 popstate/hashchange，SPA 用历史 API
+    // 跳转时需自行触发兜底上报（在页面脚本执行前包装，尽力拦截）
+    const wrapHistoryMethod = function (method) {
+      const original = history[method];
+      history[method] = function () {
+        const result = original.apply(this, arguments);
+        reportFallback();
+        return result;
+      };
+    };
+    wrapHistoryMethod("pushState");
+    wrapHistoryMethod("replaceState");
+  }
 
   function contentLoaded() {
     webviewIpcInvoke("content_loaded", {
@@ -73,6 +95,18 @@
       iconUrl: getIcon(),
       length: history.length,
     });
+  }
+
+  // 无 Navigation API 时的兜底：把当前 URL 按内容加载上报。
+  // 按上次上报的 URL 去重：back/forward/hash 反复经过同一 URL 时不再重复
+  // 上报，避免 content_loaded 被后端当作整页加载而虚增访问计数
+  let lastFallbackUrl = null;
+  function reportFallback() {
+    if (window.location.href === lastFallbackUrl) {
+      return;
+    }
+    lastFallbackUrl = window.location.href;
+    contentLoaded();
   }
 
   function getIcon() {

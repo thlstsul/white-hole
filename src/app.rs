@@ -5,10 +5,8 @@ use tauri_sys::event::listen;
 
 use crate::{
     api::{BrowserState, get_state},
-    http_client::{HttpClient, HttpClientGate},
-    incognito::Incognito,
+    http_client::HttpClient,
     search_page::SearchPage,
-    settings::Settings,
     title_bar::TitleBar,
 };
 
@@ -26,6 +24,7 @@ pub struct Browser {
     pub focus: Memo<bool>,
     pub incognito: Memo<bool>,
     pub darkreader: Memo<bool>,
+    pub is_client: Memo<bool>,
 }
 
 pub fn use_browser() -> Browser {
@@ -49,6 +48,7 @@ pub fn App() -> Element {
     let focus = use_memo(move || browser_state.read().focus);
     let incognito = use_memo(move || browser_state.read().incognito);
     let darkreader = use_memo(move || browser_state.read().darkreader);
+    let is_client = use_memo(move || browser_state.read().is_client);
     use_context_provider(|| Browser {
         icon_url,
         title,
@@ -60,6 +60,7 @@ pub fn App() -> Element {
         can_forward,
         incognito,
         darkreader,
+        is_client,
     });
 
     use_hook(|| {
@@ -86,22 +87,10 @@ pub fn App() -> Element {
 #[component]
 fn InnerApp() -> Element {
     let focus = use_browser().focus;
-    let mut is_client = use_signal(|| false);
-    use_effect(move || {
-        if !focus() && is_client() {
-            is_client.set(false);
-        }
-    });
+    let is_client = use_browser().is_client;
 
     rsx! {
         document::Stylesheet { href: CSS }
-
-        if focus() {
-            Settings {
-                Incognito {}
-                HttpClientGate { is_client }
-            }
-        }
 
         if is_client() {
             HttpClient {}
@@ -111,6 +100,13 @@ fn InnerApp() -> Element {
             } else {
                 TitleBar {}
             }
+        }
+
+        input {
+            r#type: "checkbox",
+            class: "theme-controller hidden",
+            value: "synthwave",
+            checked: use_browser().incognito,
         }
     }
 }

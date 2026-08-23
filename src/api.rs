@@ -50,6 +50,10 @@ pub async fn incognito() {
     invoke::<()>("incognito", &()).await;
 }
 
+pub async fn http_client() {
+    invoke::<()>("http_client", &()).await;
+}
+
 pub async fn start_dragging() {
     invoke::<()>("start_dragging", &()).await;
 }
@@ -110,6 +114,7 @@ pub struct BrowserState {
     pub focus: bool,
     pub incognito: bool,
     pub darkreader: bool,
+    pub is_client: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Deserialize)]

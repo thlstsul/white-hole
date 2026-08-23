@@ -45,6 +45,7 @@ pub struct Browser {
     pub(crate) tabs: TabService,
     is_focused: Boolean,
     incognito: Boolean,
+    is_client: Boolean,
     last_focus_changed: Mutex<Instant>,
 }
 
@@ -82,6 +83,7 @@ impl Browser {
                 tabs: TabService::new(app.handle().clone()),
                 is_focused: Boolean::default(),
                 incognito: Boolean::default(),
+                is_client: Boolean::default(),
                 last_focus_changed: Mutex::new(Instant::now()),
             };
             app.manage(state);
@@ -309,8 +311,30 @@ impl Browser {
         } else {
             // 进入无痕模式
             self.incognito.set(true).await;
+            self.is_focused.set(true).await;
+            // 抬起主视图到 tab 之上，保持 is_focused ⇔ mainview 顶层不变量
+            self.mainview.reparent(&self.window)?;
             self.db.migrate_memory().await?;
             self.tabs.enter_incognito().await;
+        }
+        self.state_changed(None).await?;
+        Ok(())
+    }
+
+    pub async fn http_client(&self) -> Result<(), StateError> {
+        if self.is_client.get().await {
+            self.is_focused.set(false).await;
+            self.is_client.set(false).await;
+            // 恢复当前 tab 到顶层（与 blur() 一致）
+            let label = self.tabs.current().await;
+            if !label.is_empty() {
+                self.tabs.top(&label).await?;
+            }
+        } else {
+            self.is_client.set(true).await;
+            self.is_focused.set(true).await;
+            // 抬起主视图到 tab 之上，保持 is_focused ⇔ mainview 顶层不变量
+            self.mainview.reparent(&self.window)?;
         }
         self.state_changed(None).await?;
         Ok(())
@@ -350,6 +374,7 @@ impl Browser {
         state.maximized = self.window.is_maximized()?;
         state.focus = self.is_focused.get().await;
         state.incognito = self.incognito.get().await;
+        state.is_client = self.is_client.get().await;
 
         Ok(state)
     }

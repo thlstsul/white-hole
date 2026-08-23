@@ -4,16 +4,116 @@
 //! Windows 剪贴板历史服务（Win+V）无法识别该所有者，导致复制的内容能
 //! 正常粘贴但不出现在剪贴板历史里。解决办法：复制完成后，把剪贴板上的
 //! 所有格式数据完整拷贝一遍，以宿主窗口为所有者重新设置，让历史服务能记录。
+//!
+//! 触发方式：不再由页面 JS 调用 IPC 命令（remote 权限集已移除该命令），
+//! 而是由 [`watch`] 启动的后台线程轮询系统剪贴板序列号，检测到本应用
+//! WebView2 进程发起的复制后，自行执行重接管（带节流）。
+
+use std::time::Duration;
 
 use log::warn;
-use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND};
+use tauri::{AppHandle, Manager};
+use windows::Win32::Foundation::{CloseHandle, GlobalFree, HANDLE, HGLOBAL, HWND};
 use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, OpenClipboard,
-    SetClipboardData,
+    CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardOwner,
+    GetClipboardSequenceNumber, OpenClipboard, SetClipboardData,
+};
+use windows::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
 };
 use windows::Win32::System::Memory::{
     GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
 };
+use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+
+/// 剪贴板轮询间隔：序列号变化即触发，间隔只需覆盖手动复制频率
+const POLL_INTERVAL: Duration = Duration::from_millis(200);
+/// 剪贴板重接管的最小间隔：防止高频复制时过度占用剪贴板
+const REOWN_COOLDOWN: Duration = Duration::from_millis(300);
+
+/// 启动剪贴板监听线程：轮询系统剪贴板序列号，检测到本应用 WebView2
+/// 进程发起的复制后，由宿主自行重新接管剪贴板。
+/// 只处理本应用发起的复制（所有者进程过滤），避免干扰其他程序。
+pub fn watch(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut last_seq = unsafe { GetClipboardSequenceNumber() };
+        let mut last_reown = std::time::Instant::now()
+            .checked_sub(REOWN_COOLDOWN)
+            .unwrap_or_else(std::time::Instant::now);
+
+        loop {
+            std::thread::sleep(POLL_INTERVAL);
+            let seq = unsafe { GetClipboardSequenceNumber() };
+            if seq == last_seq {
+                continue;
+            }
+            last_seq = seq;
+
+            // 只处理本应用 WebView2 发起的复制
+            if !is_our_webview_owner() {
+                continue;
+            }
+
+            // 冷却期内跳过，避免高频复制时过度占用剪贴板
+            if last_reown.elapsed() < REOWN_COOLDOWN {
+                continue;
+            }
+
+            let Some(hwnd) = app.get_window("main").and_then(|w| w.hwnd().ok()) else {
+                continue;
+            };
+            last_reown = std::time::Instant::now();
+            reown(Some(hwnd));
+        }
+    });
+}
+
+/// 当前剪贴板所有者是否为本应用 WebView2 子进程
+fn is_our_webview_owner() -> bool {
+    let Ok(owner) = (unsafe { GetClipboardOwner() }) else {
+        return false;
+    };
+    if owner.is_invalid() {
+        return false;
+    }
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(owner, Some(&mut pid)) };
+    if pid == 0 {
+        return false;
+    }
+    our_webview_pids().contains(&pid)
+}
+
+/// 枚举本应用启动的 WebView2 子进程 PID（进程名 msedgewebview2.exe）
+fn our_webview_pids() -> Vec<u32> {
+    let mut pids = Vec::new();
+    let Ok(snapshot) = (unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }) else {
+        return pids;
+    };
+
+    let mut entry = PROCESSENTRY32W {
+        dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+        ..Default::default()
+    };
+
+    let mut ok = unsafe { Process32FirstW(snapshot, &mut entry).is_ok() };
+    while ok {
+        // 父进程是本进程 且 进程名为 WebView2 浏览器进程
+        if entry.th32ParentProcessID == std::process::id() && is_webview2_exe(&entry.szExeFile) {
+            pids.push(entry.th32ProcessID);
+        }
+        ok = unsafe { Process32NextW(snapshot, &mut entry).is_ok() };
+    }
+    let _ = unsafe { CloseHandle(snapshot) };
+    pids
+}
+
+/// 判断进程可执行文件名是否为 WebView2 浏览器进程
+fn is_webview2_exe(exe: &[u16; 260]) -> bool {
+    let len = exe.iter().position(|&c| c == 0).unwrap_or(exe.len());
+    let name = String::from_utf16_lossy(&exe[..len]).to_lowercase();
+    name == "msedgewebview2.exe"
+}
 
 /// 该格式的数据不是 HGLOBAL（GlobalLock 会失效），跳过：
 /// 2=CF_BITMAP(HBITMAP) 3=CF_METAFILEPICT 9=CF_PALETTE(HPALETTE)

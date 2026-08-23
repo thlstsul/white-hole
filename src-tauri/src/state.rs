@@ -16,6 +16,7 @@ pub struct BrowserState {
     pub focus: bool,
     pub incognito: bool,
     pub darkreader: bool,
+    pub is_client: bool,
 }
 
 impl Default for BrowserState {
@@ -31,6 +32,7 @@ impl Default for BrowserState {
             focus: false,
             incognito: false,
             darkreader: true,
+            is_client: false,
         }
     }
 }
