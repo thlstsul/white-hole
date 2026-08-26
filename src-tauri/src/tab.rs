@@ -48,6 +48,9 @@ pub struct Tab {
     /// 等待中的同文档导航（pushState/popstate）或 bfcache 恢复：
     /// 不触发页面加载事件，需靠 Navigation API 快照确认导航完成并清理 loading
     nav_pending: bool,
+    /// Finished 已触发但 LoadFinished 历史校准尚未消费：跨文档加载完成瞬间的
+    /// 标题变更应 defer（pending_title）而非直接落库，避免与校准重复写入
+    load_finished_pending: bool,
     /// 加载期间到达但被跳过落库的标题（loading 守卫防止标题错位）：
     /// 待快照对账后用权威 URL 补写，避免同文档导航无 PageLoad Finished 事件而丢失
     pending_title: Option<String>,
@@ -111,6 +114,7 @@ impl Tab {
             icon_url: String::new(),
             loading: true,
             nav_pending: false,
+            load_finished_pending: false,
             pending_title: None,
             incognito,
             darkreader: true,
@@ -612,6 +616,21 @@ impl TabMap {
                 tab.nav_pending = false;
                 pending
             })
+            .await
+            .unwrap_or(false)
+    }
+
+    /// 标记 LoadFinished 历史校准是否在途（Finished 已触发、校准事件尚未消费）：
+    /// 该窗口内的标题变更应 defer 到校准落库，避免与校准重复写入同一行
+    pub async fn set_load_finished_pending(&self, label: &str, pending: bool) {
+        self.0
+            .update_async(label, |_, tab| tab.load_finished_pending = pending)
+            .await;
+    }
+
+    pub async fn is_load_finished_pending(&self, label: &str) -> bool {
+        self.0
+            .read_async(label, |_, tab| tab.load_finished_pending)
             .await
             .unwrap_or(false)
     }

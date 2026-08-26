@@ -410,6 +410,9 @@ impl TabService {
         title: String,
         icon_url: String,
     ) -> Result<(), StateError> {
+        // 校准在途期间 change_tab_title 可能已将标题 defer 到 pending_title，优先取用，
+        // 避免与校准各自落库（同一行重复 UPDATE、times 重复 +1）
+        let title = self.map.take_pending_title(label).await.unwrap_or(title);
         let needs_id = self.map.sync_by_url(label, url.clone(), 0).await;
         let id = self
             .save_navigation_log(NavigationLog {
@@ -423,6 +426,8 @@ impl TabService {
             self.map.replace_history(label, id, url, 0).await;
         }
         self.map.set_redirecting(label, false).await;
+        // 校准完成，解除在途标记：后续标题变更（同文档 SPA 改标题）照常直接落库
+        self.map.set_load_finished_pending(label, false).await;
         Ok(())
     }
 
@@ -439,7 +444,10 @@ impl TabService {
         self.darkreader_auto_switch(label, &mut state).await;
 
         if self.current.eq(label).await {
-            self.emit(Some(state.clone())).await?;
+            // 发射实时状态而非此前的快照：darkreader_auto_switch 的 DB 查询期间，
+            // PageLoadEvent::Finished 可能已把 loading 清为 false，旧快照会把
+            // loading=true 覆盖回去，导致 UI 卡在加载态（如 api.github.com/meta）
+            self.emit(None).await?;
         }
 
         let length = length as usize;
@@ -476,6 +484,10 @@ impl TabService {
             return Ok(());
         }
 
+        // Finished：先标记 LoadFinished 校准在途，再清 loading。期间的标题变更
+        // （TitleChanged 与 Finished 并发）看到 is_loading 已为 false，若直接落库会
+        // 与下方校准重复写入同一行（重复 UPDATE、times 重复 +1），故需 defer
+        self.map.set_load_finished_pending(label, true).await;
         self.map.set_loading(label, loading).await;
 
         let state = self.browser().get_state(Some(label)).await?;
@@ -495,6 +507,9 @@ impl TabService {
                 },
             )
             .await;
+        } else {
+            // 无可校准 URL（about:blank），解除在途标记，标题变更照常直接落库
+            self.map.set_load_finished_pending(label, false).await;
         }
         Ok(())
     }
@@ -552,7 +567,10 @@ impl TabService {
             }
         }
         if self.current.eq(label).await {
-            self.emit(Some(state)).await?;
+            // 发射实时状态而非此前的快照：快照对账落库（save_navigation_log）期间，
+            // PageLoadEvent::Finished 可能已把 loading 清为 false，旧快照会把
+            // loading=true 覆盖回去，导致 UI 卡在加载态
+            self.emit(None).await?;
         }
         Ok(())
     }
@@ -583,15 +601,21 @@ impl TabService {
         self.darkreader_auto_switch(label, &mut state).await;
 
         if self.current.eq(label).await {
-            self.emit(Some(state.clone())).await?;
+            // 发射实时状态而非此前的快照：darkreader_auto_switch 的 DB 查询期间，
+            // PageLoadEvent::Finished 可能已把 loading 清为 false，旧快照会把
+            // loading=true 覆盖回去，导致 UI 卡在加载态（如 api.github.com/meta）
+            self.emit(None).await?;
         }
 
-        // 跨文档导航进行中（loading=true）：TitleChanged 事件先于历史镜像更新到达，
-        // current_url() 仍指向旧文档，此时落库会把新标题写进旧 URL 的记录，造成标题错位；
-        // 改为记录 pending_title，待快照对账后用权威 URL 补写（同文档导航无
-        // PageLoad Finished 事件，快照是唯一确认点，不能依赖 on_page_load_finished_history）。
-        // 同文档改标题（SPA document.title，loading=false）时镜像可信，照常落库。
-        if self.map.is_loading(label).await {
+        // 跨文档导航进行中（loading=true）或 LoadFinished 校准在途（loading 已被
+        // Finished 清 false，但校准事件尚未消费）：TitleChanged 事件先于历史镜像更新
+        // 到达，current_url() 仍指向旧文档，此时落库会把新标题写进旧 URL 的记录，造成
+        // 标题错位；且与 on_page_load_finished_history 重复落库同一行（重复 UPDATE、
+        // times 重复 +1）。改为记录 pending_title，待校准/快照对账后用权威 URL 补写
+        // （同文档导航无 PageLoad Finished 事件，快照是唯一确认点，不能依赖
+        // on_page_load_finished_history）。
+        // 同文档改标题（SPA document.title，loading=false 且无校准在途）时镜像可信，照常落库。
+        if self.map.is_loading(label).await || self.map.is_load_finished_pending(label).await {
             self.map.set_pending_title(label, title).await;
         } else {
             self.save_navigation_log(state.into()).await?;
