@@ -11,18 +11,18 @@ use tauri::{
     webview::{DownloadEvent, NewWindowResponse, PageLoadPayload},
     window::Color,
 };
-use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
 use crate::{
     browser::{Browser, BrowserExt as _},
-    darkreader,
+    darkreader, download,
     error::{DatabaseError, FrameworkError, StateError, TabError},
     history::{HistoryEvent, HistorySnapshotEntry},
     log::{NavigationLog, save_log},
     state::BrowserState,
     tab::{Tab, TabId, TabIndex, TabMap},
 };
+use downloader::DownloadManager;
 
 /// 单个 tab 的历史事件消费者：严格按入队顺序应用该 tab 的事件
 pub(crate) async fn consume_history(
@@ -694,25 +694,36 @@ pub(crate) fn on_page_load(webview: Webview, payload: PageLoadPayload) {
 }
 
 pub(crate) fn on_download(webview: Webview, event: DownloadEvent) -> bool {
-    if let Err(e) = match event {
+    match event {
         DownloadEvent::Requested { url, .. } => {
-            let notification = webview.notification();
-            notification.builder().title("下载").body(url).show()
+            // 交由自建下载器接管，返回 false 阻断 WebView2 默认下载行为
+            let url = url.to_string();
+            let app = webview.app_handle().clone();
+            let manager = webview.state::<DownloadManager>().inner().clone();
+            async_runtime::spawn(async move {
+                // 在异步线程读取该 URL 的 cookie：cookies_for_url 在同步命令/事件处理器中
+                // 会死锁（wry#583），此处运行在 tokio 工作线程，不会阻塞 WebView2 UI 线程
+                let cookies = url
+                    .parse::<url::Url>()
+                    .ok()
+                    .and_then(|u| webview.cookies_for_url(u).ok())
+                    .map(|list| {
+                        list.iter()
+                            .map(|c| format!("{}={}", c.name(), c.value()))
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    });
+                match download::start_download(&app, manager, url, cookies).await {
+                    Ok(task_id) => info!("下载任务已提交：{task_id}"),
+                    Err(e) => error!("{e}"),
+                }
+            });
+            false
         }
-        DownloadEvent::Finished { url, success, .. } => {
-            let notification = webview.notification();
-            if success {
-                notification.builder().title("下载完成").body(url).show()
-            } else {
-                notification.builder().title("下载失败").body(url).show()
-            }
-        }
-        _ => Ok(()),
-    } {
-        error!("下载事件处理失败：{e}");
+        // 完成/失败/取消通知统一由 download::event_listener_loop 发送，这里不再重复处理
+        DownloadEvent::Finished { .. } => false,
+        _ => false,
     }
-    // TODO 使用自建下载器
-    true
 }
 
 #[cfg(test)]

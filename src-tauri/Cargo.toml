@@ -14,8 +14,10 @@ features = []
 version = "2.6.2"
 
 [dependencies]
+base64 = "0.22"
 colored = "3.1.1"
 delay_timer = "0.11.6"
+minisign-verify = "0.2"
 error_set = { workspace = true }
 get-data-url = "0.3"
 log = { workspace = true }
@@ -31,6 +33,10 @@ url = "2.5.8"
 [dependencies.cached]
 features = ["async"]
 version = "0.59.0"
+
+[dependencies.downloader]
+rev = "ea5bda84a39632212d0b35d35b0cdd9ae931bd51"
+git = "https://github.com/thlstsul/downloader"
 
 [dependencies.fern]
 features = ["colored"]
@@ -68,7 +74,7 @@ features = [
 workspace = true
 
 [dependencies.tokio]
-features = ["fs"]
+features = ["fs", "time"]
 version = "1"
 
 [dependencies.uuid]
@@ -96,5 +102,6 @@ tauri-plugin-window-state = "2"
 path = "../hotkey"
 
 [target."cfg(windows)".dependencies]
+tauri-winrt-notification = "0.7.2"
 webview2-com = "0.38"
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_DataExchange", "Win32_System_Diagnostics_ToolHelp", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_DataExchange", "Win32_System_Diagnostics_ToolHelp", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
