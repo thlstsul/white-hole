@@ -1,0 +1,102 @@
+src-tauri/Cargo.toml
+  s_cc84d0916599a9::t_9f3fdd45394457 77
+  s_7ffb140dc057dc::t_8e8f85aaf87924 105
+  s_cc84d0916599a9::t_b3fca187d80040 17,20
+  s_7ffb140dc057dc::t_0bb817d7111791 107
+src-tauri/src/tab_service.rs
+  s_cc84d0916599a9::t_7a391a6e9c0cfb 18,25
+  s_cc84d0916599a9::t_4454e069336a30 697,699-703,719-721,723-725
+  s_cc84d0916599a9::t_5b28a30c1666e4 704-714
+  s_cc84d0916599a9::t_7abdc45e136c9e 716-718
+  s_cc84d0916599a9::t_71fcac553c7b88 715
+src-tauri/src/tray.rs
+  s_cc84d0916599a9::t_4e53b14c7c043b 1-263,266-267,269-370
+  s_7ffb140dc057dc::t_fbb3c00458ca36 264-265,268
+src-tauri/src/update.rs
+  s_7ffb140dc057dc::t_e0e60b962ca3d1 57-70
+  s_cc84d0916599a9::t_632d97ec17b9fd 2,4,24-35,40-56,71-93,97-128
+  s_7ffb140dc057dc::t_e3dabe1bf3ca15 7
+  s_7ffb140dc057dc::t_c3dc6447c27407 36-38
+  s_cc84d0916599a9::t_a29c17bf70b10b 129
+src-tauri/src/lib.rs
+  s_cc84d0916599a9::t_5e20f060c045cf 24,96,101
+  s_cc84d0916599a9::t_261309e908d0cd 99-100
+  s_cc84d0916599a9::t_621b459149766f 98
+  s_cc84d0916599a9::t_8eb138af504c30 40
+  s_7ffb140dc057dc::t_666be4d4354ead 82-95
+src-tauri/src/download.rs
+  s_7ffb140dc057dc::t_69297c198e5613 60,73-80,82-85,89-90,101-124,126-134,136-138
+  s_7ffb140dc057dc::t_0c5de91b7096e3 141-145,149-152,155,165,172,177-186
+  s_7ffb140dc057dc::t_731a63e2fe2f45 146-148,153,166-171
+  s_7ffb140dc057dc::t_aa95ae979860a9 97
+  s_cc84d0916599a9::t_4f4e80970863b9 1,9-11,18,49-52
+  s_7ffb140dc057dc::t_da31ca8e9b8bbf 39-43
+  s_cc84d0916599a9::t_3fb1fbce0cb990 139
+  s_7ffb140dc057dc::t_04afa32b552df8 7
+  s_cc84d0916599a9::t_f1a1780a61efe5 16
+  s_7ffb140dc057dc::t_e02f94b6d99c2c 81
+  s_7ffb140dc057dc::t_03f1e721021e73 44-45
+  s_7ffb140dc057dc::t_f671bbd30787df 61
+  s_cc84d0916599a9::t_9d71fe6a863c4b 24,31,46
+  s_7ffb140dc057dc::t_51012692abde0e 62
+  s_cc84d0916599a9::t_ff47310676be68 2-3,5-6,8,12-15,17,19-22,26-29,32,38,47-48,53-59,63-72,86-88,91-96,98-100,135,140
+  s_cc84d0916599a9::t_aa0be1d683664f 23,25,30,33-37
+  s_cc84d0916599a9::t_1df12d3e7f9e51 4
+  s_7ffb140dc057dc::t_206925078a86e5 154,156-164,173-176
+  s_7ffb140dc057dc::t_480f08e756b36a 125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "68a75c481efb4675c661ac721481ccca07830bfd",
+  "prompts": {},
+  "humans": {
+    "h_97445c73a495c5": {
+      "author": "THELOSTSOUL <1095533751@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_7ffb140dc057dc": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a93a1814865284ef616d0fe",
+        "model": "volc/deepseek-v4-flash-0731"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "external_session_id": "6a93a1814865284ef616d0fe",
+        "dedupe_key": "6a93a1814865284ef616d0fe:6a93e3c04865284ef616d3d9:afterEdit:3df7d633",
+        "client_type": "ide",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "source_scene": "agent",
+        "tool_use_id": "6a93e3c04865284ef616d3d9",
+        "session_id": "6a93a1814865284ef616d0fe",
+        "tool_type": "builtin",
+        "edit_kind": "file_edit",
+        "runtime_client": "trae-tob-git-ai",
+        "operation_id": "6a93e3c04865284ef616d3d9"
+      }
+    },
+    "s_cc84d0916599a9": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a92efd9fb190d9f05b65684",
+        "model": "volc/deepseek-v4-flash-0731"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "external_session_id": "6a92efd9fb190d9f05b65684",
+        "tool_use_id": "6a93a25c4865284ef616d155",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "tool_type": "builtin",
+        "operation_id": "6a93a25c4865284ef616d155",
+        "runtime_client": "trae-tob-git-ai",
+        "source_scene": "agent",
+        "edit_kind": "file_edit",
+        "dedupe_key": "6a92efd9fb190d9f05b65684:6a93a25c4865284ef616d155:afterEdit:d0c1a8fb",
+        "client_type": "ide",
+        "session_id": "6a92efd9fb190d9f05b65684"
+      }
+    }
+  }
+}
