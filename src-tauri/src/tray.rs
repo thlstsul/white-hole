@@ -126,7 +126,11 @@ async fn tray_event_loop(app: AppHandle, manager: DownloadManager) {
                             refresh_tray(&app, &manager, &mut last_signature, &mut items, &mut last_rows).await;
                         }
                     }
-                    Err(RecvError::Lagged(_)) => continue,
+                    // 广播丢帧：部分生命周期事件可能已被跳过，立即按权威状态重同步，
+                    // 避免菜单卡在上一次结构（如已完成任务仍显示「▼ 下载中」）
+                    Err(RecvError::Lagged(_)) => {
+                        refresh_tray(&app, &manager, &mut last_signature, &mut items, &mut last_rows).await;
+                    }
                     Err(_) => break,
                 }
             }
@@ -137,7 +141,15 @@ async fn tray_event_loop(app: AppHandle, manager: DownloadManager) {
                 if stats.task_id.is_empty() {
                     continue;
                 }
-                refresh_progress(&app, &stats, &mut items, &mut last_rows).await;
+                refresh_progress(
+                    &app,
+                    &manager,
+                    &stats,
+                    &mut items,
+                    &mut last_rows,
+                    &mut last_signature,
+                )
+                .await;
             }
         }
     }
@@ -201,22 +213,38 @@ async fn refresh_tray(
 /// `stats` 来自 `subscribe_all_progress` 的快照（只含最近更新过进度的任务），
 /// 配合 `items` 中缓存的菜单项句柄做原地 `set_text`，避免为每个进度事件重建菜单；
 /// 同时基于 `last_rows` 缓存重算 tooltip，保证悬停百分比实时更新。
+///
+/// 快照不含任务状态，故以 `get_task_status` 回查的**权威状态**为准（`last_rows`
+/// 缓存可能在事件流丢帧后过期）：任务已非「下载中」时不原地刷新行文本，而是触发
+/// 一次完整 `refresh_tray` 按真实状态重建菜单——否则事件流丢失 TaskCompleted 后，
+/// 完成时的最终快照（downloaded==total、speed==0）会把菜单永久刷成「▼ 下载中 · 等待」。
 async fn refresh_progress(
     app: &AppHandle,
+    manager: &DownloadManager,
     stats: &downloader::DownloadStats,
     items: &mut HashMap<String, TrayMenuItems>,
-    last_rows: &mut [TrayRow],
+    last_rows: &mut Vec<TrayRow>,
+    last_signature: &mut Vec<String>,
 ) {
-    // 竞态防护：进度快照不含任务状态，须回查最近一次 collect_rows 缓存的动作；
-    // 若任务已非「下载中」（完成/暂停/失败），菜单应由 refresh_tray 按真实状态重建，
-    // 这里直接跳过，避免把已完成任务行误刷成「▼ 下载中」。
-    let active = last_rows
+    // 权威状态回查：进度快照不含状态，而 `last_rows` 缓存在事件流丢帧后会过期。
+    // 以真实状态为准，与缓存行比对，任一不一致（任务已移除/已非下载中/缓存缺失）
+    // 都触发一次完整 refresh_tray 按真实状态重建菜单——否则事件流丢失 TaskCompleted
+    // 后，完成时的最终快照（downloaded==total、speed==0）会把菜单永久刷成「▼ 下载中 · 等待」。
+    // 一致时缓存必然与权威状态同步（refresh_tray 每次都会刷新 last_rows），可安全走
+    // 下方原地 set_text 快速路径；不一致分支以 watch 的最新值收敛，不会反复重建。
+    let cached_active = last_rows
         .iter()
         .any(|r| r.task_id == stats.task_id && r.action == Some(TrayAction::Pause));
-    if !active {
+    let status = manager.get_task_status(&stats.task_id).await;
+    let authoritative_active = status
+        .as_ref()
+        .map(|s| matches!(s, DownloadStatus::Pending | DownloadStatus::Downloading))
+        .unwrap_or(false);
+    if authoritative_active != cached_active {
+        refresh_tray(app, manager, last_signature, items, last_rows).await;
         return;
     }
-    // 仅当该任务当前在菜单里才更新；已完成/已暂停任务由 refresh_tray 重建
+    // 仅当该任务当前在菜单里才更新；状态已切换的任务由上面的 refresh_tray 重建
     let Some(entry) = items.get_mut(&stats.task_id) else {
         return;
     };

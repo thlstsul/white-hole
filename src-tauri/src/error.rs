@@ -1,6 +1,20 @@
+use std::fmt;
+
 use error_set::error_set;
 
 use crate::impl_serialize;
+
+/// Tab 未找到错误，包装 String 使其实现 std::error::Error
+#[derive(Debug)]
+pub struct TabNotFoundError(pub String);
+
+impl fmt::Display for TabNotFoundError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for TabNotFoundError {}
 
 error_set! {
     ParseError := {
@@ -24,7 +38,10 @@ error_set! {
         Task(delay_timer::error::TaskError),
     } || DatabaseError || FrameworkError || ParseError
     TabError := StateError || FrameworkError || ParseError
-    StateError := FrameworkError || DatabaseError || IconError
+    StateError := {
+        #[display("Tab 未找到: {0}")]
+        TabNotFound(TabNotFoundError),
+    } || FrameworkError || DatabaseError || IconError
     IconError := {
         #[display("无法获取图标数据：{0}")]
         GetDataUrl(get_data_url::Error),

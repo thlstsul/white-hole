@@ -54,7 +54,6 @@ pub struct Tab {
     /// 加载期间到达但被跳过落库的标题（loading 守卫防止标题错位）：
     /// 待快照对账后用权威 URL 补写，避免同文档导航无 PageLoad Finished 事件而丢失
     pending_title: Option<String>,
-    incognito: bool,
     darkreader: bool,
     index: isize,
     /// 当前加载是否为重定向（reload / 302 / meta refresh）：
@@ -116,7 +115,6 @@ impl Tab {
             nav_pending: false,
             load_finished_pending: false,
             pending_title: None,
-            incognito,
             darkreader: true,
             redirecting: false,
             history_queue,
@@ -472,32 +470,28 @@ impl TabMap {
         Ok(())
     }
 
-    /// 关闭全部无痕 tab，返回被关闭的 label（供上层清理暂存资源）
-    pub async fn close_incognito(&self) -> Result<Vec<TabId>, FrameworkError> {
+    /// 判断 label 是否存在
+    pub async fn contains(&self, label: &str) -> bool {
+        self.0.contains_sync(label)
+    }
+
+    /// 返回所有 label（供 close_incognito 遍历使用）
+    pub async fn keys(&self) -> Vec<TabId> {
         let mut labels = Vec::new();
         self.0
-            .iter_async(|l, tab| {
-                if tab.incognito {
-                    labels.push(l.to_owned());
-                }
+            .iter_async(|l, _| {
+                labels.push(l.to_owned());
                 true
             })
             .await;
-        for label in labels.iter() {
-            self.close(label).await?;
-        }
-        Ok(labels)
+        labels
     }
 
     /// return id 所在 (label, index)
-    pub async fn any_open(&self, id: i64, incognito: bool) -> Option<(TabId, usize)> {
+    pub async fn any_open(&self, id: i64) -> Option<(TabId, usize)> {
         let mut label = None;
         self.0
             .any_async(|l, tab| {
-                if tab.incognito != incognito {
-                    return false;
-                }
-
                 let Some(index) = tab.index(id) else {
                     return false;
                 };

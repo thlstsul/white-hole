@@ -16,10 +16,10 @@ use uuid::Uuid;
 use crate::{
     browser::{Browser, BrowserExt as _},
     darkreader, download,
-    error::{DatabaseError, FrameworkError, StateError, TabError},
+    error::{DatabaseError, FrameworkError, StateError, TabError, TabNotFoundError},
     history::{HistoryEvent, HistorySnapshotEntry},
     log::{NavigationLog, save_log},
-    state::BrowserState,
+    state::{Boolean, BrowserState},
     tab::{Tab, TabId, TabIndex, TabMap},
 };
 use downloader::DownloadManager;
@@ -73,9 +73,15 @@ impl PendingEvents {
 /// 承担标签生命周期、历史镜像同步与每 tab 命令。
 /// 与 Browser 解耦：不直接持有窗口与数据库，需要基础设施（DB、UI 发射、窗口）时
 /// 经 AppHandle 回调 Browser（发射与落库仍收敛在 Browser）。
+///
+/// 无痕模式与有痕模式的 Tab 分别存储在 `incognito_map` 和 `normal_map` 中，
+/// 避免切换时相互干扰（如快捷键切换 Tab 误切到另一模式的 Tab）。
 pub struct TabService {
-    map: TabMap,
+    normal_map: TabMap,
+    incognito_map: TabMap,
     current: TabIndex,
+    /// 是否处于无痕模式
+    is_incognito: Boolean,
     /// 进入无痕模式前的当前 tab，退出时恢复（与 current 同属当前状态管理）
     pre_incognito: Mutex<Option<TabId>>,
     /// 新 tab 注册窗口期（webview 已创建、TabMap 尚未插入）的历史事件暂存：
@@ -90,8 +96,10 @@ pub struct TabService {
 impl TabService {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
-            map: TabMap::new(),
+            normal_map: TabMap::new(),
+            incognito_map: TabMap::new(),
             current: TabIndex::new(),
+            is_incognito: Boolean::default(),
             pre_incognito: Mutex::new(None),
             pending_history: Mutex::new(PendingEvents::new()),
             consumers: Mutex::new(HashMap::new()),
@@ -133,11 +141,13 @@ impl TabService {
     /// 进入无痕模式：记住当前 tab（退出时恢复），并清空当前指向
     pub async fn enter_incognito(&self) {
         *self.pre_incognito.lock().await = Some(self.current.get().await);
+        self.is_incognito.set(true).await;
         self.current.clear().await;
     }
 
     /// 退出无痕模式：恢复进入无痕前的 tab（不存在则回退到相邻 tab）
     pub async fn restore_previous_tab(&self) -> Result<(), TabError> {
+        self.is_incognito.set(false).await;
         match self.pre_incognito.lock().await.take() {
             Some(prev) if !prev.is_empty() => match self.switch_tab(&prev).await {
                 Ok(()) => Ok(()),
@@ -147,6 +157,28 @@ impl TabService {
                 }
             },
             _ => self.next_tab().await,
+        }
+    }
+
+    // ============ 内部辅助 ============
+
+    /// 返回当前模式对应的 TabMap
+    async fn current_map(&self) -> &TabMap {
+        if self.is_incognito.get().await {
+            &self.incognito_map
+        } else {
+            &self.normal_map
+        }
+    }
+
+    /// 查找指定 label 所在的 TabMap
+    async fn map_for(&self, label: &str) -> Option<&TabMap> {
+        if self.normal_map.contains(label).await {
+            Some(&self.normal_map)
+        } else if self.incognito_map.contains(label).await {
+            Some(&self.incognito_map)
+        } else {
+            None
         }
     }
 
@@ -176,7 +208,12 @@ impl TabService {
         // 持锁完成"插入 + 补投"：与 enqueue_history 的"查表 + 暂存"串行化，
         // 注册窗口期的事件要么在补投前入暂存、要么在插入后直接发送——不丢失、不乱序
         let mut pending = self.pending_history.lock().await;
-        self.map.insert(label.clone(), tab).await;
+        let map = if incognito {
+            &self.incognito_map
+        } else {
+            &self.normal_map
+        };
+        map.insert(label.clone(), tab).await;
         for event in pending.drain(&label) {
             // 新建队列为空，发送不会阻塞；持锁保证先于插入后到达的直接发送
             let _ = history_queue.send(event).await;
@@ -187,7 +224,8 @@ impl TabService {
 
     pub async fn close_tab(&self) -> Result<(), TabError> {
         let label = self.current.get().await;
-        self.map.close(&label).await?;
+        let map = self.current_map().await;
+        map.close(&label).await?;
         self.pending_history.lock().await.clear(&label);
         // 等待该 tab 的消费者任务排空（通道已随 Tab 销毁关闭）后再返回：
         // 保证其历史事件全部处理完，避免退出无痕关内存库后仍有在途写入落回持久库
@@ -195,7 +233,7 @@ impl TabService {
             let _ = handle.await;
         }
         self.current.clear().await;
-        if let Some(near_label) = self.map.near(&label).await {
+        if let Some(near_label) = map.near(&label).await {
             self.switch_tab(&near_label).await?;
         }
         self.emit(None).await?;
@@ -205,7 +243,10 @@ impl TabService {
     /// 关闭全部无痕 tab，并**排空**其历史消费者（等待在途事件处理完）后返回：
     /// 调用方随后才关闭内存库，此时已无在途消费者会把无痕数据写进持久库
     pub async fn close_incognito(&self) -> Result<(), FrameworkError> {
-        let removed = self.map.close_incognito().await?;
+        let removed = self.incognito_map.keys().await;
+        for label in &removed {
+            self.incognito_map.close(label).await?;
+        }
         {
             let mut pending = self.pending_history.lock().await;
             for label in &removed {
@@ -229,14 +270,19 @@ impl TabService {
 
     pub async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
         let window = self.window()?;
-        self.map.top(label, &window).await?;
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or(FrameworkError::Tauri(tauri::Error::WebviewNotFound))?;
+        map.top(label, &window).await?;
         self.current.set(label.to_string()).await;
         Ok(())
     }
 
     pub async fn next_tab(&self) -> Result<(), TabError> {
         let label = self.current.get().await;
-        if let Some(next_label) = self.map.next(&label).await {
+        let map = self.current_map().await;
+        if let Some(next_label) = map.next(&label).await {
             self.switch_tab(&next_label).await?;
             self.emit(None).await?;
         }
@@ -245,7 +291,8 @@ impl TabService {
 
     pub async fn near_tab(&self) -> Result<(), TabError> {
         let label = self.current.get().await;
-        if let Some(near_label) = self.map.near(&label).await {
+        let map = self.current_map().await;
+        if let Some(near_label) = map.near(&label).await {
             self.switch_tab(&near_label).await?;
             self.emit(None).await?;
         }
@@ -254,30 +301,49 @@ impl TabService {
 
     pub async fn top(&self, label: &str) -> Result<(), FrameworkError> {
         let window = self.window()?;
-        self.map.top(label, &window).await
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or(FrameworkError::Tauri(tauri::Error::WebviewNotFound))?;
+        map.top(label, &window).await
     }
 
     pub async fn any_open(&self, id: i64, incognito: bool) -> Option<(TabId, usize)> {
-        self.map.any_open(id, incognito).await
+        if incognito {
+            self.incognito_map.any_open(id).await
+        } else {
+            self.normal_map.any_open(id).await
+        }
     }
 
     pub async fn go_to(&self, label: &str, index: usize) -> bool {
-        self.map.go(label, index).await
+        let map = self.map_for(label).await;
+        match map {
+            Some(m) => m.go(label, index).await,
+            None => false,
+        }
     }
 
     pub async fn insert_history(&self, label: &str, id: i64, url: String, length: usize) {
-        self.map.insert_history(label, id, url, length).await;
+        if let Some(map) = self.map_for(label).await {
+            map.insert_history(label, id, url, length).await;
+        }
     }
 
     pub async fn get_state(&self, label: &str) -> Result<BrowserState, FrameworkError> {
-        self.map.get_state(label).await
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or(FrameworkError::Tauri(tauri::Error::WebviewNotFound))?;
+        map.get_state(label).await
     }
 
     // ============ 每 tab 命令 ============
 
     pub async fn back(&self) -> Result<(), StateError> {
         let label = self.current.get().await;
-        if self.map.back(&label).await {
+        let map = self.current_map().await;
+        if map.back(&label).await {
             self.change_tab_loading_state(&label, true).await?;
         }
         Ok(())
@@ -285,7 +351,8 @@ impl TabService {
 
     pub async fn forward(&self) -> Result<(), StateError> {
         let label = self.current.get().await;
-        if self.map.forward(&label).await {
+        let map = self.current_map().await;
+        if map.forward(&label).await {
             self.change_tab_loading_state(&label, true).await?;
         }
         Ok(())
@@ -293,7 +360,8 @@ impl TabService {
 
     pub async fn go(&self, index: usize) -> Result<(), StateError> {
         let label = self.current.get().await;
-        if self.map.go(&label, index).await {
+        let map = self.current_map().await;
+        if map.go(&label, index).await {
             self.change_tab_loading_state(&label, true).await?;
         }
         Ok(())
@@ -301,7 +369,8 @@ impl TabService {
 
     pub async fn reload(&self) -> Result<(), StateError> {
         let label = self.current.get().await;
-        self.map.reload(&label).await;
+        let map = self.current_map().await;
+        map.reload(&label).await;
         self.change_tab_loading_state(&label, true).await
     }
 
@@ -310,7 +379,8 @@ impl TabService {
         if label.is_empty() {
             return;
         }
-        self.map.devtools(&label).await;
+        let map = self.current_map().await;
+        map.devtools(&label).await;
     }
 
     pub async fn print(&self) -> Result<(), FrameworkError> {
@@ -318,24 +388,35 @@ impl TabService {
         if label.is_empty() {
             return Ok(());
         }
-        self.map.print(&label).await
+        let map = self.current_map().await;
+        map.print(&label).await
     }
 
     /// 切换当前 tab 的暗色模式，返回新状态
     pub async fn toggle_darkreader(&self, label: &str) -> Result<bool, tauri::Error> {
-        self.map.darkreader(label).await
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or(tauri::Error::WebviewNotFound)?;
+        map.darkreader(label).await
     }
 
     pub async fn set_focus(&self, label: &str) -> Result<(), FrameworkError> {
-        self.map.set_focus(label).await
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or(FrameworkError::Tauri(tauri::Error::WebviewNotFound))?;
+        map.set_focus(label).await
     }
 
     pub async fn set_size(&self, size: LogicalSize<f64>) {
-        self.map.set_size(size).await;
+        self.normal_map.set_size(size).await;
+        self.incognito_map.set_size(size).await;
     }
 
     pub async fn set_position(&self, position: LogicalPosition<f64>) {
-        self.map.set_position(position).await;
+        self.normal_map.set_position(position).await;
+        self.incognito_map.set_position(position).await;
     }
 
     pub async fn set_background_color(
@@ -343,7 +424,11 @@ impl TabService {
         label: &str,
         color: Color,
     ) -> Result<(), tauri::Error> {
-        self.map.set_background_color(label, color).await
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or(tauri::Error::WebviewNotFound)?;
+        map.set_background_color(label, color).await
     }
 
     // ============ 历史镜像同步 ============
@@ -356,8 +441,10 @@ impl TabService {
             let mut pending = self.pending_history.lock().await;
             // 持锁查表 + 暂存原子化：与 create_tab 的"插入 + 补投"在同一把锁内串行化，
             // 杜绝"查表未命中 → 插入补投 → 才入暂存"的丢失竞态
-            if let Some(sender) = self.map.history_queue(&label).await {
-                Some((sender, event))
+            if let Some(map) = self.map_for(&label).await {
+                map.history_queue(&label)
+                    .await
+                    .map(|sender| (sender, event))
             } else if self.app_handle.get_webview(&label).is_some() {
                 // tab 尚未注册（webview 已创建、TabMap 未插入）：暂存待补投
                 pending.push(label, event);
@@ -410,10 +497,14 @@ impl TabService {
         title: String,
         icon_url: String,
     ) -> Result<(), StateError> {
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
         // 校准在途期间 change_tab_title 可能已将标题 defer 到 pending_title，优先取用，
         // 避免与校准各自落库（同一行重复 UPDATE、times 重复 +1）
-        let title = self.map.take_pending_title(label).await.unwrap_or(title);
-        let needs_id = self.map.sync_by_url(label, url.clone(), 0).await;
+        let title = map.take_pending_title(label).await.unwrap_or(title);
+        let needs_id = map.sync_by_url(label, url.clone(), 0).await;
         let id = self
             .save_navigation_log(NavigationLog {
                 url: url.clone(),
@@ -423,11 +514,11 @@ impl TabService {
             })
             .await?;
         if needs_id {
-            self.map.replace_history(label, id, url, 0).await;
+            map.replace_history(label, id, url, 0).await;
         }
-        self.map.set_redirecting(label, false).await;
+        map.set_redirecting(label, false).await;
         // 校准完成，解除在途标记：后续标题变更（同文档 SPA 改标题）照常直接落库
-        self.map.set_load_finished_pending(label, false).await;
+        map.set_load_finished_pending(label, false).await;
         Ok(())
     }
 
@@ -438,7 +529,11 @@ impl TabService {
         length: i32,
         icon_url: String,
     ) -> Result<(), StateError> {
-        self.map.set_icon(label, icon_url).await;
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
+        map.set_icon(label, icon_url).await;
 
         let mut state = self.browser().get_state(Some(label)).await?;
         self.darkreader_auto_switch(label, &mut state).await;
@@ -451,7 +546,7 @@ impl TabService {
         }
 
         let length = length as usize;
-        let needs_id = self.map.sync_by_url(label, url.clone(), length).await;
+        let needs_id = map.sync_by_url(label, url.clone(), length).await;
         // 无条件落库：content_loaded 携带页面真实图标（此时 set_icon 已生效），
         // 若不落库，URL 已存在于历史栈（needs_id=false）时图标永远不会保存。
         // 用前端上报的权威 url 落库：state.url 取自同步前的镜像，无 Navigation API
@@ -467,28 +562,32 @@ impl TabService {
         if needs_id {
             // 仅当 sync_by_url 插入了新条目（占位 id=-1）时才回填历史栈 id，
             // 避免 URL 命中旧条目时误覆盖旧条目的 id
-            self.map.replace_history(label, id, url, length).await;
+            map.replace_history(label, id, url, length).await;
         }
 
         Ok(())
     }
 
     pub async fn on_page_load(&self, label: &str, loading: bool) -> Result<(), StateError> {
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
         if loading {
             // 页面已在加载中又触发 Started = 重定向链（302/meta refresh/reload）
-            let redirecting = self.map.is_loading(label).await;
-            self.map.start_loading(label).await;
-            self.map.set_redirecting(label, redirecting).await;
+            let redirecting = map.is_loading(label).await;
+            map.start_loading(label).await;
+            map.set_redirecting(label, redirecting).await;
             // 真实加载已开始，loading 交由 PageLoadEvent::Finished 清理
-            self.map.set_nav_pending(label, false).await;
+            map.set_nav_pending(label, false).await;
             return Ok(());
         }
 
         // Finished：先标记 LoadFinished 校准在途，再清 loading。期间的标题变更
         // （TitleChanged 与 Finished 并发）看到 is_loading 已为 false，若直接落库会
         // 与下方校准重复写入同一行（重复 UPDATE、times 重复 +1），故需 defer
-        self.map.set_load_finished_pending(label, true).await;
-        self.map.set_loading(label, loading).await;
+        map.set_load_finished_pending(label, true).await;
+        map.set_loading(label, loading).await;
 
         let state = self.browser().get_state(Some(label)).await?;
         if self.current.eq(label).await {
@@ -509,7 +608,7 @@ impl TabService {
             .await;
         } else {
             // 无可校准 URL（about:blank），解除在途标记，标题变更照常直接落库
-            self.map.set_load_finished_pending(label, false).await;
+            map.set_load_finished_pending(label, false).await;
         }
         Ok(())
     }
@@ -520,7 +619,8 @@ impl TabService {
             return;
         }
 
-        self.map.set_loading(&label, loading).await;
+        let map = self.current_map().await;
+        map.set_loading(&label, loading).await;
     }
 
     /// Navigation API 权威快照对账：全量重建镜像，新 key 或 URL 变更（replaceState）
@@ -531,14 +631,18 @@ impl TabService {
         index: usize,
         entries: Vec<HistorySnapshotEntry>,
     ) -> Result<(), StateError> {
-        let needs_id = self.map.sync_snapshot(label, index, entries).await;
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
+        let needs_id = map.sync_snapshot(label, index, entries).await;
         // 同文档导航（pushState/popstate）或 bfcache 恢复不触发页面加载事件，
         // 快照到达即导航完成，清掉 back/forward/go 置起的 loading
-        if self.map.take_nav_pending(label).await {
-            self.map.set_loading(label, false).await;
+        if map.take_nav_pending(label).await {
+            map.set_loading(label, false).await;
         }
         // 快照不含 title/icon，当前条目（replaceState 改 URL）落库时从标签页取
-        let state = self.map.get_state(label).await?;
+        let state = map.get_state(label).await?;
         for (pos, url) in needs_id {
             let mut log = NavigationLog {
                 url: url.clone(),
@@ -549,12 +653,12 @@ impl TabService {
                 log.icon_url = state.icon_url.clone();
             }
             let id = self.save_navigation_log(log).await?;
-            self.map.backfill_history(label, pos, id, url).await;
+            map.backfill_history(label, pos, id, url).await;
         }
         // 补写加载期间被跳过的标题：同文档导航（back/forward/go/reload 到已存在条目）
         // 由快照确认而非 PageLoad Finished，且已存在条目不在 needs_id 中不会重存，
         // 此处用快照对账后的权威 URL 落库，避免标题静默丢失
-        if let Some(title) = self.map.take_pending_title(label).await {
+        if let Some(title) = map.take_pending_title(label).await {
             let url = state.url.clone();
             if !url.is_empty() && url != "about:blank" {
                 self.save_navigation_log(NavigationLog {
@@ -581,10 +685,14 @@ impl TabService {
         label: &str,
         loading: bool,
     ) -> Result<(), StateError> {
-        self.map.set_loading(label, loading).await;
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
+        map.set_loading(label, loading).await;
         if loading {
             // 等待页面加载事件（跨文档）或 Navigation API 快照（同文档/bfcache）确认导航完成
-            self.map.set_nav_pending(label, true).await;
+            map.set_nav_pending(label, true).await;
         }
 
         if self.current.eq(label).await {
@@ -595,7 +703,11 @@ impl TabService {
     }
 
     pub async fn change_tab_title(&self, label: &str, title: String) -> Result<(), StateError> {
-        self.map.set_title(label, title.clone()).await;
+        let map = self
+            .map_for(label)
+            .await
+            .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
+        map.set_title(label, title.clone()).await;
 
         let mut state = self.browser().get_state(Some(label)).await?;
         self.darkreader_auto_switch(label, &mut state).await;
@@ -615,8 +727,8 @@ impl TabService {
         // （同文档导航无 PageLoad Finished 事件，快照是唯一确认点，不能依赖
         // on_page_load_finished_history）。
         // 同文档改标题（SPA document.title，loading=false 且无校准在途）时镜像可信，照常落库。
-        if self.map.is_loading(label).await || self.map.is_load_finished_pending(label).await {
-            self.map.set_pending_title(label, title).await;
+        if map.is_loading(label).await || map.is_load_finished_pending(label).await {
+            map.set_pending_title(label, title).await;
         } else {
             self.save_navigation_log(state.into()).await?;
         }
@@ -634,7 +746,11 @@ impl TabService {
             true
         };
 
-        if let Err(e) = self.map.set_darkreader(label, enable).await {
+        let map = match self.map_for(label).await {
+            Some(m) => m,
+            None => return,
+        };
+        if let Err(e) = map.set_darkreader(label, enable).await {
             error!("切换darkreader失败：{e}");
         } else {
             state.darkreader = enable;
