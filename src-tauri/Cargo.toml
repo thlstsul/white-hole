@@ -35,7 +35,7 @@ features = ["async"]
 version = "0.59.0"
 
 [dependencies.downloader]
-rev = "ea5bda84a39632212d0b35d35b0cdd9ae931bd51"
+rev = "1163b7ba8e9b592867b19b3919b2c99614f3de30"
 git = "https://github.com/thlstsul/downloader"
 
 [dependencies.fern]

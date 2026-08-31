@@ -2035,7 +2035,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 [[package]]
 name = "downloader"
 version = "0.2.0"
-source = "git+https://github.com/thlstsul/downloader?rev=ea5bda84a39632212d0b35d35b0cdd9ae931bd51#ea5bda84a39632212d0b35d35b0cdd9ae931bd51"
+source = "git+https://github.com/thlstsul/downloader?rev=1163b7ba8e9b592867b19b3919b2c99614f3de30#1163b7ba8e9b592867b19b3919b2c99614f3de30"
 dependencies = [
  "content_disposition",
  "log",

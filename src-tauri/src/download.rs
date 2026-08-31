@@ -41,8 +41,6 @@ pub(crate) async fn start_download(
         let _ = manager.remove_task(&task_id).await;
         return Err(format!("启动下载 {url} 失败：{e}"));
     }
-    // 开始下载时通知一次，让用户知道任务已接管
-    send_notification(app, "开始下载", &url);
     Ok(task_id)
 }
 
@@ -56,16 +54,26 @@ pub(crate) fn download_dir(app: &AppHandle) -> PathBuf {
         .unwrap_or_else(|_| std::env::temp_dir().join("white-hole-downloads"))
 }
 
-/// 监听下载终止事件（完成/失败/取消），发送系统通知
+/// 监听下载事件流（开始/完成/失败/取消），发送系统通知
 ///
 /// Windows 下通过 `send_notification` 使用应用 AUMID + 自定义 appLogo 图标（见函数注释）；
-/// 开始下载时通知一次（start_download），任务终止（完成/失败/取消）时再次提醒。
+/// 所有下载通知统一在此处理：开始（TaskStarted）、终止（完成/失败/取消），
+/// 暂停/恢复为生命周期中间态，不打扰用户。
 async fn event_listener_loop(app: AppHandle, manager: DownloadManager) {
     let mut rx = manager.subscribe_events();
     loop {
         match rx.recv().await {
             Ok(event) => {
                 let (title, body) = match event {
+                    DownloadEvent::TaskStarted { task_id } => {
+                        let Some(url) = manager.get_task_url(&task_id).await else {
+                            continue;
+                        };
+                        ("开始下载".to_string(), url)
+                    }
+                    DownloadEvent::TaskPaused { .. } | DownloadEvent::TaskResumed { .. } => {
+                        continue;
+                    }
                     DownloadEvent::TaskCompleted { task_id } => {
                         let name = manager
                             .get_task_filename(&task_id)
