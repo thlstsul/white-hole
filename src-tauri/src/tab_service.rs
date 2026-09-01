@@ -478,43 +478,41 @@ impl TabService {
                 self.content_loaded(label, url, length as i32, icon_url)
                     .await
             }
-            HistoryEvent::LoadFinished {
-                url,
-                title,
-                icon_url,
-            } => {
-                self.on_page_load_finished_history(label, url, title, icon_url)
-                    .await
-            }
+            HistoryEvent::LoadFinished => self.on_page_load_finished_history(label).await,
         }
     }
 
-    /// on_page_load 完成时的历史校准（队列内执行，与前端 content_loaded 串行化）
-    async fn on_page_load_finished_history(
-        &self,
-        label: &str,
-        url: String,
-        title: String,
-        icon_url: String,
-    ) -> Result<(), StateError> {
+    /// on_page_load 完成时的历史校准（队列内执行，与前端 content_loaded 串行化）。
+    /// URL 必须在此刻（队列消费时）读镜像而非 Finished 回调时刻：回调里先入队的
+    /// 快照/content_loaded 事件可能尚未应用，那时读到的镜像仍指向上一文档，
+    /// 带旧 URL 校准会把 index 拉回旧条目（"点击链接后历史被重置"）
+    async fn on_page_load_finished_history(&self, label: &str) -> Result<(), StateError> {
         let map = self
             .map_for(label)
             .await
             .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
+        // 队列内读取：此时本 tab 先入队的快照/加载事件已全部应用，镜像是权威值
+        let state = map.get_state(label).await?;
         // 校准在途期间 change_tab_title 可能已将标题 defer 到 pending_title，优先取用，
         // 避免与校准各自落库（同一行重复 UPDATE、times 重复 +1）
-        let title = map.take_pending_title(label).await.unwrap_or(title);
-        let needs_id = map.sync_by_url(label, url.clone(), 0).await;
-        let id = self
-            .save_navigation_log(NavigationLog {
-                url: url.clone(),
-                title,
-                icon_url,
-                ..Default::default()
-            })
-            .await?;
-        if needs_id {
-            map.replace_history(label, id, url, 0).await;
+        let title = map
+            .take_pending_title(label)
+            .await
+            .unwrap_or(state.title.clone());
+        let url = state.url.clone();
+        if !url.is_empty() && url != "about:blank" {
+            let needs_id = map.sync_by_url(label, url.clone(), 0).await;
+            let id = self
+                .save_navigation_log(NavigationLog {
+                    url: url.clone(),
+                    title,
+                    icon_url: state.icon_url.clone(),
+                    ..Default::default()
+                })
+                .await?;
+            if needs_id {
+                map.replace_history(label, id, url, 0).await;
+            }
         }
         map.set_redirecting(label, false).await;
         // 校准完成，解除在途标记：后续标题变更（同文档 SPA 改标题）照常直接落库
@@ -594,18 +592,11 @@ impl TabService {
             self.emit(Some(state.clone())).await?;
         }
 
-        // 页面加载完成时，以实际 URL 校准历史栈（入队串行化，避免与 content_loaded 并发乱序）
-        let url = state.url.clone();
-        if !url.is_empty() && url != "about:blank" {
-            self.enqueue_history(
-                label,
-                HistoryEvent::LoadFinished {
-                    url,
-                    title: state.title.clone(),
-                    icon_url: state.icon_url.clone(),
-                },
-            )
-            .await;
+        // 页面加载完成时，以实际 URL 校准历史栈（入队串行化，避免与 content_loaded 并发乱序）。
+        // 事件不带 URL/标题：消费时（队列内、前置快照/加载事件应用后）再读权威镜像
+        if !state.url.is_empty() && state.url != "about:blank" {
+            self.enqueue_history(label, HistoryEvent::LoadFinished)
+                .await;
         } else {
             // 无可校准 URL（about:blank），解除在途标记，标题变更照常直接落库
             map.set_load_finished_pending(label, false).await;
@@ -623,8 +614,9 @@ impl TabService {
         map.set_loading(&label, loading).await;
     }
 
-    /// Navigation API 权威快照对账：全量重建镜像，新 key 或 URL 变更（replaceState）
-    /// 条目落库并回填 id，最后刷新当前标签页 UI 状态（back/forward 按钮）
+    /// Navigation API 快照对账：片段对账镜像（快照只是同源连续片段），
+    /// 新 key 或 URL 变更（replaceState）条目落库并回填 id，
+    /// 最后刷新当前标签页 UI 状态（back/forward 按钮）
     pub async fn sync_snapshot(
         &self,
         label: &str,
@@ -635,20 +627,21 @@ impl TabService {
             .map_for(label)
             .await
             .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
-        let needs_id = map.sync_snapshot(label, index, entries).await;
+        let (needs_id, cur) = map.sync_snapshot(label, index, entries).await;
         // 同文档导航（pushState/popstate）或 bfcache 恢复不触发页面加载事件，
         // 快照到达即导航完成，清掉 back/forward/go 置起的 loading
         if map.take_nav_pending(label).await {
             map.set_loading(label, false).await;
         }
-        // 快照不含 title/icon，当前条目（replaceState 改 URL）落库时从标签页取
+        // 快照不含 title/icon，当前条目（replaceState 改 URL）落库时从标签页取；
+        // 当前条目的位置用对账后的镜像位置 cur 而非片段内 index（跨源时两者不同）
         let state = map.get_state(label).await?;
         for (pos, url) in needs_id {
             let mut log = NavigationLog {
                 url: url.clone(),
                 ..Default::default()
             };
-            if pos == index {
+            if pos == cur {
                 log.title = state.title.clone();
                 log.icon_url = state.icon_url.clone();
             }

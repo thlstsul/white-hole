@@ -214,11 +214,10 @@ impl Tab {
             return false;
         }
 
-        // 优先 Navigation API（权威导航），无则降级 history.back()
-        if let Err(e) = self
-            .webview
-            .eval("(window.navigation ? navigation.back() : history.back())")
-        {
+        // 用 History API（非 Navigation API）：navigation.back() 的 promise 对跨文档
+        // 导航"永不应决"（WICG/WebKit 规范），跨源后退因此静默失效；
+        // history.back() 作用于完整会话历史，跨源、跨文档均可用
+        if let Err(e) = self.webview.eval("history.back()") {
             error!("{}后退失败{e}", self.label());
             false
         } else {
@@ -232,11 +231,9 @@ impl Tab {
             return false;
         }
 
-        // 优先 Navigation API（权威导航），无则降级 history.forward()
-        if let Err(e) = self
-            .webview
-            .eval("(window.navigation ? navigation.forward() : history.forward())")
-        {
+        // 用 History API（非 Navigation API）：navigation.forward() 的 promise 对跨文档
+        // 导航"永不应决"，跨源前进静默失效；history.forward() 跨源、跨文档均可用
+        if let Err(e) = self.webview.eval("history.forward()") {
             error!("{}前进失败{e}", self.label());
             false
         } else {
@@ -251,18 +248,12 @@ impl Tab {
             return false;
         }
 
-        // 优先按 key 精确跳转（Navigation API），key 失效或缺失时退化为相对 delta，
-        // 彻底摆脱"用镜像 index 算 delta"的漂移反馈环
-        let script = match self.history.get(index as usize).and_then(|e| e.key.clone()) {
-            Some(key) => {
-                let key = serde_json::to_string(&key).unwrap_or_default();
-                format!(
-                    "navigation.traverseTo({key}).catch(function(){{ history.go({}) }})",
-                    index - self.index
-                )
-            }
-            None => format!("history.go({})", index - self.index),
-        };
+        // 用 History API 相对 delta 跳转（非 Navigation API）：traverseTo 的 key
+        // 必须属于当前文档的 entries()（同源连续片段），跨源目标条目必然 reject；
+        // history.go(delta) 作用于完整会话历史，跨源、跨文档均可用。
+        // 相对 delta 而非绝对 index：镜像 index 由快照对账实时校准，与浏览器
+        // 会话历史严格一致，delta 不会漂移
+        let script = format!("history.go({})", index - self.index);
         if let Err(e) = self.webview.eval(script) {
             error!("{}跳转失败{e}", self.label());
             false
@@ -283,10 +274,25 @@ impl Tab {
             }
         }
 
+        // 当前 index 指向的条目已是该 URL：镜像已同步（快照对账/此前 sync 均按
+        // 真实导航序落好），直接返回。不能在 URL 重复时按"最近匹配"重定位 index：
+        // 跨文档导航中快照已把新 URL 插入 index+1，迟到的校准（LoadFinished 的
+        // state.url 取自镜像、可能仍是旧文档）会命中 index 处的旧条目而把 index
+        // 拉回上一页面，表现为"点击链接后历史被重置"
+        let cur = self.index.max(0) as usize;
+        let cur_entry = self.history.get(cur);
+        if cur_entry.is_some_and(|e| e.url == url)
+            || cur_entry.is_some_and(|e| {
+                let url_trimmed = url.trim_end_matches('/');
+                !url_trimmed.is_empty() && e.url.trim_end_matches('/') == url_trimmed
+            })
+        {
+            return false; // 当前条目已匹配，未插入新条目
+        }
+
         // 查找 URL 是否已存在于历史栈：精确匹配优先，其次容忍尾部斜杠差异；
         // 有多个匹配时选择距离当前 index 最近的位置（最小移动量），
         // 避免 position() 固定选第一个匹配而在 URL 重复时定位错误
-        let cur = self.index.max(0) as usize;
         let url_trimmed = url.trim_end_matches('/');
         let (mut best_exact, mut best_loose): (Option<usize>, Option<usize>) = (None, None);
         for (i, entry) in self.history.iter().enumerate() {
@@ -348,16 +354,33 @@ impl Tab {
         true // 插入了新条目（id 占位符为 -1）
     }
 
-    /// 以 Navigation API 上报的权威快照全量重建历史镜像。
-    /// entries 按原生顺序排列；key 作为条目身份，同 key 且 URL 未变的条目
-    /// 保留原 id；新 key 或同 key 但 URL 已变（replaceState 只改 URL 不改 key）
-    /// 置占位 -1（等待 save_navigation_log 回填）。
-    /// 返回需要回填 id 的 (位置, url) 列表。
+    /// 以 Navigation API 上报的快照对账历史镜像。
+    /// **快照只是"与当前源同源的连续片段"**（Navigation API 安全限制）：
+    /// 跨源导航后 entries() 不含异源历史，`index` 是该片段内的位置而非联合历史
+    /// 的全局位置——绝不能全量重建，否则跨源跳转后历史被抹成只剩片段
+    /// （"点击链接跳转页面后，Tab 历史重置了"的根因）。
+    ///
+    /// 对账规则：
+    /// - 首条目 key 命中镜像已有 key 且**整段 key 序列与镜像子段逐一对齐**
+    ///   → 片段是镜像的连续子段（同文档导航 / 前进后退穿过同源条目），
+    ///   用快照刷新该子段并修正 index；仅首 key 命中但后续 key 不连续时
+    ///   （同 key 在镜像多处重复 / 中间条目被替换）回退追加分支，避免 splice 错位
+    /// - 首条目 key 未命中 → 片段以新条目开头（跨源新导航 / bfcache 恢复 /
+    ///   replaceState）：在当前位置截断 forward 历史，整段追加，index 移到末尾；
+    ///   若当前条目是 keyless 占位且与片段首条同 URL，视为同一历史条目原地补
+    ///   key，避免"先入 keyless 占位 + 整段追加"产生同 URL 重复条目（新 tab 打开
+    ///   时首个快照必现）
+    ///
+    /// key 作为条目身份：同 key 且 URL 未变的条目保留原 id；新 key 或同 key
+    /// 但 URL 已变（replaceState 只改 URL 不改 key）置占位 -1 等待回填。
+    /// 占位回填只覆盖**本次快照影响的片段区间**，不重复落库镜像中历史遗留的
+    /// 占位条目（save_log 对已存在行 title 非空时 times + 1，重复会虚增计数）。
+    /// 返回 (需要回填 id 的 (位置, url) 列表, 对账后当前条目在镜像中的位置)。
     pub fn sync_snapshot(
         &mut self,
         index: usize,
         entries: Vec<HistorySnapshotEntry>,
-    ) -> Vec<(usize, String)> {
+    ) -> (Vec<(usize, String)>, usize) {
         // key 作为条目身份：同 key 且 URL 未变的条目保留原 id，
         // 新 key 或 URL 变更（replaceState）置占位 -1 等待回填
         let id_by_key: std::collections::HashMap<&str, (i64, &str)> = self
@@ -371,27 +394,86 @@ impl Tab {
             })
             .collect();
 
-        self.history = entries
-            .into_iter()
+        let fragment: Vec<HistoryEntry> = entries
+            .iter()
             .map(|entry| HistoryEntry {
                 id: match id_by_key.get(entry.key.as_str()) {
                     Some((id, url)) if *url == entry.url => *id,
                     _ => -1,
                 },
-                url: entry.url,
-                key: Some(entry.key),
+                url: entry.url.clone(),
+                key: Some(entry.key.clone()),
             })
             .collect();
-        self.index = index as isize;
+        let frag_len = fragment.len();
+        // 片段内首条目的镜像位置；命中 = 片段是镜像已有子段，未命中 = 新片段
+        let frag_start = match fragment.first().and_then(|e| e.key.as_deref()) {
+            Some(key) => self
+                .history
+                .iter()
+                .position(|entry| entry.key.as_deref() == Some(key)),
+            None => None,
+        };
+        // 命中分支还需校验片段与镜像子段 key 序列逐一对齐（见函数文档）
+        let aligned = frag_start.is_some_and(|start| {
+            start + frag_len <= self.history.len()
+                && self.history[start..start + frag_len]
+                    .iter()
+                    .zip(fragment.iter())
+                    .all(|(m, f)| m.key.as_deref() == f.key.as_deref())
+        });
+
+        // (对账后当前 index, 本次快照影响的镜像区间 [start, end)，用于限定回填范围)
+        let (cur, span) = if let Some(start) = frag_start
+            && aligned
+        {
+            // 片段是镜像的连续子段：刷新子段内容，index 修正为片段内当前位置
+            self.history.splice(start..start + frag_len, fragment);
+            ((start + index) as isize, start..start + frag_len)
+        } else {
+            // 新片段（跨源导航/bfcache/replaceState）：截断当前位置之后的
+            // forward 历史，整段追加；防御 index 为 -1（空历史新 tab）导致的下溢
+            let at = self.index.max(0) as usize;
+            // keyless 占位条目与快照首条同 URL 时视为同一历史条目（新 tab 打开
+            // 时 insert_history / sync_by_url 已先入 keyless 条目）：原地补 key 保留
+            // 原 id，截断 forward 后追加片段其余部分，避免同 URL 重复条目、index 后移
+            if at < self.history.len()
+                && self.history[at].key.is_none()
+                && fragment.first().is_some_and(|f| {
+                    self.history[at].url.trim_end_matches('/') == f.url.trim_end_matches('/')
+                })
+            {
+                let mut rest = fragment.into_iter();
+                let first = rest.next().expect("已判 fragment.first() 为 Some");
+                self.history[at].url = first.url;
+                self.history[at].key = first.key;
+                self.history.truncate(at + 1);
+                self.history.extend(rest);
+                self.index = (self.history.len() - 1) as isize;
+                (self.index, at..self.history.len())
+            } else {
+                if at != self.history.len() {
+                    self.history.truncate(at + 1);
+                }
+                let append_start = self.history.len();
+                self.history.extend(fragment);
+                self.index = self.history.len().saturating_sub(1) as isize;
+                (self.index, append_start..self.history.len())
+            }
+        };
+        self.index = cur;
         self.redirecting = false;
 
-        // 占位条目（新 key / replaceState 改 URL）等待 save_navigation_log 回填
-        self.history
+        // 占位条目（本次快照影响的片段内新 key / replaceState 改 URL）等待回填。
+        // 只收集影响区间内的条目，避免每次快照重复落库镜像中历史遗留的占位条目
+        // （save_log 对已存在行 title 非空时 times + 1，会虚增访问计数）
+        let needs_id = self.history[span.clone()]
             .iter()
             .enumerate()
             .filter(|(_, entry)| entry.id <= 0)
-            .map(|(i, entry)| (i, entry.url.clone()))
-            .collect()
+            .map(|(offset, entry)| (span.start + offset, entry.url.clone()))
+            .collect();
+        (needs_id, cur as usize)
     }
 
     /// 将指定位置条目的占位 id（-1）回填为真实 id（快照对账后调用）
@@ -654,13 +736,14 @@ impl TabMap {
             .await;
     }
 
-    /// 全量对账：以权威快照重建镜像，返回需要回填 id 的 (位置, url) 列表
+    /// 片段对账：以 Navigation API 快照对账镜像（快照只是同源连续片段，
+    /// 不是联合历史全量），返回 (需要回填 id 的 (位置, url) 列表, 对账后当前位置)
     pub async fn sync_snapshot(
         &self,
         label: &str,
         index: usize,
         entries: Vec<HistorySnapshotEntry>,
-    ) -> Vec<(usize, String)> {
+    ) -> (Vec<(usize, String)>, usize) {
         self.0
             .update_async(label, |_, tab| tab.sync_snapshot(index, entries))
             .await
