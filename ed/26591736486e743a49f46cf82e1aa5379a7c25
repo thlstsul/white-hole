@@ -1,0 +1,39 @@
+src-tauri/src/tab_service.rs
+  s_e9afd7e3fc2663::t_10383001a17bd8 481,485-489,494-495,498-515,595-599,617-619,630,636-637,644
+src-tauri/src/history.rs
+  s_e9afd7e3fc2663::t_10383001a17bd8 14-18
+src-tauri/src/tab.rs
+  s_e9afd7e3fc2663::t_617bd5f16c1f3f 470
+  s_e9afd7e3fc2663::t_3cc384b5adf30f 373
+  s_e9afd7e3fc2663::t_10383001a17bd8 217-220,234-236,251-256,277-292,357-363,368,374-375,378,383,397-398,404-405,409-416,425,429-430,433-435,462-464,475-476,739-740,746
+  s_e9afd7e3fc2663::t_0314378174d8bf 364-367,369-372,376-377,408,417-424,426-428,431-432,436-448,450-461,467-469,474
+  s_e9afd7e3fc2663::t_48575aa7d86d00 449
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "ed26591736486e743a49f46cf82e1aa5379a7c25",
+  "prompts": {},
+  "sessions": {
+    "s_e9afd7e3fc2663": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9690b902cdab631bb1118e",
+        "model": "aliyun/deepseek-v4-flash"
+      },
+      "human_author": "THLSTSUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "edit_kind": "bash",
+        "tool_name": "RunCommand",
+        "session_id": "6a9690b902cdab631bb1118e",
+        "source_scene": "agent",
+        "display_model_name": "aliyun/deepseek-v4-flash",
+        "external_session_id": "6a9690b902cdab631bb1118e",
+        "runtime_client": "trae-tob-git-ai",
+        "client_type": "ide",
+        "operation_id": "6a969ece02cdab631bb112ba",
+        "tool_use_id": "6a969ece02cdab631bb112ba"
+      }
+    }
+  }
+}
