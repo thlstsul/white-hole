@@ -1,0 +1,67 @@
+src-tauri/src/error.rs
+  s_c2424620466756::t_213780881ba6df 18,41-42,44
+  s_c2424620466756::t_a9c3cc0bd97910 1-2,7-17
+  s_c2424620466756::t_ae56a52cf18620 43
+src-tauri/src/tab.rs
+  s_c2424620466756::t_d4990505800696 475
+  s_c2424620466756::t_80939c8dfef88d 478-479,482-483,487
+  s_c2424620466756::t_cafcb00ccae239 473-474
+  s_c2424620466756::t_a7dafd435e57a4 476-477
+src-tauri/src/tab_service.rs
+  s_c2424620466756::t_22f785a63bd9c1 656,661,688-692,695,706-710
+  s_c2424620466756::t_0d1a47ddbb5103 76-78,80-81,83-84
+  s_c2424620466756::t_4f113ece0a8f8d 227-228,236
+  s_c2424620466756::t_e3852ce6367fed 99-100,102
+  s_c2424620466756::t_5e0aaed31c77b2 144,150,163-181
+  s_c2424620466756::t_66dfa2571d8787 211-216
+  s_c2424620466756::t_4a21a549efcd42 22
+  s_c2424620466756::t_99d27dc6ef6b42 246-249
+  s_c2424620466756::t_0d7b1e13440b04 19
+  s_c2424620466756::t_4ef784d9e01199 273-277,284-285,294-295,304-308,312-316,320-324,328-329
+  s_c2424620466756::t_fd90c5a37fdb4e 183,335-338,345-346,354-355,363-364,372-373,382-383,391-392,397-401,405-409,444,500,645
+  s_c2424620466756::t_869dca7684970d 427
+  s_c2424620466756::t_9d2e0da30774b3 184,445,521,532-536,549,565,572-575,578-580,582,589-590,638
+  s_c2424620466756::t_57efaa03c37e31 182
+  s_c2424620466756::t_d09f22d5ce04c2 330
+  s_c2424620466756::t_e4bf3eeddb950d 334
+  s_c2424620466756::t_460e010454b89e 428-430
+  s_c2424620466756::t_d73868eb5737a9 446-447
+  s_c2424620466756::t_c123e86ad92f63 501-503
+  s_c2424620466756::t_b7fd34afd39a6f 635-637
+src-tauri/src/tray.rs
+  s_c2424620466756::t_8d25d3e3073ad2 129-133,144-152,216-220,223,226-227,229-235,238-244,247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "152086cef9695c38c26012438e29d281c2a32d1a",
+  "prompts": {},
+  "humans": {
+    "h_97445c73a495c5": {
+      "author": "THELOSTSOUL <1095533751@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_c2424620466756": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a95812ccd5798b706ca791f",
+        "model": "aliyun/deepseek-v4-flash"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "session_id": "6a95812ccd5798b706ca791f",
+        "external_session_id": "6a95812ccd5798b706ca791f",
+        "client_type": "ide",
+        "source_scene": "agent",
+        "tool_type": "builtin",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "runtime_client": "trae-tob-git-ai",
+        "tool_use_id": "6a958d44cd5798b706ca7a36",
+        "dedupe_key": "6a95812ccd5798b706ca791f:6a958d44cd5798b706ca7a36:afterEdit:73d4e3a3",
+        "operation_id": "6a958d44cd5798b706ca7a36",
+        "edit_kind": "file_edit"
+      }
+    }
+  }
+}
