@@ -26,6 +26,12 @@
       return; // 快照不可用时放弃本次上报，等待下一次事件
     }
     const current = window.navigation.currentEntry;
+    // currentEntry 在导航条目尚未建立时为 null（早期 DOMContentLoaded、
+    // 无历史条目的文档）；条目为空同样算不出可靠 index：
+    // 放弃本次上报，等待 pageshow / currententrychange 重试
+    if (!current || all.length === 0) {
+      return;
+    }
     // 对抗 bing 首页推广：整条移除推广条目（不清洗成干净 URL 保留）。
     // index 重算为当前条目在过滤后列表中的位置；若当前条目本身就是推广
     // 条目（已被过滤），index 指向其前一个保留条目，镜像中无推广记录。
