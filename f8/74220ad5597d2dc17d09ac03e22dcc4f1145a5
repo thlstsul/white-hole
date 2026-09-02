@@ -1,0 +1,75 @@
+src-tauri/src/tab_service.rs
+  s_38bdde6f18591a::t_b1f8c16af267fe 626-629
+  s_38bdde6f18591a::t_7ce0fc712aab06 585-586
+  s_38bdde6f18591a::t_941d45a6d6ab9e 341-346
+  s_38bdde6f18591a::t_2fc4b3c24425e8 596-598
+  s_38bdde6f18591a::t_651ddff5052ccb 700-701
+src-tauri/src/browser.rs
+  s_38bdde6f18591a::t_aa0f42781ed47e 420
+  s_38bdde6f18591a::t_afcee2cbd75a12 423
+  s_38bdde6f18591a::t_4707130706a6e9 419,421-422,424
+  s_38bdde6f18591a::t_d11911b14a38c6 425
+src-tauri/src/tab.rs
+  s_38bdde6f18591a::t_cf96d286a5c41d 670,672-676,681-683,685-687
+  s_38bdde6f18591a::t_184e36a5110dfd 125
+  s_38bdde6f18591a::t_b5417720de28df 126-127
+  s_38bdde6f18591a::t_9b2c89b76e68f8 57-59
+  s_c56f4f7dfd82b8::t_d3173c063c51ba 426-439,441-446
+  s_38bdde6f18591a::t_8dcab2a2f0e7ba 891,893-907,911-912
+  s_38bdde6f18591a::t_6ae049957651ee 60-63
+  s_38bdde6f18591a::t_bf95ff3030bb29 677-680,684
+  s_38bdde6f18591a::t_2f43aae6b1d4bc 671
+  s_38bdde6f18591a::t_9af5ecf3c2f3c9 697-704
+  s_38bdde6f18591a::t_9b55860e5fd40b 892
+  s_38bdde6f18591a::t_bfd4b41b0e8944 668-669,688-696
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "f874220ad5597d2dc17d09ac03e22dcc4f1145a5",
+  "prompts": {},
+  "sessions": {
+    "s_38bdde6f18591a": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a984cd27ca8a06e5549fd4c",
+        "model": "aliyun/deepseek-v4-flash"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "runtime_client": "trae-tob-git-ai",
+        "external_session_id": "6a984cd27ca8a06e5549fd4c",
+        "dedupe_key": "6a984cd27ca8a06e5549fd4c:6a98680b7ca8a06e554a00ce:afterEdit:73d4e3a3",
+        "tool_type": "builtin",
+        "tool_use_id": "6a98680b7ca8a06e554a00ce",
+        "operation_id": "6a98680b7ca8a06e554a00ce",
+        "edit_kind": "file_edit",
+        "client_type": "ide",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "session_id": "6a984cd27ca8a06e5549fd4c",
+        "source_scene": "agent"
+      }
+    },
+    "s_c56f4f7dfd82b8": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a985e807ca8a06e5549ff86",
+        "model": "aliyun/deepseek-v4-flash"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "operation_id": "6a98611c7ca8a06e554a0048",
+        "client_type": "ide",
+        "external_session_id": "6a985e807ca8a06e5549ff86",
+        "dedupe_key": "6a985e807ca8a06e5549ff86:6a98611c7ca8a06e554a0048:afterEdit:73d4e3a3",
+        "runtime_client": "trae-tob-git-ai",
+        "edit_kind": "file_edit",
+        "tool_type": "builtin",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "session_id": "6a985e807ca8a06e5549ff86",
+        "tool_use_id": "6a98611c7ca8a06e554a0048",
+        "source_scene": "agent"
+      }
+    }
+  }
+}
