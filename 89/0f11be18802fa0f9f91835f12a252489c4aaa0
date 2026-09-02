@@ -1,0 +1,32 @@
+src-tauri/src/lib.rs
+  s_fab321d6684649::t_939830ea04411a 191-192,194-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "890f11be18802fa0f9f91835f12a252489c4aaa0",
+  "prompts": {},
+  "sessions": {
+    "s_fab321d6684649": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a98275ebdfd64479f8d2db3",
+        "model": "aliyun/deepseek-v4-flash"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "edit_kind": "file_edit",
+        "external_session_id": "6a98275ebdfd64479f8d2db3",
+        "tool_use_id": "6a9829efbdfd64479f8d2de9",
+        "tool_type": "builtin",
+        "runtime_client": "trae-tob-git-ai",
+        "client_type": "ide",
+        "source_scene": "agent",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "operation_id": "6a9829efbdfd64479f8d2de9",
+        "session_id": "6a98275ebdfd64479f8d2db3",
+        "dedupe_key": "6a98275ebdfd64479f8d2db3:6a9829efbdfd64479f8d2de9:afterEdit:73d4e3a3"
+      }
+    }
+  }
+}
