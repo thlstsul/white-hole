@@ -1,0 +1,28 @@
+src-tauri/src/lib.rs
+  s_fab321d6684649::t_939830ea04411a 191-192,194-197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "c7042cbfcb88a4aaf5f22ce699373aeac890fba0",
+  "prompts": {},
+  "sessions": {
+    "s_fab321d6684649": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a98275ebdfd64479f8d2db3",
+        "model": "aliyun/deepseek-v4-flash"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "tool_name": "RunCommand",
+        "edit_kind": "bash",
+        "session_id": "6a98275ebdfd64479f8d2db3",
+        "tool_use_id": "6a9828c7bdfd64479f8d2dbe",
+        "external_session_id": "6a98275ebdfd64479f8d2db3",
+        "display_model_name": "aliyun/deepseek-v4-flash",
+        "operation_id": "6a9828c7bdfd64479f8d2dbe"
+      }
+    }
+  }
+}
