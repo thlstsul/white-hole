@@ -361,10 +361,9 @@ impl Tab {
     /// （"点击链接跳转页面后，Tab 历史重置了"的根因）。
     ///
     /// 对账规则：
-    /// - 首条目 key 命中镜像已有 key 且**整段 key 序列与镜像子段逐一对齐**
-    ///   → 片段是镜像的连续子段（同文档导航 / 前进后退穿过同源条目），
-    ///   用快照刷新该子段并修正 index；仅首 key 命中但后续 key 不连续时
-    ///   （同 key 在镜像多处重复 / 中间条目被替换）回退追加分支，避免 splice 错位
+    /// - 首条目 key 命中镜像已有 key → 以快照替换从该位置起的镜像历史，
+    ///   修正 index 为片段内当前位置；key 作为条目身份，同 key 且 URL 未变的
+    ///   条目保留原 id，否则置占位 -1；
     /// - 首条目 key 未命中 → 片段以新条目开头（跨源新导航 / bfcache 恢复 /
     ///   replaceState）：在当前位置截断 forward 历史，整段追加，index 移到末尾；
     ///   若当前条目是 keyless 占位且与片段首条同 URL，视为同一历史条目原地补
@@ -414,21 +413,15 @@ impl Tab {
                 .position(|entry| entry.key.as_deref() == Some(key)),
             None => None,
         };
-        // 命中分支还需校验片段与镜像子段 key 序列逐一对齐（见函数文档）
-        let aligned = frag_start.is_some_and(|start| {
-            start + frag_len <= self.history.len()
-                && self.history[start..start + frag_len]
-                    .iter()
-                    .zip(fragment.iter())
-                    .all(|(m, f)| m.key.as_deref() == f.key.as_deref())
-        });
-
         // (对账后当前 index, 本次快照影响的镜像区间 [start, end)，用于限定回填范围)
-        let (cur, span) = if let Some(start) = frag_start
-            && aligned
-        {
-            // 片段是镜像的连续子段：刷新子段内容，index 修正为片段内当前位置
-            self.history.splice(start..start + frag_len, fragment);
+        let (cur, span) = if let Some(start) = frag_start {
+            // 片段首条 key 命中镜像已有条目：以快照替换从 start 位置起的镜像历史。
+            // 非跨域场景下快照 = 全量历史，即使 key 序列不完全对齐（如 sync_by_url
+            // 先插入了 keyless 占位条目导致 aligned 失败），也应以快照为准替换历史。
+            // 移除 aligned 条件：该条件在非跨域场景下因 keyless 占位条目导致 false，
+            // 回退到追加分支，每次 sync_snapshot 都会重复追加 fragment 到历史末尾。
+            let end = (start + frag_len).min(self.history.len());
+            self.history.splice(start..end, fragment);
             ((start + index) as isize, start..start + frag_len)
         } else {
             // 新片段（跨源导航/bfcache/replaceState）：截断当前位置之后的
