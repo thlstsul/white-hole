@@ -416,9 +416,13 @@ impl Browser {
     }
 
     pub async fn click_link(&self, url: String) -> Result<(), StateError> {
-        let mut state = self.get_state(None).await?;
-        state.url = url;
-        state.loading = true;
+        // 将乐观 URL 存入当前 tab，在真实导航追上之前，get_state 会自动使用此值覆盖，
+        // 确保点击链接后 UI 立即反映新 URL 和加载状态，避免网络延迟时无反应
+        let label = self.tabs.current().await;
+        if !label.is_empty() {
+            self.tabs.set_optimistic_url(&label, url).await;
+        }
+        let state = self.get_state(Some(&label)).await?;
         self.emit(Some(state)).await
     }
 

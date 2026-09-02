@@ -338,6 +338,12 @@ impl TabService {
         map.get_state(label).await
     }
 
+    pub async fn set_optimistic_url(&self, label: &str, url: String) {
+        if let Some(map) = self.map_for(label).await {
+            map.set_optimistic_url(label, url).await;
+        }
+    }
+
     // ============ 每 tab 命令 ============
 
     pub async fn back(&self) -> Result<(), StateError> {
@@ -576,6 +582,8 @@ impl TabService {
             let redirecting = map.is_loading(label).await;
             map.start_loading(label).await;
             map.set_redirecting(label, redirecting).await;
+            // 快照当前 click_count，用于 on_page_load(Finished) 检测 stale 事件
+            map.snapshot_click_count(label).await;
             // 真实加载已开始，loading 交由 PageLoadEvent::Finished 清理
             map.set_nav_pending(label, false).await;
             return Ok(());
@@ -585,6 +593,9 @@ impl TabService {
         // （TitleChanged 与 Finished 并发）看到 is_loading 已为 false，若直接落库会
         // 与下方校准重复写入同一行（重复 UPDATE、times 重复 +1），故需 defer
         map.set_load_finished_pending(label, true).await;
+        // 先清除乐观 URL（避免 set_loading 后窗口期内 get_state 读到乐观 URL），
+        // 使用 try_clear 仅当导航序列号未变化时清除，防止 stale Finished 误清除新导航的乐观 URL
+        map.try_clear_optimistic_url(label).await;
         map.set_loading(label, loading).await;
 
         let state = self.browser().get_state(Some(label)).await?;
@@ -612,6 +623,10 @@ impl TabService {
 
         let map = self.current_map().await;
         map.set_loading(&label, loading).await;
+        // 加载结束时清除乐观 URL，作为 on_page_load(Finished) 未触发时的兜底
+        if !loading {
+            map.clear_optimistic_url(&label).await;
+        }
     }
 
     /// Navigation API 快照对账：片段对账镜像（快照只是同源连续片段），
@@ -682,6 +697,8 @@ impl TabService {
             .map_for(label)
             .await
             .ok_or_else(|| StateError::TabNotFound(TabNotFoundError(label.to_string())))?;
+        // 用户主动导航（back/forward/go/reload），清除乐观 URL
+        map.clear_optimistic_url(label).await;
         map.set_loading(label, loading).await;
         if loading {
             // 等待页面加载事件（跨文档）或 Navigation API 快照（同文档/bfcache）确认导航完成

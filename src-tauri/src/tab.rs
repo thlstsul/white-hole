@@ -54,6 +54,13 @@ pub struct Tab {
     /// 加载期间到达但被跳过落库的标题（loading 守卫防止标题错位）：
     /// 待快照对账后用权威 URL 补写，避免同文档导航无 PageLoad Finished 事件而丢失
     pending_title: Option<String>,
+    /// 点击链接时乐观设置的 URL（按 tab 隔离），在真实导航追上之前，
+    /// get_state 会使用此值覆盖 URL 与 loading，避免网络延迟时 UI 无反应。
+    optimistic_url: Option<String>,
+    /// click_link 调用计数器，每次 click_link 递增。
+    click_count: u64,
+    /// on_page_load(Started) 时的 click_count 快照，用于检测 stale Finished 事件。
+    start_click_count: u64,
     darkreader: bool,
     index: isize,
     /// 当前加载是否为重定向（reload / 302 / meta refresh）：
@@ -115,6 +122,9 @@ impl Tab {
             nav_pending: false,
             load_finished_pending: false,
             pending_title: None,
+            optimistic_url: None,
+            click_count: 0,
+            start_click_count: 0,
             darkreader: true,
             redirecting: false,
             history_queue,
@@ -413,13 +423,27 @@ impl Tab {
                 .position(|entry| entry.key.as_deref() == Some(key)),
             None => None,
         };
+        // 校验 key 序列对齐，防范跨源场景（Navigation API 跨源时不返回异源条目，
+        // 导致片段是镜像子集，splice 会错误替换中间条目）。
+        // 对齐规则：忽略镜像中 keyless 占位条目（sync_by_url 先插入的占位），
+        // 有 key 的条目必须与片段逐一对齐，否则视为跨源片段回退到追加分支
+        let aligned = frag_start.is_some_and(|start| {
+            self.history[start..]
+                .iter()
+                .zip(fragment.iter())
+                .all(|(m, f)| {
+                    // keyless 占位条目不参与对齐检查（sync_by_url 先插入的占位
+                    // 无 key，导致 aligned 误判为 false，回退到追加分支反复追加）
+                    m.key.is_none() || m.key.as_deref() == f.key.as_deref()
+                })
+        });
         // (对账后当前 index, 本次快照影响的镜像区间 [start, end)，用于限定回填范围)
-        let (cur, span) = if let Some(start) = frag_start {
-            // 片段首条 key 命中镜像已有条目：以快照替换从 start 位置起的镜像历史。
-            // 非跨域场景下快照 = 全量历史，即使 key 序列不完全对齐（如 sync_by_url
-            // 先插入了 keyless 占位条目导致 aligned 失败），也应以快照为准替换历史。
-            // 移除 aligned 条件：该条件在非跨域场景下因 keyless 占位条目导致 false，
-            // 回退到追加分支，每次 sync_snapshot 都会重复追加 fragment 到历史末尾。
+        let (cur, span) = if let Some(start) = frag_start
+            && aligned
+        {
+            // 片段首条 key 命中镜像已有条目且 key 序列对齐：以快照替换从 start
+            // 位置起的镜像历史。使用 end = min(...) 安全处理片段超出历史长度的
+            // 情况（keyless 占位条目导致历史较短）。
             let end = (start + frag_len).min(self.history.len());
             self.history.splice(start..end, fragment);
             ((start + index) as isize, start..start + frag_len)
@@ -641,6 +665,43 @@ impl TabMap {
             .await;
     }
 
+    pub async fn set_optimistic_url(&self, label: &str, url: String) {
+        self.0
+            .update_async(label, |_, tab| {
+                tab.click_count += 1;
+                tab.optimistic_url = Some(url);
+            })
+            .await;
+    }
+
+    /// 安全清除乐观 URL：仅当 click_count 未变化时（即无新 click_link 发生）清除，
+    /// 避免 stale on_page_load(Finished) 误清除新导航设置的乐观 URL。
+    /// 原理：on_page_load(Started) 快照了当时的 click_count，
+    /// 若 Finished 时 click_count 已变化，说明期间有新的 click_link，Finished 属于旧导航。
+    pub async fn try_clear_optimistic_url(&self, label: &str) {
+        self.0
+            .update_async(label, |_, tab| {
+                if tab.click_count == tab.start_click_count {
+                    tab.optimistic_url = None
+                }
+            })
+            .await;
+    }
+
+    pub async fn clear_optimistic_url(&self, label: &str) {
+        self.0
+            .update_async(label, |_, tab| tab.optimistic_url = None)
+            .await;
+    }
+
+    /// 快照当前 click_count 到 start_click_count，用于 on_page_load(Finished)
+    /// 检测期间是否有新的 click_link 发生。
+    pub async fn snapshot_click_count(&self, label: &str) {
+        self.0
+            .update_async(label, |_, tab| tab.start_click_count = tab.click_count)
+            .await;
+    }
+
     pub async fn start_loading(&self, label: &str) {
         self.0
             .update_async(label, |_, tab| {
@@ -827,11 +888,28 @@ impl TabMap {
         let state = self
             .0
             .read_async(label, |_, tab| {
+                let url = tab.current_url()?;
+                let loading = tab.loading;
+                // 乐观 URL 覆盖：真实 URL 尚未追上时，用 click_link 设置的 URL 替代
+                if let Some(ref opt_url) = tab.optimistic_url {
+                    if url != *opt_url {
+                        return Ok(BrowserState {
+                            icon_url: tab.icon_url.clone(),
+                            title: tab.title.clone(),
+                            url: opt_url.clone(),
+                            loading: true,
+                            can_back: tab.can_back(),
+                            can_forward: tab.can_forward(),
+                            darkreader: tab.darkreader,
+                            ..Default::default()
+                        });
+                    }
+                }
                 Ok(BrowserState {
                     icon_url: tab.icon_url.clone(),
                     title: tab.title.clone(),
-                    url: tab.current_url()?,
-                    loading: tab.loading,
+                    url,
+                    loading,
                     can_back: tab.can_back(),
                     can_forward: tab.can_forward(),
                     darkreader: tab.darkreader,
