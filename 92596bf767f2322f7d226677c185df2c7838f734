@@ -1,0 +1,49 @@
+src-tauri/src/download.rs
+  s_6385d2e4bc4365::t_87881a502b5764 57,60-61,68-76
+src-tauri/Cargo.toml
+  h_763ea9794dd7cc 38
+src-tauri/src/tray.rs
+  s_6385d2e4bc4365::t_8886a0cf8ba4c5 21
+  s_6385d2e4bc4365::t_0aaede4ee1bc4b 262-265
+  s_6385d2e4bc4365::t_6c4b365ece00fd 429-439
+  s_6385d2e4bc4365::t_550ef6419df2bf 333,338
+  s_6385d2e4bc4365::t_a01868ac29fde5 175-177
+  s_6385d2e4bc4365::t_83a3a6bbf58da7 164
+  s_6385d2e4bc4365::t_87881a502b5764 1,9,11,26,39-40,43,54,77-82,85,88,93-94,96-104,106-127,129-130,133-138,140,143-144,146-163,165-174,178-190,192-197,199-207,209,220-242,247,249,251,253-254,258-261,268,270-272,308-314
+  s_6385d2e4bc4365::t_c32b124327a10e 208
+  s_6385d2e4bc4365::t_9872e70fe2b221 210-219
+  s_6385d2e4bc4365::t_aee5386db1f20c 296,301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "92596bf767f2322f7d226677c185df2c7838f734",
+  "prompts": {},
+  "humans": {
+    "h_763ea9794dd7cc": {
+      "author": "THLSTSUL <1095533751@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_6385d2e4bc4365": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a953a2f02cdab631bb107b5",
+        "model": "volc/deepseek-v4-flash-0731"
+      },
+      "human_author": "THLSTSUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "display_model_name": "volc/deepseek-v4-flash-0731",
+        "source_scene": "agent",
+        "operation_id": "6a954c1402cdab631bb10ad4",
+        "client_type": "ide",
+        "tool_name": "SearchReplace",
+        "external_session_id": "6a953a2f02cdab631bb107b5",
+        "edit_kind": "file_edit",
+        "runtime_client": "trae-tob-git-ai",
+        "session_id": "6a953a2f02cdab631bb107b5",
+        "tool_use_id": "6a954c1402cdab631bb10ad4"
+      }
+    }
+  }
+}
