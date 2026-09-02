@@ -1,0 +1,33 @@
+src-tauri/src/tab.rs
+  s_fab321d6684649::t_d906263ab2ffc1 417-424
+  s_fab321d6684649::t_ee7f59f05eae0d 364-366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "a9e855cab3c519ed7f3e5f134a3e3051ac036a6c",
+  "prompts": {},
+  "sessions": {
+    "s_fab321d6684649": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a98275ebdfd64479f8d2db3",
+        "model": "aliyun/deepseek-v4-flash"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "runtime_client": "trae-tob-git-ai",
+        "tool_type": "builtin",
+        "operation_id": "6a9829efbdfd64479f8d2de9",
+        "source_scene": "agent",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "external_session_id": "6a98275ebdfd64479f8d2db3",
+        "edit_kind": "file_edit",
+        "dedupe_key": "6a98275ebdfd64479f8d2db3:6a9829efbdfd64479f8d2de9:afterEdit:73d4e3a3",
+        "client_type": "ide",
+        "tool_use_id": "6a9829efbdfd64479f8d2de9",
+        "session_id": "6a98275ebdfd64479f8d2db3"
+      }
+    }
+  }
+}
