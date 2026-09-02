@@ -111,7 +111,7 @@ impl Browser {
             self.tabs.set_size(web_size).await;
         }
 
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
@@ -132,7 +132,7 @@ impl Browser {
         {
             self.tabs.go_to(&label, index).await;
             self.tabs.switch_tab(&label).await?;
-            self.state_changed(None).await?;
+            self.emit(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(&pool, id).await {
                 log::error!("刷新浏览记录 last_time 失败: {e}");
@@ -144,7 +144,7 @@ impl Browser {
                 .await?;
             let mut state = self.get_state(None).await?;
             state.url = url.to_string();
-            self.state_changed(Some(state.clone())).await?;
+            self.emit(Some(state.clone())).await?;
             let mut log: NavigationLog = state.into();
             log.title.clear();
             let id = self.save_navigation_log(log).await?;
@@ -163,7 +163,7 @@ impl Browser {
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
             self.tabs.go_to(&label, index).await;
             self.tabs.switch_tab(&label).await?;
-            self.state_changed(None).await?;
+            self.emit(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(self.db.get().await.as_ref(), id).await {
                 log::error!("刷新浏览记录 last_time 失败: {e}");
@@ -175,7 +175,7 @@ impl Browser {
                 .await?;
             let mut state = self.get_state(None).await?;
             state.url = url.clone();
-            self.state_changed(Some(state.clone())).await?;
+            self.emit(Some(state.clone())).await?;
             let mut log: NavigationLog = state.into();
             log.title.clear();
             let id = self.save_navigation_log(log).await?;
@@ -230,14 +230,14 @@ impl Browser {
     pub async fn maximize(&self) -> Result<(), StateError> {
         self.window.maximize()?;
 
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
     pub async fn unmaximize(&self) -> Result<(), StateError> {
         self.window.unmaximize()?;
 
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
@@ -248,7 +248,7 @@ impl Browser {
 
         self.mainview.reparent(&self.window)?;
 
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
@@ -262,7 +262,7 @@ impl Browser {
             self.tabs.top(&label).await?;
         }
 
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
@@ -317,7 +317,7 @@ impl Browser {
             self.db.migrate_memory().await?;
             self.tabs.enter_incognito().await;
         }
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
@@ -336,7 +336,7 @@ impl Browser {
             // 抬起主视图到 tab 之上，保持 is_focused ⇔ mainview 顶层不变量
             self.mainview.reparent(&self.window)?;
         }
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
@@ -400,7 +400,7 @@ impl Browser {
     pub async fn leave_picture_in_picture(&self, label: &str) -> Result<(), StateError> {
         self.blur().await?;
         self.tabs.switch_tab(label).await?;
-        self.state_changed(None).await?;
+        self.emit(None).await?;
         Ok(())
     }
 
@@ -408,18 +408,18 @@ impl Browser {
         let mut state = self.get_state(None).await?;
         state.title = FOCUS_LINK_TITLE.to_string();
         state.url = url;
-        self.state_changed(Some(state)).await
+        self.emit(Some(state)).await
     }
 
     pub async fn blur_link(&self) -> Result<(), StateError> {
-        self.state_changed(None).await
+        self.emit(None).await
     }
 
     pub async fn click_link(&self, url: String) -> Result<(), StateError> {
         let mut state = self.get_state(None).await?;
         state.url = url;
         state.loading = true;
-        self.state_changed(Some(state)).await
+        self.emit(Some(state)).await
     }
 
     pub async fn darkreader(&self) -> Result<(), StateError> {
@@ -445,7 +445,7 @@ impl Browser {
                 }
             });
         }
-        self.state_changed(Some(state)).await
+        self.emit(Some(state)).await
     }
 
     pub async fn devtools(&self) {
@@ -512,10 +512,7 @@ impl Browser {
     }
 
     /// 发射状态到主视图（TabService 经此通知 UI，发射与图标查询收敛于此）
-    pub(crate) async fn state_changed(
-        &self,
-        state: Option<BrowserState>,
-    ) -> Result<(), StateError> {
+    pub(crate) async fn emit(&self, state: Option<BrowserState>) -> Result<(), StateError> {
         let mut state = if let Some(state) = state {
             state
         } else {

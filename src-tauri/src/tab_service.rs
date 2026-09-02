@@ -124,7 +124,7 @@ impl TabService {
 
     /// 通知主视图状态变更（发射统一收敛在 Browser::state_changed）
     async fn emit(&self, state: Option<BrowserState>) -> Result<(), StateError> {
-        self.browser().state_changed(state).await
+        self.browser().emit(state).await
     }
 
     async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
