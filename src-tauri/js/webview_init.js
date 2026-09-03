@@ -32,30 +32,21 @@
     if (!current || all.length === 0) {
       return;
     }
-    // 对抗 bing 首页推广：整条移除推广条目（不清洗成干净 URL 保留）。
-    // index 重算为当前条目在过滤后列表中的位置；若当前条目本身就是推广
-    // 条目（已被过滤），index 指向其前一个保留条目，镜像中无推广记录。
+
     const entries = [];
     const keys = [];
-    let index = 0;
     for (let i = 0; i < all.length; i++) {
-      if (isBingPromoUrl(all[i].url)) {
-        continue;
-      }
       entries.push({ key: all[i].key, url: all[i].url });
       keys.push(all[i].key);
-      if (i <= current.index) {
-        index++;
-      }
     }
-    index = Math.max(0, index - 1);
+
     const key = current.index + "|" + current.url + "|" + keys.join(",");
     if (key === lastSnapshotKey) {
       return;
     }
     lastSnapshotKey = key;
     webviewIpcInvoke("history_snapshot", {
-      index,
+      index: current.index,
       entries,
     });
   }
@@ -72,27 +63,31 @@
   );
   window.addEventListener("pageshow", reportSnapshot, false);
 
+  const wrapHistory = function (method) {
+    const original = history[method];
+    history[method] = function (state, title, url) {
+      if (shouldBlockHistoryUrl(method, url)) {
+        return;
+      }
+      const result = original.apply(this, arguments);
+      if (!window.navigation) {
+        reportFallback();
+      }
+      return result;
+    };
+  };
+  wrapHistory("pushState");
+  wrapHistory("replaceState");
+
   if (window.navigation) {
     // Navigation API（Chromium 102+ / WebView2）提供权威完整会话历史
     window.navigation.addEventListener("currententrychange", reportSnapshot);
   } else {
     // 非 Chromium 引擎（macOS WKWebView / Linux WebKitGTK）没有 Navigation API：
-    // 退化为 popstate / hashchange / 历史 API 包装兜底上报，保证同文档导航
+    // 退化为 popstate / hashchange 兜底上报，保证同文档导航
     // （前进后退、hash 变化、SPA pushState）能更新镜像中的当前 URL 与导航记录
     window.addEventListener("popstate", reportFallback, false);
     window.addEventListener("hashchange", reportFallback, false);
-    // pushState/replaceState 不触发 popstate/hashchange，SPA 用历史 API
-    // 跳转时需自行触发兜底上报（在页面脚本执行前包装，尽力拦截）
-    const wrapHistoryMethod = function (method) {
-      const original = history[method];
-      history[method] = function () {
-        const result = original.apply(this, arguments);
-        reportFallback();
-        return result;
-      };
-    };
-    wrapHistoryMethod("pushState");
-    wrapHistoryMethod("replaceState");
   }
 
   function contentLoaded() {
@@ -132,11 +127,28 @@
     return new URL(iconUrl, window.location.href).href;
   }
 
-  // ===== bing 首页推广对抗 =====
-  // bing 首页在用户交互时会把地址栏改写为带跟踪参数的推广链接
-  // （形如 https://cn.bing.com/?form=SPHPRE1&bbtnfrm= ），会污染历史；
-  // 推广参数与域名（cn./www.）会变化，不能精确匹配，按 URL 特征识别。
-  function isBingPromoUrl(url) {
+  // 场景化拦截（wrapHistory 入口调用）：判断一次历史 API 改写（pushState /
+  // replaceState）是否应被阻断。包含两类：
+  // 1. 推广链接改写（isBingPromoUrl）：URL 特征可识别，直接拒绝；
+  // 2. 同 URL 重复入栈：bing 用 pushState 把与当前页面
+  //    相同的 URL 再次入栈（如搜索结果页重复入栈），非推广特征但目标 URL 与
+  //    当前 URL 完全相同意味着不改变页面、只新增冗余条目，一并阻断。
+  function shouldBlockHistoryUrl(method, url) {
+    if (typeof url !== "string") {
+      return false;
+    }
+    if (isBingPromoUrl(url)) {
+      return true;
+    }
+    return (
+      method === "pushState" &&
+      isBingHost(url) &&
+      normalizeUrl(url) === window.location.href
+    );
+  }
+
+  // bing 域名判断（含 cn./www. 等子域）供推广拦截与重复入栈场景化拦截复用
+  function isBingHost(url) {
     if (typeof url !== "string" || url.length === 0) {
       return false;
     }
@@ -147,7 +159,29 @@
       return false;
     }
     const host = parsed.hostname.toLowerCase();
-    if (host !== "bing.com" && !host.endsWith(".bing.com")) {
+    return host === "bing.com" || host.endsWith(".bing.com");
+  }
+
+  // 把相对/绝对 URL 归一化为绝对形式，用于"pushState 目标 == 当前 URL"比较
+  function normalizeUrl(url) {
+    try {
+      return new URL(url, window.location.href).href;
+    } catch (e) {
+      return url;
+    }
+  }
+
+  function isBingPromoUrl(url) {
+    if (typeof url !== "string" || url.length === 0) {
+      return false;
+    }
+    if (!isBingHost(url)) {
+      return false;
+    }
+    let parsed;
+    try {
+      parsed = new URL(url, window.location.href);
+    } catch (e) {
       return false;
     }
     const path = parsed.pathname;
