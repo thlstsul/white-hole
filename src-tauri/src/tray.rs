@@ -487,26 +487,20 @@ fn show_main_window(app: &AppHandle) {
 /// 用系统默认程序打开文件（Windows 用 explorer，macOS/Linux 用 open/xdg-open）
 fn open_path(path: &Path) -> std::io::Result<()> {
     #[cfg(windows)]
-    {
-        std::process::Command::new("explorer").arg(path).spawn()?;
-        Ok(())
-    }
+    std::process::Command::new("explorer").arg(path).spawn()?;
     #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open").arg(path).spawn()?;
-        Ok(())
-    }
+    std::process::Command::new("open").arg(path).spawn()?;
     #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open").arg(path).spawn()?;
-        Ok(())
-    }
+    std::process::Command::new("xdg-open").arg(path).spawn()?;
+
+    #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+    return Ok(());
     #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
         let _ = path;
-        Err(std::io::Error::new(
+        return Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             "当前平台暂不支持打开文件",
-        ))
+        ));
     }
 }
