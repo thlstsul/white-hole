@@ -1,0 +1,83 @@
+src-tauri/js/floating_tab.js
+  s_0783c1b25140dd::t_a090cff3d6c847 231-274,277
+  s_0783c1b25140dd::t_b4203dee42f265 322
+  s_1cf98135e93c9b::t_140924b8a7230a 8,19-22,25-27,45-50,52,55-88,90-94,97-99,102-106,119,122,139,141-143,146-168,187-196,198-203,206,208-209,217-219,221-230,283-295,301-303,306-309,329
+  s_cf1f26b0428ec7::t_ea7d1063d32bff 89
+  s_0783c1b25140dd::t_117af59ccf49af 169,174-183
+  s_1cf98135e93c9b::t_cad5f30ccf872e 140,170-173,184-186,197,204-205,207
+  s_0783c1b25140dd::t_9b6639a264e537 220
+  s_0783c1b25140dd::t_4b11d01ec2d626 296-300,304-305
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "0304631cee11800f025a009cf801cbcfcf4ab211",
+  "prompts": {},
+  "humans": {
+    "h_97445c73a495c5": {
+      "author": "THELOSTSOUL <1095533751@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_0783c1b25140dd": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9c354c2e8571dac6e32540",
+        "model": "kimi-k2.7-code__dev"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "tool_use_id": "6a9c366b2e8571dac6e32593",
+        "dedupe_key": "6a9c354c2e8571dac6e32540:6a9c366b2e8571dac6e32593:afterEdit:c427f3c9",
+        "tool_type": "agent",
+        "source_scene": "unknown",
+        "external_session_id": "6a9c354c2e8571dac6e32540",
+        "runtime_client": "trae-tob-git-ai",
+        "operation_id": "6a9c366b2e8571dac6e32593",
+        "edit_kind": "file_edit",
+        "tool_id": "Edit",
+        "client_type": "ide",
+        "session_id": "6a9c354c2e8571dac6e32540"
+      }
+    },
+    "s_1cf98135e93c9b": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9c33692e8571dac6e324b4",
+        "model": "kimi-k2.7-code__dev"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "external_session_id": "6a9c33692e8571dac6e324b4",
+        "tool_name": "Edit",
+        "operation_id": "6a9c35032e8571dac6e32523",
+        "source_scene": "agent",
+        "runtime_client": "trae-tob-git-ai",
+        "client_type": "ide",
+        "tool_use_id": "6a9c35032e8571dac6e32523",
+        "edit_kind": "file_edit",
+        "session_id": "6a9c33692e8571dac6e324b4"
+      }
+    },
+    "s_cf1f26b0428ec7": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9b5537b99a2f4392cff716",
+        "model": "DeepSeek-V4-Pro-Official__dev"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "operation_id": "6a9bbabeb99a2f4392cffa35",
+        "tool_name": "Edit",
+        "runtime_client": "trae-tob-git-ai",
+        "tool_use_id": "6a9bbabeb99a2f4392cffa35",
+        "client_type": "ide",
+        "external_session_id": "6a9b5537b99a2f4392cff716",
+        "display_model_name": "DeepSeek-V4-Pro 正式版",
+        "session_id": "6a9b5537b99a2f4392cff716",
+        "source_scene": "agent",
+        "edit_kind": "file_edit"
+      }
+    }
+  }
+}
