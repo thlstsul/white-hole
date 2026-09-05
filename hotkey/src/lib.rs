@@ -91,6 +91,11 @@ impl<R: Runtime> HotkeyManager<R> {
         }
     }
 
+    /// 查询某个键是否当前被按下（供外部判断修饰键状态，如 Ctrl+点击）
+    pub fn is_pressed(&self, key: Code) -> bool {
+        self.pressed_keys.contains_sync(&key)
+    }
+
     fn check_hotkeys(&self) {
         let Some(hotkey) = match_hotkey(&self.pressed_keys) else {
             return;

@@ -233,3 +233,13 @@ pub async fn darkreader(browser: State<'_, Browser>) -> Result<(), StateError> {
 pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<Response, FetchError> {
     request::fetch(&url, options).await
 }
+
+#[command]
+pub async fn close_floating_tab(browser: State<'_, Browser>) -> Result<(), FrameworkError> {
+    browser.close_floating_tab().await
+}
+
+#[command]
+pub async fn promote_floating_tab(browser: State<'_, Browser>) -> Result<(), TabError> {
+    browser.promote_floating_tab().await
+}

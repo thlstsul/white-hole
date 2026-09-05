@@ -13,6 +13,17 @@ use tauri::{
 };
 use uuid::Uuid;
 
+/// 浮动 Tab：在主窗口右下角叠加的小型预览 webview，
+/// 不参与常规 TabMap 管理，独立持有 webview 引用与状态。
+pub(crate) struct FloatingTab {
+    /// webview label（Uuid），用于 close 时定位
+    pub label: TabId,
+    /// 当前加载的 URL（promote 时用于创建常规 Tab）
+    pub url: String,
+    /// webview 引用（close / reparent / resize 操作）
+    pub webview: Webview,
+}
+
 use crate::{
     browser::{Browser, BrowserExt as _},
     darkreader, download,
@@ -91,6 +102,8 @@ pub struct TabService {
     /// 防止在途事件在内存库被关闭后把无痕数据写进持久库
     consumers: Mutex<HashMap<TabId, async_runtime::JoinHandle<()>>>,
     app_handle: AppHandle,
+    /// 当前浮动 Tab（最多 1 个）；None 表示无浮动 Tab
+    pub(crate) floating_tab: Mutex<Option<FloatingTab>>,
 }
 
 impl TabService {
@@ -104,6 +117,7 @@ impl TabService {
             pending_history: Mutex::new(PendingEvents::new()),
             consumers: Mutex::new(HashMap::new()),
             app_handle,
+            floating_tab: Mutex::new(None),
         }
     }
 
@@ -276,6 +290,12 @@ impl TabService {
             .ok_or(FrameworkError::Tauri(tauri::Error::WebviewNotFound))?;
         map.top(label, &window).await?;
         self.current.set(label.to_string()).await;
+
+        // 浮动 Tab 重新置顶（常规 Tab reparent 后可能覆盖它）
+        if let Some(ref floating) = *self.floating_tab.lock().await {
+            let _ = floating.webview.reparent(&window);
+        }
+
         Ok(())
     }
 
@@ -771,16 +791,53 @@ impl TabService {
 // ============ Webview 事件回调（由 Tab::new 注册到 WebviewBuilder） ============
 
 pub(crate) fn on_new_window(app_handle: &AppHandle, url: Url) -> NewWindowResponse<Wry> {
+    // 同步捕获 Ctrl 状态：避免异步任务中的 TOCTOU 竞态
+    let ctrl = {
+        use ::hotkey::Code;
+        use ::hotkey::HotkeyManagerExt as _;
+        let hotkey = app_handle.hotkey();
+        hotkey.is_pressed(Code::ControlLeft) || hotkey.is_pressed(Code::ControlRight)
+    };
+
     async_runtime::spawn({
         let app_handle = app_handle.clone();
 
         async move {
             let browser = app_handle.browser();
             browser.set_loading(false).await;
+            if ctrl {
+                // Ctrl+点击 → 打开浮动 Tab
+                let _ = browser
+                    .open_floating_tab(&url)
+                    .await
+                    .inspect_err(|e| error!("打开浮动链接{url}失败：{e}"));
+            } else {
+                // target="_blank" / window.open → 打开常规 Tab
+                let _ = browser
+                    .open_tab_by_url(&url, true)
+                    .await
+                    .inspect_err(|e| error!("打开链接{url}失败：{e}"));
+            }
+        }
+    });
+
+    NewWindowResponse::Deny
+}
+
+/// 浮动 Tab 内的 on_new_window：**始终**替换当前浮动 Tab（不区分 Ctrl 状态）。
+/// 设计意图（见 SPEC FT-17）：浮动 Tab 内的 Ctrl+点击与普通点击行为一致——
+/// 都是替换当前浮动 Tab 为新页面，保持"浮动 Tab 内不产生常规 Tab"的隔离性。
+pub(crate) fn on_floating_new_window(app_handle: &AppHandle, url: Url) -> NewWindowResponse<Wry> {
+    async_runtime::spawn({
+        let app_handle = app_handle.clone();
+
+        async move {
+            let browser = app_handle.browser();
+            // 替换：关闭旧浮动 → 打开新浮动
             browser
-                .open_tab_by_url(&url, true)
+                .open_floating_tab(&url)
                 .await
-                .inspect_err(|e| error!("打开链接{url}失败：{e}"))
+                .inspect_err(|e| error!("替换浮动链接{url}失败：{e}"))
         }
     });
 
@@ -816,6 +873,32 @@ pub(crate) fn on_page_load(webview: Webview, payload: PageLoadPayload) {
             .on_page_load(label, loading)
             .await
             .inspect_err(|e| error!("{label}变更加载状态失败：{e}"))
+    });
+}
+
+/// 浮动 Tab 专用：页面加载状态回调（FT-14）
+pub(crate) fn on_floating_page_load(webview: Webview, payload: PageLoadPayload) {
+    let event = payload.event();
+    async_runtime::spawn(async move {
+        let label = webview.label();
+        let loading = match event {
+            tauri::webview::PageLoadEvent::Started => true,
+            tauri::webview::PageLoadEvent::Finished => false,
+        };
+        // 页面加载完成时预读 URL（锁外调用，避免阻塞其他浮动 Tab 操作）
+        let current_url = if !loading {
+            webview.url().ok().map(|u| u.to_string())
+        } else {
+            None
+        };
+        let browser = webview.browser();
+        let mut floating = browser.tabs.floating_tab.lock().await;
+        if let Some(ref mut f) = *floating
+            && f.label == label
+            && let Some(url) = current_url
+        {
+            f.url = url;
+        }
     });
 }
 

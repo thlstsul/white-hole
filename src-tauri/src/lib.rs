@@ -134,6 +134,8 @@ pub fn run() -> Result<(), SetupError> {
             click_link,
             darkreader,
             fetch,
+            close_floating_tab,
+            promote_floating_tab,
         ])
         .on_window_event(on_window_event)
         .on_device_event(on_device_event)
