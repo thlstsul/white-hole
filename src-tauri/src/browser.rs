@@ -207,6 +207,7 @@ impl Browser {
         }
 
         self.focus_changed().await?;
+        self.raise_floating_tab().await;
         Ok(())
     }
 
@@ -243,6 +244,7 @@ impl Browser {
         }
 
         self.focus_changed().await?;
+        self.raise_floating_tab().await;
         Ok(())
     }
 
@@ -260,6 +262,13 @@ impl Browser {
         }
 
         self.tabs.near_tab().await
+    }
+
+    /// 将现有浮动 Tab 重新置顶（常规 Tab 创建/切换后可能覆盖它）
+    pub(crate) async fn raise_floating_tab(&self) {
+        if let Some(ref floating) = *self.tabs.floating_tab.lock().await {
+            let _ = floating.webview.reparent(&self.window);
+        }
     }
 
     /// 打开浮动 Tab：关闭已有 → 创建 webview（同窗口 add_child）→ 注入 JS 控制栏
@@ -384,11 +393,7 @@ impl Browser {
         }
 
         self.mainview.reparent(&self.window)?;
-
-        // 浮动 Tab 重新置顶
-        if let Some(ref floating) = *self.tabs.floating_tab.lock().await {
-            let _ = floating.webview.reparent(&self.window);
-        }
+        self.raise_floating_tab().await;
 
         self.emit(None).await?;
         Ok(())
@@ -403,11 +408,7 @@ impl Browser {
         if !label.is_empty() {
             self.tabs.top(&label).await?;
         }
-
-        // 浮动 Tab 重新置顶（top 内已补，此处兜底 mainview reparent 路径）
-        if let Some(ref floating) = *self.tabs.floating_tab.lock().await {
-            let _ = floating.webview.reparent(&self.window);
-        }
+        self.raise_floating_tab().await;
 
         self.emit(None).await?;
         Ok(())
