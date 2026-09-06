@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr, string::FromUtf8Error};
 
-use crate::api::{HttpHeader, HttpResponse};
+use crate::api::HttpResponse;
 use dioxus::{logger::tracing::error, prelude::*};
 use encoding::{
     DecoderTrap, Encoding,
@@ -21,18 +21,14 @@ pub fn ResponseView(resp: ReadSignal<HttpResponse>) -> Element {
         elapsed_time,
     } = resp();
 
-    let mut header_map = HashMap::new();
-    for HttpHeader { key, value } in headers.into_iter() {
-        header_map.insert(key, value);
-    }
+    let header_map: HashMap<String, String> =
+        headers.into_iter().map(|h| (h.key, h.value)).collect();
 
     let status = StatusCode::try_from(status).unwrap_or_default();
 
     let content_type = header_map
         .get("content-type")
-        .map(|c| Mime::from_str(c))
-        .transpose()
-        .unwrap_or(None);
+        .and_then(|c| Mime::from_str(c).ok());
 
     rsx! {
         Stat { status, elapsed_time, done_date }
@@ -196,15 +192,13 @@ fn Stat(status: StatusCode, elapsed_time: i32, done_date: OffsetDateTime) -> Ele
 
 fn decode(text: Vec<u8>, charset: &str) -> Result<String, FromUtf8Error> {
     const TRAP: DecoderTrap = DecoderTrap::Strict;
-    let result = match charset {
+    match charset {
         "ascii" => ASCII.decode(&text, TRAP),
         "gb18030" => GB18030.decode(&text, TRAP),
         "gbk" => GBK.decode(&text, TRAP),
         "iso-8859-1" => ISO_8859_1.decode(&text, TRAP),
         _ => UTF_8.decode(&text, TRAP),
-    };
-
-    result
-        .inspect_err(|e| error!("{e}"))
-        .or(String::from_utf8(text))
+    }
+    .inspect_err(|e| error!("{e}"))
+    .or(String::from_utf8(text))
 }

@@ -171,7 +171,6 @@ impl Browser {
             self.open_floating_tab(url).await?;
             return Ok(());
         }
-
         self.open_tab_regular(url).await
     }
 
@@ -188,13 +187,10 @@ impl Browser {
             self.emit(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(&pool, id).await {
-                log::error!("刷新浏览记录 last_time 失败: {e}");
+                log::error!("刷新浏览记录 last_time 失败：{e}");
             }
         } else {
-            let label = self
-                .tabs
-                .create_tab(url, self.incognito.get().await)
-                .await?;
+            let label = self.tabs.create_tab(url, incognito).await?;
             let mut state = self.get_state(None).await?;
             state.url = url.to_string();
             self.emit(Some(state.clone())).await?;
@@ -207,7 +203,7 @@ impl Browser {
         }
 
         self.focus_changed().await?;
-        self.raise_floating_tab().await;
+        self.tabs.raise_floating_tab().await;
         Ok(())
     }
 
@@ -219,21 +215,18 @@ impl Browser {
             return Ok(());
         }
 
+        let pool = self.db.get().await;
         let incognito = self.incognito.get().await;
         self.is_focused.set(false).await;
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
             self.tabs.go_to(&label, index).await;
             self.tabs.switch_tab(&label).await?;
             self.emit(None).await?;
-            // 已打开的 tab 也刷新对应浏览记录的 last_time
-            if let Err(e) = touch_log(self.db.get().await.as_ref(), id).await {
-                log::error!("刷新浏览记录 last_time 失败: {e}");
+            if let Err(e) = touch_log(pool.as_ref(), id).await {
+                log::error!("刷新浏览记录 last_time 失败：{e}");
             }
-        } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
-            let label = self
-                .tabs
-                .create_tab(&Url::parse(&url)?, self.incognito.get().await)
-                .await?;
+        } else if let Some(url) = get_url(pool.as_ref(), id).await {
+            let label = self.tabs.create_tab(&Url::parse(&url)?, incognito).await?;
             let mut state = self.get_state(None).await?;
             state.url = url.clone();
             self.emit(Some(state.clone())).await?;
@@ -244,7 +237,7 @@ impl Browser {
         }
 
         self.focus_changed().await?;
-        self.raise_floating_tab().await;
+        self.tabs.raise_floating_tab().await;
         Ok(())
     }
 
@@ -262,13 +255,6 @@ impl Browser {
         }
 
         self.tabs.near_tab().await
-    }
-
-    /// 将现有浮动 Tab 重新置顶（常规 Tab 创建/切换后可能覆盖它）
-    pub(crate) async fn raise_floating_tab(&self) {
-        if let Some(ref floating) = *self.tabs.floating_tab.lock().await {
-            let _ = floating.webview.reparent(&self.window);
-        }
     }
 
     /// 打开浮动 Tab：关闭已有 → 创建 webview（同窗口 add_child）→ 注入 JS 控制栏
@@ -376,15 +362,13 @@ impl Browser {
     pub async fn maximize(&self) -> Result<(), StateError> {
         self.window.maximize()?;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn unmaximize(&self) -> Result<(), StateError> {
         self.window.unmaximize()?;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn focus(&self) -> Result<(), StateError> {
@@ -393,10 +377,9 @@ impl Browser {
         }
 
         self.mainview.reparent(&self.window)?;
-        self.raise_floating_tab().await;
+        self.tabs.raise_floating_tab().await;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn blur(&self) -> Result<(), StateError> {
@@ -408,10 +391,9 @@ impl Browser {
         if !label.is_empty() {
             self.tabs.top(&label).await?;
         }
-        self.raise_floating_tab().await;
+        self.tabs.raise_floating_tab().await;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn back(&self) -> Result<(), StateError> {
@@ -521,7 +503,7 @@ impl Browser {
             .tabs
             .get_state(the_label.unwrap_or(label.as_str()))
             .await
-            .unwrap_or(BrowserState::default());
+            .unwrap_or_default();
 
         state.maximized = self.window.is_maximized()?;
         state.focus = self.is_focused.get().await;
@@ -552,8 +534,7 @@ impl Browser {
     pub async fn leave_picture_in_picture(&self, label: &str) -> Result<(), StateError> {
         self.blur().await?;
         self.tabs.switch_tab(label).await?;
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn focus_link(&self, url: String) -> Result<(), StateError> {
@@ -594,10 +575,10 @@ impl Browser {
             async_runtime::spawn(async move {
                 if enable {
                     if let Err(e) = delete_blacklist(&pool, &host).await {
-                        error!("删除 darkreader 黑名单 {host} 失败: {e}");
+                        error!("删除 darkreader 黑名单 {host} 失败：{e}");
                     }
                 } else if let Err(e) = save_blacklist(&pool, &host).await {
-                    error!("保存 darkreader 黑名单 {host} 失败: {e}");
+                    error!("保存 darkreader 黑名单 {host} 失败：{e}");
                 }
             });
         }
@@ -612,7 +593,6 @@ impl Browser {
         self.tabs.print().await
     }
 
-    /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
         let mut last_focus_changed = self.last_focus_changed.lock().await;
         if last_focus_changed.elapsed().as_millis() < 150 {
@@ -630,7 +610,6 @@ impl Browser {
         Ok(true)
     }
 
-    /// 根据系统主题更新窗口和 webview 背景色
     pub async fn update_theme(&self, theme: Theme) {
         let is_dark = matches!(theme, Theme::Dark);
         let bg = bg_color(is_dark);
@@ -669,15 +648,12 @@ impl Browser {
 
     /// 发射状态到主视图（TabService 经此通知 UI，发射与图标查询收敛于此）
     pub(crate) async fn emit(&self, state: Option<BrowserState>) -> Result<(), StateError> {
-        let mut state = if let Some(state) = state {
-            state
-        } else {
-            self.get_state(None).await?
+        let mut state = match state {
+            Some(state) => state,
+            None => self.get_state(None).await?,
         };
 
-        // 在 emit 之前查询 icon 而不影响 state 原始数据
         if state.icon_url.is_empty()
-            && !state.url.is_empty()
             && state.url.starts_with("http")
             && let Some(data_url) = self.get_cached_icon(&state.url).await
         {

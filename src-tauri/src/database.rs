@@ -37,13 +37,11 @@ impl Database {
             sqlx::migrate!("../migrations").run(&pool).await
         {
             let migrator = sqlx::migrate!("../migrations");
-            if let Some(checksum) = migrator.iter().find_map(|m| {
-                if m.version == version {
-                    Some(m.checksum.clone())
-                } else {
-                    None
-                }
-            }) {
+            if let Some(checksum) = migrator
+                .iter()
+                .find(|m| m.version == version)
+                .map(|m| m.checksum.clone())
+            {
                 // 99999999999999_insert_public_suffix.sql 动态脚本
                 if let Err(e) =
                     sqlx::query("update _sqlx_migrations set checksum = ? where version = ?")
@@ -52,7 +50,7 @@ impl Database {
                         .execute(&pool)
                         .await
                 {
-                    error!("重置 sqlx migrations 失败: {e}");
+                    error!("重置 sqlx migrations 失败：{e}");
                 }
             }
             migrator.run(&pool).await?;

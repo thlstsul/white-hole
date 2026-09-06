@@ -13,8 +13,7 @@ use crate::{
 
 #[command]
 pub async fn minimize(window: Window) -> Result<(), FrameworkError> {
-    window.minimize()?;
-    Ok(())
+    Ok(window.minimize()?)
 }
 
 #[command]
@@ -56,14 +55,12 @@ pub async fn start_dragging(
 
 #[command]
 pub async fn focus(browser: State<'_, Browser>) -> Result<(), StateError> {
-    browser.focus().await?;
-    Ok(())
+    browser.focus().await
 }
 
 #[command]
 pub async fn blur(browser: State<'_, Browser>) -> Result<(), StateError> {
-    browser.blur().await?;
-    Ok(())
+    browser.blur().await
 }
 
 #[command]
@@ -76,14 +73,12 @@ pub async fn search(browser: State<'_, Browser>, keyword: String) -> Result<(), 
     let Some(url) = browser.parse_keyword(&keyword).await else {
         return Ok(());
     };
-    browser.open_tab_by_url(&url, true).await?;
-    Ok(())
+    browser.open_tab_by_url(&url, true).await
 }
 
 #[command]
 pub async fn open_tab(browser: State<'_, Browser>, id: i64) -> Result<(), TabError> {
-    browser.open_tab(id).await?;
-    Ok(())
+    browser.open_tab(id).await
 }
 
 #[command]
@@ -193,8 +188,7 @@ pub async fn fullscreen_changed(
         "{} webview fullscreen changed: {is_fullscreen}",
         webview.label()
     );
-    browser.fullscreen_changed(is_fullscreen).await?;
-    Ok(())
+    browser.fullscreen_changed(is_fullscreen).await
 }
 
 #[command]

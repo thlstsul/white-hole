@@ -24,14 +24,12 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
         return Url::parse(&format!("file:///{input}")).ok();
     }
 
-    // 1. 尝试直接解析为URL
     if let Ok(url) = Url::parse(input)
         && ALLOWED_SCHEMES.contains(&url.scheme())
     {
         return Some(url);
     }
 
-    // 3. 尝试补全协议并解析URL
     let Ok(mut url) = Url::parse(&format!("https://{}", input)) else {
         return complete_search_url(input);
     };
@@ -40,7 +38,6 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
         return complete_search_url(input);
     };
     let Host::Domain(host) = host else {
-        // ip host
         let _ = url.set_scheme("http");
         return Some(url);
     };
@@ -61,7 +58,6 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
         return Some(url);
     }
 
-    // 5. 其他情况视为搜索
     complete_search_url(input)
 }
 

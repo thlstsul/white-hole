@@ -116,7 +116,6 @@
     }
 
     let iconUrl = "/favicon.ico";
-    // 检查link标签
     const link = document.head.querySelector(
       'link[rel="shortcut icon"],link[rel="icon shortcut"],link[rel="icon"]',
     );

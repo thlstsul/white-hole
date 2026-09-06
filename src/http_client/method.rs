@@ -11,19 +11,11 @@ pub fn MethodSelect(#[props(default)] class: String, value: Signal<String>) -> E
             },
 
             for method in METHODS {
-                if *method == value() {
-                    option {
-                        value: *method,
-                        selected: true,
-                        class: "bg-base-100 text-base-content",
-                        "{method}"
-                    }
-                } else {
-                    option {
-                        value: *method,
-                        class: "bg-base-100 text-base-content",
-                        "{method}"
-                    }
+                option {
+                    value: *method,
+                    selected: *method == value(),
+                    class: "bg-base-100 text-base-content",
+                    "{method}"
                 }
             }
         }

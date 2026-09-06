@@ -12,7 +12,6 @@ pub trait Paginator: Sized {
 }
 
 impl Paginator for PageToken {
-    /// 多取一条数据
     fn as_limit_sql(&self) -> String {
         format!("LIMIT {} OFFSET {}", self.limit + 1, self.offset)
     }

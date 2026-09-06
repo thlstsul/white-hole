@@ -15,11 +15,11 @@ type HandlerFn<R> = Box<dyn Fn(AppHandle<R>) + Send + Sync + 'static>;
 pub fn init() -> TauriPlugin<Wry> {
     tauri::plugin::Builder::new("hotkey-manager")
         .setup(move |app, _api| {
-            let mut mamager = HotkeyManager::new(app.clone());
+            let mut manager = HotkeyManager::new(app.clone());
             for factory in inventory::iter::<&dyn HotkeyRegistrar> {
-                mamager = factory.register(mamager);
+                manager = factory.register(manager);
             }
-            app.manage(mamager);
+            app.manage(manager);
             Ok(())
         })
         .build()
@@ -72,7 +72,7 @@ impl<R: Runtime> HotkeyManager<R> {
             .hotkeys
             .insert_sync(hotkey, Arc::new(Box::new(callback)))
         {
-            error!("注册快捷键 {:?} 失败", k);
+            error!("注册快捷键 {k:?} 失败");
         }
     }
 
@@ -83,7 +83,6 @@ impl<R: Runtime> HotkeyManager<R> {
     pub fn handle_key_event(&self, key: Code, state: KeyState) {
         if state == KeyState::Down {
             if self.pressed_keys.insert_sync(key).is_ok() {
-                // 键按下时检查快捷键
                 self.check_hotkeys();
             }
         } else {
@@ -132,12 +131,7 @@ pub struct Hotkey {
 impl Hotkey {
     /// Creates a new hotkey to define keyboard shortcuts throughout your application.
     /// Only [`Modifiers::ALT`], [`Modifiers::SHIFT`], [`Modifiers::CONTROL`], and [`Modifiers::META`]
-    pub fn new(mut mods: Modifiers, key: Code) -> Self {
-        if mods.contains(Modifiers::META) {
-            mods.remove(Modifiers::META);
-            mods.insert(Modifiers::META);
-        }
-
+    pub fn new(mods: Modifiers, key: Code) -> Self {
         Self { mods, key }
     }
 
@@ -154,17 +148,15 @@ impl Hotkey {
     /// Converts this hotkey into a string.
     pub fn into_string(self) -> String {
         let mut hotkey = String::new();
-        if self.mods.contains(Modifiers::SHIFT) {
-            hotkey.push_str("shift+")
-        }
-        if self.mods.contains(Modifiers::CONTROL) {
-            hotkey.push_str("control+")
-        }
-        if self.mods.contains(Modifiers::ALT) {
-            hotkey.push_str("alt+")
-        }
-        if self.mods.contains(Modifiers::META) {
-            hotkey.push_str("super+")
+        for (m, s) in [
+            (Modifiers::SHIFT, "shift+"),
+            (Modifiers::CONTROL, "control+"),
+            (Modifiers::ALT, "alt+"),
+            (Modifiers::META, "super+"),
+        ] {
+            if self.mods.contains(m) {
+                hotkey.push_str(s);
+            }
         }
         hotkey.push_str(&self.key.to_string());
         hotkey
@@ -228,65 +220,38 @@ fn match_hotkey(pressed_keys: &HashSet<Code>) -> Option<Hotkey> {
 }
 
 fn parse_hotkey(hotkey: &str) -> Result<Hotkey, HotkeyParseError> {
-    let tokens = hotkey.split('+').collect::<Vec<&str>>();
-
     let mut mods = Modifiers::empty();
     let mut key = None;
 
-    match tokens.len() {
-        // single key hotkey
-        1 => {
-            key = Some(parse_key(tokens[0])?);
+    for raw in hotkey.split('+') {
+        let token = raw.trim();
+
+        if token.is_empty() {
+            return Err(HotkeyParseError::EmptyToken {
+                hotkey: hotkey.to_string(),
+            });
         }
-        // modifiers and key comobo hotkey
-        _ => {
-            for raw in tokens {
-                let token = raw.trim();
 
-                if token.is_empty() {
-                    return Err(HotkeyParseError::EmptyToken {
-                        hotkey: hotkey.to_string(),
-                    });
-                }
+        if key.is_some() {
+            return Err(HotkeyParseError::InvalidFormat {
+                hotkey: hotkey.to_string(),
+            });
+        }
 
-                if key.is_some() {
-                    // At this point we have parsed the modifiers and a main key, so by reaching
-                    // this code, the function either received more than one main key or
-                    //  the hotkey is not in the right order
-                    // examples:
-                    // 1. "Ctrl+Shift+C+A" => only one main key should be allowd.
-                    // 2. "Ctrl+C+Shift" => wrong order
-                    return Err(HotkeyParseError::InvalidFormat {
-                        hotkey: hotkey.to_string(),
-                    });
-                }
-
-                match token.to_uppercase().as_str() {
-                    "OPTION" | "ALT" => {
-                        mods |= Modifiers::ALT;
-                    }
-                    "CONTROL" | "CTRL" => {
-                        mods |= Modifiers::CONTROL;
-                    }
-                    "COMMAND" | "CMD" | "META" => {
-                        mods |= Modifiers::META;
-                    }
-                    "SHIFT" => {
-                        mods |= Modifiers::SHIFT;
-                    }
-                    #[cfg(target_os = "macos")]
-                    "COMMANDORCONTROL" | "COMMANDORCTRL" | "CMDORCTRL" | "CMDORCONTROL" => {
-                        mods |= Modifiers::META;
-                    }
-                    #[cfg(not(target_os = "macos"))]
-                    "COMMANDORCONTROL" | "COMMANDORCTRL" | "CMDORCTRL" | "CMDORCONTROL" => {
-                        mods |= Modifiers::CONTROL;
-                    }
-                    _ => {
-                        key = Some(parse_key(token)?);
-                    }
-                }
+        match token.to_uppercase().as_str() {
+            "OPTION" | "ALT" => mods |= Modifiers::ALT,
+            "CONTROL" | "CTRL" => mods |= Modifiers::CONTROL,
+            "COMMAND" | "CMD" | "META" => mods |= Modifiers::META,
+            "SHIFT" => mods |= Modifiers::SHIFT,
+            #[cfg(target_os = "macos")]
+            "COMMANDORCONTROL" | "COMMANDORCTRL" | "CMDORCTRL" | "CMDORCONTROL" => {
+                mods |= Modifiers::META;
             }
+            #[cfg(not(target_os = "macos"))]
+            "COMMANDORCONTROL" | "COMMANDORCTRL" | "CMDORCTRL" | "CMDORCONTROL" => {
+                mods |= Modifiers::CONTROL;
+            }
+            _ => key = Some(parse_key(token)?),
         }
     }
 

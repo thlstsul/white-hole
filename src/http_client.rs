@@ -20,10 +20,8 @@ pub fn HttpClient() -> Element {
     let uri_value = use_signal(String::new);
     let body_value = use_signal(String::new);
     let header_value = use_store(Vec::new);
-    let body_editable = use_memo(move || {
-        let method = method_value();
-        "PATCH" == method || "POST" == method || "PUT" == method
-    });
+    let body_editable =
+        use_memo(move || matches!(method_value().as_str(), "PATCH" | "POST" | "PUT"));
     let mut begin = use_signal(|| false);
 
     let mut resp = use_action(move |req| async move { fetch(req).await });

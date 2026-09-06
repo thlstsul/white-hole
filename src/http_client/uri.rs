@@ -13,10 +13,11 @@ pub fn UriInput(#[props(default)] class: String, value: Signal<String>) -> Eleme
             },
             onfocusout: move |_| {
                 let mut input = value.write();
-                if !input.is_empty() && !input.starts_with("http://")
+                if !input.is_empty()
+                    && !input.starts_with("http://")
                     && !input.starts_with("https://")
                 {
-                    *input = format!("http://{}", *input);
+                    input.insert_str(0, "http://");
                 }
             },
         }

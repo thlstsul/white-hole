@@ -178,29 +178,34 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
         let event = event.clone();
 
         async move {
-            if let WindowEvent::Destroyed = event
-                && let Err(e) = window.app_handle().save_window_state(StateFlags::all())
-            {
-                error!("保存窗口状态失败：{e}");
-            } else if let WindowEvent::Resized(_) = event {
-                let browser = window.browser();
-                if let Err(e) = browser.resize().await {
-                    error!("重置浏览器大小失败：{e}");
+            match event {
+                WindowEvent::Destroyed => {
+                    if let Err(e) = window.app_handle().save_window_state(StateFlags::all()) {
+                        error!("保存窗口状态失败：{e}");
+                    }
                 }
-            } else if let WindowEvent::Focused(true) = event {
-                // Webview::set_focus 后，会触发 WindowEvent::Focused 事件；所以 focus_changed 做了防抖
-                let browser = window.browser();
-                if let Err(e) = browser.focus_changed().await {
-                    error!("聚焦变更失败：{e}");
+                WindowEvent::Resized(_) => {
+                    let browser = window.browser();
+                    if let Err(e) = browser.resize().await {
+                        error!("重置浏览器大小失败：{e}");
+                    }
                 }
-            } else if let WindowEvent::Focused(false) = event {
-                // 窗口重新失焦时，清空残留已按下按键
-                // TODO 目前只发现跨域时也会触发，原因未知
-                let hotkey = window.hotkey();
-                hotkey.clear_pressed();
-            } else if let WindowEvent::ThemeChanged(theme) = event {
-                let browser = window.browser();
-                browser.update_theme(theme).await;
+                WindowEvent::Focused(true) => {
+                    // Webview::set_focus 后，会触发 WindowEvent::Focused 事件；所以 focus_changed 做了防抖
+                    let browser = window.browser();
+                    if let Err(e) = browser.focus_changed().await {
+                        error!("聚焦变更失败：{e}");
+                    }
+                }
+                WindowEvent::Focused(false) => {
+                    // 窗口重新失焦时，清空残留已按下按键
+                    // TODO 目前只发现跨域时也会触发，原因未知
+                    window.hotkey().clear_pressed();
+                }
+                WindowEvent::ThemeChanged(theme) => {
+                    window.browser().update_theme(theme).await;
+                }
+                _ => {}
             }
         }
     });
@@ -238,11 +243,8 @@ fn setup_log<R: Runtime>() -> TauriPlugin<R> {
                 Target::new(TargetKind::Webview),
             ])
             .format(move |out, message, record| {
-                // 获取当前时间并格式化为字符串
                 let now = TimezoneStrategy::UseLocal.get_now();
                 let now = now.format(time_format).unwrap_or_default().dimmed();
-
-                // 创建带颜色的日志级别显示
                 let level_colored = level_colors.color(record.level());
 
                 let location = if let (Some(file), Some(line)) = (record.file(), record.line()) {
@@ -269,7 +271,6 @@ fn setup_log<R: Runtime>() -> TauriPlugin<R> {
                 Target::new(TargetKind::Webview),
             ])
             .format(move |out, message, record| {
-                // 获取当前时间并格式化为字符串
                 let now = TimezoneStrategy::UseLocal.get_now();
                 let now = now.format(time_format).unwrap_or_default();
 

@@ -79,7 +79,7 @@ pub async fn save_log(
 
             async move {
                 if let Err(e) = builder.build().execute(&pool).await {
-                    error!("更新浏览日志失败: {e}")
+                    error!("更新浏览日志失败：{e}")
                 }
             }
         });
@@ -173,15 +173,15 @@ pub async fn touch_log(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
         id
     )
     .execute(pool)
-    .await?;
-    Ok(())
+    .await
+    .map(|_| ())
 }
 
 pub async fn update_log_star(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
     sqlx::query!("update navigation_log set star = not star where id = ?", id)
         .execute(pool)
-        .await?;
-    Ok(())
+        .await
+        .map(|_| ())
 }
 
 #[allow(dead_code)]
@@ -198,17 +198,14 @@ pub async fn query_log_by_id(
     }
     separated.push_unseparated(") ");
 
-    let record = query_builder.build_query_as().fetch_all(pool).await?;
-
-    Ok(record)
+    query_builder.build_query_as().fetch_all(pool).await
 }
 
 pub async fn clear_log(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    // 清理跳转的URL记录
     sqlx::query!("delete from navigation_log where url = title or title is null or title = ''")
         .execute(pool)
-        .await?;
-    Ok(())
+        .await
+        .map(|_| ())
 }
 
 impl From<BrowserState> for NavigationLog {

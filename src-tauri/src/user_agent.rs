@@ -10,7 +10,7 @@ pub fn setup_user_agent() {
             USER_AGENT,
             UserAgentPlatform::default()
                 .to_user_agent_string()
-                .to_string(),
+                .into_owned(),
         );
     }
 }

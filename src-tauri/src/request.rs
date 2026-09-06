@@ -77,13 +77,9 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
     let headers = raw_response
         .headers()
         .iter()
-        .flat_map(|(key, value)| {
-            // 头值可能不是合法 UTF-8
-            let value_str = value.to_str().unwrap_or("...").to_string();
-            std::iter::once(HttpHeader {
-                key: key.as_str().to_string(),
-                value: value_str,
-            })
+        .map(|(key, value)| HttpHeader {
+            key: key.as_str().to_string(),
+            value: value.to_str().unwrap_or("...").to_string(),
         })
         .collect();
 

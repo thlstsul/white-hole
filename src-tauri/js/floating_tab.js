@@ -1,9 +1,6 @@
-// 浮动 Tab 注入脚本：标题栏 + 控制按钮
-// 由 Browser::open_floating_tab 通过 initialization_script 注入
 (function () {
   if (window.self !== window.top) return;
 
-  // —— 注入样式（跟随系统主题） ——
   var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   var iconColor = prefersDark ? "#e0e0e0" : "#1a1a1a";
   var style = document.createElement("style");
@@ -109,7 +106,6 @@
     "body { margin-top: 0 !important; }" +
     "[id], [name], a[href] { scroll-margin-top: var(--ft-body-offset, 48px) !important; }";
 
-  // —— 注入标题栏 DOM ——
   var bar = document.createElement("div");
   bar.id = "floating-tab-bar";
   bar.innerHTML =
@@ -123,7 +119,6 @@
     "  </button>" +
     "</div>";
 
-  // —— 工具函数 ——
   function ipc(cmd) {
     window.__TAURI_INTERNALS__
       .invoke(cmd, {}, { donotUseCustomProtocol: true })
@@ -209,7 +204,6 @@
     }
   }
 
-  // —— 按钮事件 ——
   bar.querySelector(".ft-promote").addEventListener("click", function (e) {
     e.stopPropagation();
     ipc("promote_floating_tab");
@@ -278,7 +272,6 @@
     ipc("close_floating_tab");
   });
 
-  // —— 注入时机 ——
   function inject() {
     if (document.getElementById("floating-tab-bar")) return;
     // 网页加载失败时 document.body 可能不存在，fallback 到 documentElement
@@ -315,7 +308,6 @@
     inject();
   }
 
-  // —— Esc 关闭浮动 Tab（FT-16）——
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") {
       e.stopPropagation();

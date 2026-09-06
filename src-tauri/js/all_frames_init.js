@@ -17,7 +17,6 @@
         mutations.forEach(function (mutation) {
           mutation.addedNodes.forEach(function (node) {
             if (node.nodeType === 1) {
-              // 元素节点
               if (node.tagName === "A") {
                 addListener2Link(node);
               } else if (node.tagName === "VIDEO") {

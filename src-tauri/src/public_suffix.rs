@@ -27,17 +27,15 @@ pub async fn sync_public_suffix(pool: &SqlitePool) -> Result<(), SyncPublicSuffi
 
 pub async fn get_public_suffix(pool: &SqlitePool, must_today: bool) -> Result<String, sqlx::Error> {
     if must_today {
-        sqlx::query!(
+        sqlx::query_scalar!(
             "select content from public_suffix_list where create_time > date('now', 'localtime') limit 1"
         )
         .fetch_one(pool)
         .await
-        .map(|row| row.content)
     } else {
-        sqlx::query!("select content from public_suffix_list limit 1")
+        sqlx::query_scalar!("select content from public_suffix_list limit 1")
             .fetch_one(pool)
             .await
-            .map(|row| row.content)
     }
 }
 

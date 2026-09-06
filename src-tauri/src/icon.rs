@@ -68,8 +68,7 @@ pub async fn get_cached_icon(pool: &SqlitePool, url: &str) -> Option<String> {
 }
 
 pub async fn save_icon(pool: &SqlitePool, url: &str) -> Result<i64, sqlx::Error> {
-    let id = get_id(pool, url).await;
-    if let Some(id) = id {
+    if let Some(id) = get_id(pool, url).await {
         return Ok(id);
     }
 
@@ -83,8 +82,8 @@ pub async fn save_icon(pool: &SqlitePool, url: &str) -> Result<i64, sqlx::Error>
 pub async fn clear_icon(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query!("delete from icon_cached where not exists (select 1 from navigation_log where icon_id = icon_cached.id)")
         .execute(pool)
-        .await?;
-    Ok(())
+        .await
+        .map(|_| ())
 }
 
 async fn upsert_data_url(
