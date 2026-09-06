@@ -1,0 +1,35 @@
+src-tauri/src/browser.rs
+  s_f7ae5c8440120c::t_97c834cc73324c 411
+  s_f7ae5c8440120c::t_f1dd849d610113 247
+  s_f7ae5c8440120c::t_dd0dd99df07b89 268
+  s_f7ae5c8440120c::t_640f7f636a4350 396
+  s_f7ae5c8440120c::t_65b2566787a606 210
+  s_f7ae5c8440120c::t_b49f4b7947684a 267,269-273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "a75fb6ca1a457ed70757d972523feab50c107e95",
+  "prompts": {},
+  "sessions": {
+    "s_f7ae5c8440120c": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9c448ab1d5ceccf5a714d3",
+        "model": "kimi-k2.7-code__dev"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "tool_name": "Edit",
+        "runtime_client": "trae-tob-git-ai",
+        "operation_id": "6a9c46dab1d5ceccf5a715d1",
+        "source_scene": "agent",
+        "session_id": "6a9c448ab1d5ceccf5a714d3",
+        "edit_kind": "file_edit",
+        "client_type": "ide",
+        "external_session_id": "6a9c448ab1d5ceccf5a714d3",
+        "tool_use_id": "6a9c46dab1d5ceccf5a715d1"
+      }
+    }
+  }
+}
