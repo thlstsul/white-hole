@@ -1,0 +1,168 @@
+src/api.rs
+  s_c912d26a400285::t_f0f518ac1ac8f4 201-203
+  s_c912d26a400285::t_901f334649b1c1 199-200
+  s_c912d26a400285::t_3423ca332d26be 204
+src-tauri/src/task.rs
+  s_c912d26a400285::t_731fca83c76b8d 26
+  s_c912d26a400285::t_7aa3df19a8d9cd 45
+  s_c912d26a400285::t_b06b9f7e9ac10b 7-11
+src/http_client/uri.rs
+  s_c912d26a400285::t_3ed57166bf7c1d 16-17,20
+src/http_client/method.rs
+  s_c912d26a400285::t_7db3e959f3b22c 14-18
+hotkey/src/lib.rs
+  s_c912d26a400285::t_9782a54ed81f6e 134
+  s_c912d26a400285::t_f8300413652490 18,20,22
+  s_c912d26a400285::t_46f7735f05a375 75
+  s_c912d26a400285::t_aa411313a895fa 151-159
+  s_c912d26a400285::t_757f74014536f8 226-238,240-252,254
+src-tauri/src/icon.rs
+  s_c912d26a400285::t_45bdbd95386907 71,85-86
+src-tauri/src/browser.rs
+  s_c912d26a400285::t_d703ea257f1079 371
+  s_c912d26a400285::t_6a609cd44a63e2 506
+  s_c912d26a400285::t_7c3aedf2e08f91 537
+  s_c912d26a400285::t_ed98f5ad4f491e 365
+  s_c912d26a400285::t_8236d00c7b76fd 382
+  s_c912d26a400285::t_24662801ed5360 190,226
+  s_c912d26a400285::t_c79fafaeea1a09 396
+  s_c912d26a400285::t_becf23f45bf47a 578
+  s_c912d26a400285::t_5bacab69395752 206,240,380,394
+  s_c912d26a400285::t_0f6149e657071d 218,225,228-229
+  s_c912d26a400285::t_f1a33ec6126062 581
+  s_c912d26a400285::t_2b37a7993b0a88 193
+  s_c912d26a400285::t_4149e3b40fd918 651-653
+src-tauri/src/tab_service.rs
+  s_c912d26a400285::t_27b68e066c03a6 345-346,348-350
+  s_c912d26a400285::t_c9d237d83699fe 722
+  s_c912d26a400285::t_1f8c695ce70dbb 701
+  s_c912d26a400285::t_d68be69e3c9863 212
+  s_c912d26a400285::t_1805b611c82143 179
+  s_c912d26a400285::t_3fd3de9900009c 340
+  s_c912d26a400285::t_8f73d064f8dfab 131-140
+  s_c912d26a400285::t_340bbbb319249e 598
+  s_c912d26a400285::t_5af30a0e1cdd86 354-357
+  s_c912d26a400285::t_7d678cc82d51ae 434-437
+  s_c912d26a400285::t_16c2bf34e17692 524
+  s_c912d26a400285::t_519432d7468eb3 461-464
+  s_c912d26a400285::t_c8d0314d3c9be4 209-211,213-220
+  s_c912d26a400285::t_70ed7bbc83df12 561
+  s_c912d26a400285::t_402421754186fa 712
+  s_c912d26a400285::t_b018b58b1d2464 729
+  s_c912d26a400285::t_d4df848d90bd21 313
+  s_c912d26a400285::t_84bcebefd4c0a2 176-178
+  s_c912d26a400285::t_387206ec66e63a 180-182
+src-tauri/src/clipboard.rs
+  s_c912d26a400285::t_a4086c8be8e080 781
+  s_c912d26a400285::t_397dc689d72081 845
+src/app.rs
+  s_c912d26a400285::t_a0820338dd6d01 60
+src-tauri/src/log.rs
+  s_c912d26a400285::t_d417f2c9a313ea 201,207-208
+  s_c912d26a400285::t_c4fdcaf3a5c1c0 82
+  s_c912d26a400285::t_6f60cec947ad9e 176-177,183-184
+src-tauri/src/hotkey.rs
+  s_c912d26a400285::t_fe2380e1670dea 57
+  s_c912d26a400285::t_a74816e0b4a498 90
+build.rs
+  s_c912d26a400285::t_feafad441b62de 34
+  s_c912d26a400285::t_1207f060c133b5 87-88
+src-tauri/build.rs
+  s_c912d26a400285::t_e15f7ca921a780 51
+src-tauri/src/tray.rs
+  s_c912d26a400285::t_431962d9eb602b 277-280
+  s_c912d26a400285::t_3ecdbba1bead84 483-490,493-496
+src-tauri/src/request.rs
+  s_c912d26a400285::t_b31bd514f5020b 80-82
+src-tauri/src/lib.rs
+  s_c912d26a400285::t_138bf0db39a5e3 181-198,200-203,205-208
+src-tauri/src/public_suffix.rs
+  s_c912d26a400285::t_c4fe6c21bc533a 30,36
+src/title_bar.rs
+  s_c912d26a400285::t_35fcbba81cb32a 66,69-70,73
+src-tauri/src/command.rs
+  s_c912d26a400285::t_f0d35cb6364e0a 58
+  s_c912d26a400285::t_b3442e07772a0d 16
+  s_c912d26a400285::t_14328e3081f992 81
+src-tauri/src/tab.rs
+  s_c912d26a400285::t_b554cb8b5d8f90 905,910,921
+  s_c912d26a400285::t_a61a5959d19e2c 137
+  s_1e1d4ab52b3c98::t_9e977a4c7e9e03 225-227,237-238,252-253
+  s_c912d26a400285::t_e119b6622efef7 541-543
+  s_c912d26a400285::t_f8560f263f587c 900-901,904,906,908-909,911-913,917-918,922,924
+  s_c912d26a400285::t_e41d1209d6a4cd 496-497,499-501
+  s_1e1d4ab52b3c98::t_cd755dd9ddb10a 224
+  s_1e1d4ab52b3c98::t_8a236a21080422 228-229
+  s_1e1d4ab52b3c98::t_ce0f2ab0eb5c72 239-240
+  s_1e1d4ab52b3c98::t_caf2f54dc65e44 254-255
+src-tauri/src/state.rs
+  s_c912d26a400285::t_010b2536f816c5 50-51,55
+src-tauri/src/darkreader.rs
+  s_c912d26a400285::t_b2b106642609e9 30
+src-tauri/src/database.rs
+  s_c912d26a400285::t_70bb9f71e04ee2 40-44
+  s_c912d26a400285::t_b4c8a391cc0634 53
+src/http_client/response.rs
+  s_c912d26a400285::t_260889ecd3d0f5 24-25,31
+  s_c912d26a400285::t_99d5e1e75c4ad9 3
+  s_c912d26a400285::t_69140d7865c755 195,201-203
+hotkey-macros/src/lib.rs
+  s_c912d26a400285::t_c0dfe80162b2ae 57,68
+src/url.rs
+  s_c912d26a400285::t_9658b886b72520 137-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "ecf57628547aa7947005f86410409ab95acb6e44",
+  "prompts": {},
+  "humans": {
+    "h_97445c73a495c5": {
+      "author": "THELOSTSOUL <1095533751@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_1e1d4ab52b3c98": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9962e32ca70b1eef93188c",
+        "model": "DeepSeek-V4-Flash-Official"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "session_id": "6a9962e32ca70b1eef93188c",
+        "tool_use_id": "6a996f562ca70b1eef931a53",
+        "dedupe_key": "6a9962e32ca70b1eef93188c:6a996f562ca70b1eef931a53:afterEdit:ced2b6e9",
+        "runtime_client": "trae-tob-git-ai",
+        "edit_kind": "file_edit",
+        "operation_id": "6a996f562ca70b1eef931a53",
+        "tool_type": "builtin",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "source_scene": "agent",
+        "client_type": "ide",
+        "external_session_id": "6a9962e32ca70b1eef93188c"
+      }
+    },
+    "s_c912d26a400285": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9d9a0c51426396feabf6b7",
+        "model": "kimi-k2.7-code__dev"
+      },
+      "human_author": "THELOSTSOUL <1095533751@qq.com>",
+      "custom_attributes": {
+        "operation_id": "6a9da80851426396feabfe12",
+        "tool_id": "Edit",
+        "runtime_client": "trae-tob-git-ai",
+        "dedupe_key": "6a9d9a0c51426396feabf6b7:6a9da80851426396feabfe12:afterEdit:613b7c8a",
+        "source_scene": "unknown",
+        "tool_type": "agent",
+        "edit_kind": "file_edit",
+        "external_session_id": "6a9d9a0c51426396feabf6b7",
+        "tool_use_id": "6a9da80851426396feabfe12",
+        "client_type": "ide",
+        "session_id": "6a9d9a0c51426396feabf6b7"
+      }
+    }
+  }
+}
