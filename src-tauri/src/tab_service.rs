@@ -261,6 +261,9 @@ impl TabService {
     pub async fn close_tab(&self) -> Result<(), TabError> {
         let label = self.current.get().await;
         let map = self.current_map().await;
+        // 关闭前先定位相邻 tab：close 后该 label 已从 map 移除，
+        // 剩余 tab 为 1 个时 near() 会误判为无相邻 tab
+        let near_label = map.near(&label).await;
         map.close(&label).await?;
         self.pending_history.lock().await.clear(&label);
         // 等待该 tab 的消费者任务排空（通道已随 Tab 销毁关闭）后再返回：
@@ -269,7 +272,7 @@ impl TabService {
             let _ = handle.await;
         }
         self.current.clear().await;
-        if let Some(near_label) = map.near(&label).await {
+        if let Some(near_label) = near_label {
             self.switch_tab(&near_label).await?;
         }
         self.emit(None).await?;
