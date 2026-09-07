@@ -21,13 +21,9 @@ fn main() {
 }
 
 fn run_command_safely(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {
-    // 根据编译模式选择执行方式
     if is_release_build() {
-        // Release 模式：同步执行
         run_sync(command, args, output_file)?;
-        // 同步执行完成后自动释放锁
     } else {
-        // Debug 模式：后台执行
         spawn_detached(command, args, output_file)?;
     }
 
@@ -35,17 +31,13 @@ fn run_command_safely(command: &str, args: &[&str], output_file: Option<&str>) -
 }
 
 fn is_release_build() -> bool {
-    std::env::var("PROFILE")
-        .map(|p| p == "release")
-        .unwrap_or(false)
+    std::env::var("PROFILE").is_ok_and(|p| p == "release")
 }
 
-/// 同步执行命令
 fn run_sync(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {
     let mut cmd = Command::new(command);
     cmd.args(args);
 
-    // 处理输出重定向
     match output_file {
         Some(path) => {
             let file = File::create(path)?;
@@ -69,7 +61,6 @@ fn run_sync(command: &str, args: &[&str], output_file: Option<&str>) -> io::Resu
     Ok(())
 }
 
-/// 后台执行命令
 fn spawn_detached(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {
     if cfg!(target_os = "windows") {
         spawn_windows(command, args, output_file)
@@ -78,7 +69,6 @@ fn spawn_detached(command: &str, args: &[&str], output_file: Option<&str>) -> io
     }
 }
 
-/// Windows 后台执行
 fn spawn_windows(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {
     let mut cmd_args = vec!["/C", "start", "/B", command];
     cmd_args.extend(args);
@@ -92,18 +82,15 @@ fn spawn_windows(command: &str, args: &[&str], output_file: Option<&str>) -> io:
     Ok(())
 }
 
-/// Unix 后台执行
 fn spawn_unix(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {
-    // Convert to owned values to move into thread
     let command = command.to_owned();
-    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    let output_file = output_file.map(|s| s.to_string());
+    let args: Vec<String> = args.iter().copied().map(str::to_string).collect();
+    let output_file = output_file.map(str::to_string);
 
     thread::spawn(move || {
         let mut cmd = Command::new(&command);
         cmd.args(args.iter().map(String::as_str));
 
-        // Convert Option<String> to Option<&str> when passing to function
         if let Err(e) = handle_output_redirect(&mut cmd, output_file.as_deref()) {
             eprintln!("Output redirect failed: {}", e);
             return;
@@ -122,7 +109,6 @@ fn spawn_unix(command: &str, args: &[&str], output_file: Option<&str>) -> io::Re
     Ok(())
 }
 
-/// 处理输出重定向
 fn handle_output_redirect(cmd: &mut Command, output_file: Option<&str>) -> io::Result<()> {
     match output_file {
         Some(path) => {

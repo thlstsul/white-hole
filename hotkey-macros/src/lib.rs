@@ -5,7 +5,6 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{ExprTuple, ItemFn, parse_macro_input, punctuated::Punctuated};
 
-// 定义热键参数结构 - 支持单个热键或多个热键
 enum HotkeyArgs {
     Single {
         modifiers: Box<syn::Expr>,
@@ -19,7 +18,6 @@ enum HotkeyArgs {
 
 impl Parse for HotkeyArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // 尝试解析为数组（多个热键）
         if input.peek(syn::token::Bracket) {
             let content;
             syn::bracketed!(content in input);
@@ -32,7 +30,6 @@ impl Parse for HotkeyArgs {
 
             Ok(HotkeyArgs::Multiple { hotkeys })
         } else {
-            // 解析为单个热键
             Ok(HotkeyArgs::Single {
                 modifiers: input.parse()?,
                 _comma: input.parse()?,
@@ -44,24 +41,20 @@ impl Parse for HotkeyArgs {
 
 #[proc_macro_attribute]
 pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
-    // 解析输入函数
     let input_fn = parse_macro_input!(input as ItemFn);
 
-    // 获取原函数信息
     let vis = &input_fn.vis;
     let fn_async = input_fn.sig.asyncness.is_some();
     let fn_name = &input_fn.sig.ident;
     let wrapper_name = syn::Ident::new(&format!("_{}", fn_name), fn_name.span());
 
-    // 解析属性参数
     let args = parse_macro_input!(args as HotkeyArgs);
 
-    // 生成注册代码
     let register_calls = match args {
         HotkeyArgs::Single {
             modifiers, code, ..
         } => {
-            let call = if fn_async {
+            if fn_async {
                 quote! {
                     #vis fn #wrapper_name(app_handle: ::tauri::AppHandle) {
                         ::tauri::async_runtime::spawn(#fn_name(app_handle));
@@ -72,13 +65,11 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
                 quote! {
                     manager.register(::hotkey::Hotkey::new(#modifiers, #code), #fn_name);
                 }
-            };
-            quote! { #call }
+            }
         }
         HotkeyArgs::Multiple { hotkeys } => {
             let mut calls = Vec::new();
 
-            // 如果是异步函数，需要生成包装函数
             if fn_async {
                 calls.push(quote! {
                     #vis fn #wrapper_name(app_handle: ::tauri::AppHandle) {
@@ -115,7 +106,6 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     };
 
-    // 生成代码
     let expanded = quote! {
         #input_fn
 

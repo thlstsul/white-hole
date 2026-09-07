@@ -39,7 +39,6 @@ pub fn SearchPage() -> Element {
     });
 
     use_resource(move || async move {
-        // 自动聚焦输入框
         let focus = use_browser().focus;
         if let Some(input) = input_element() {
             let _ = input.set_focus(focus()).await;
@@ -47,7 +46,6 @@ pub fn SearchPage() -> Element {
     });
 
     use_resource(move || async move {
-        // 检索日志
         let Ok(response) = query_navigation_log(keyword(), page_token()).await else {
             return;
         };

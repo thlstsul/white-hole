@@ -110,7 +110,6 @@ async fn event_listener_loop(app: AppHandle, manager: DownloadManager) {
     }
 }
 
-/// 将字节数格式化为用户可读的大小（B / KB / MB / GB）
 fn format_size(bytes: u64) -> String {
     const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
@@ -127,7 +126,6 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
-/// 将下载错误转换为对用户友好的简短文案，避免把底层技术细节直接展示给用户
 fn friendly_error(err: &DownloadError) -> String {
     match err {
         DownloadError::RequestTimeout | DownloadError::ReadTimeout => {

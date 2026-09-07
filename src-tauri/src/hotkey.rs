@@ -54,7 +54,7 @@ async fn blur(app_handle: AppHandle) {
 async fn close_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.close_tab().await {
-        error!("关闭标签失败: {e}");
+        error!("关闭标签失败：{e}");
     }
     if let Err(e) = browser.focus_changed().await {
         error!("焦点变化失败：{e}");
@@ -87,7 +87,7 @@ async fn near_tab(app_handle: AppHandle) {
 async fn fullscreen(app_handle: AppHandle) {
     let browser = app_handle.browser();
     if let Err(e) = browser.fullscreen().await {
-        error!("全屏失败: {e}");
+        error!("全屏失败：{e}");
     }
 }
 

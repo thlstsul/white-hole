@@ -134,14 +134,10 @@ impl<'a> PercentDecode<'a> {
     /// This is return `Err` when the percent-decoded bytes are not well-formed in UTF-8.
     pub fn decode_utf8(self) -> Result<Cow<'a, str>, Utf8Error> {
         match self.clone().into() {
-            Cow::Borrowed(bytes) => match std::str::from_utf8(bytes) {
-                Ok(s) => Ok(s.into()),
-                Err(e) => Err(e),
-            },
-            Cow::Owned(bytes) => match String::from_utf8(bytes) {
-                Ok(s) => Ok(s.into()),
-                Err(e) => Err(e.utf8_error()),
-            },
+            Cow::Borrowed(bytes) => std::str::from_utf8(bytes).map(|s| s.into()),
+            Cow::Owned(bytes) => String::from_utf8(bytes)
+                .map_err(|e| e.utf8_error())
+                .map(|s| s.into()),
         }
     }
 

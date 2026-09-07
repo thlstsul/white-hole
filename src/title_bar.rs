@@ -63,13 +63,14 @@ fn TitleBarContent() -> Element {
 
 #[component]
 fn Icon() -> Element {
-    let src = use_browser().icon_url;
+    let icon_url = use_browser().icon_url;
 
     let mut src = use_memo(move || {
-        if src.is_empty() {
+        let url = icon_url();
+        if url.is_empty() {
             DEFAULT_ICON.to_string()
         } else {
-            src()
+            url
         }
     });
 

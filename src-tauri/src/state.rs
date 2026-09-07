@@ -47,12 +47,12 @@ impl Boolean {
     }
 
     pub async fn set(&self, value: bool) -> bool {
-        let mut focus = self.0.write().await;
-        if *focus == value {
+        let mut guard = self.0.write().await;
+        if *guard == value {
             return false;
         }
 
-        *focus = value;
+        *guard = value;
         true
     }
 

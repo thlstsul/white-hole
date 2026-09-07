@@ -134,10 +134,7 @@ impl Tab {
     }
 
     pub fn index(&self, id: i64) -> Option<usize> {
-        self.history
-            .iter()
-            .enumerate()
-            .find_map(|(i, item)| if item.id == id { Some(i) } else { None })
+        self.history.iter().position(|item| item.id == id)
     }
 
     pub fn insert_history(&mut self, id: i64, url: String, length: usize) {
@@ -224,16 +221,12 @@ impl Tab {
             return false;
         }
 
-        // 用 History API（非 Navigation API）：navigation.back() 的 promise 对跨文档
-        // 导航"永不应决"（WICG/WebKit 规范），跨源后退因此静默失效；
-        // history.back() 作用于完整会话历史，跨源、跨文档均可用
-        if let Err(e) = self.webview.eval("history.back()") {
-            error!("{}后退失败{e}", self.label());
-            false
-        } else {
-            // index 不再预更新，等待 currententrychange / popstate 回传后对账校准
-            true
-        }
+        // 用 History API（非 Navigation API）：navigation.back() 对跨文档导航
+        // "永不应决"（WICG/WebKit 规范），history.back() 跨源、跨文档均可用
+        self.webview
+            .eval("history.back()")
+            .inspect_err(|e| error!("{}后退失败{e}", self.label()))
+            .is_ok()
     }
 
     pub fn forward(&mut self) -> bool {
@@ -241,15 +234,10 @@ impl Tab {
             return false;
         }
 
-        // 用 History API（非 Navigation API）：navigation.forward() 的 promise 对跨文档
-        // 导航"永不应决"，跨源前进静默失效；history.forward() 跨源、跨文档均可用
-        if let Err(e) = self.webview.eval("history.forward()") {
-            error!("{}前进失败{e}", self.label());
-            false
-        } else {
-            // index 不再预更新，等待 currententrychange / popstate 回传后对账校准
-            true
-        }
+        self.webview
+            .eval("history.forward()")
+            .inspect_err(|e| error!("{}前进失败{e}", self.label()))
+            .is_ok()
     }
 
     pub fn go(&mut self, index: usize) -> bool {
@@ -258,19 +246,13 @@ impl Tab {
             return false;
         }
 
-        // 用 History API 相对 delta 跳转（非 Navigation API）：traverseTo 的 key
-        // 必须属于当前文档的 entries()（同源连续片段），跨源目标条目必然 reject；
-        // history.go(delta) 作用于完整会话历史，跨源、跨文档均可用。
         // 相对 delta 而非绝对 index：镜像 index 由快照对账实时校准，与浏览器
         // 会话历史严格一致，delta 不会漂移
         let script = format!("history.go({})", index - self.index);
-        if let Err(e) = self.webview.eval(script) {
-            error!("{}跳转失败{e}", self.label());
-            false
-        } else {
-            // index 不再预更新，等待 webview 事件回传后对账校准
-            true
-        }
+        self.webview
+            .eval(script)
+            .inspect_err(|e| error!("{}跳转失败{e}", self.label()))
+            .is_ok()
     }
 
     pub fn sync_by_url(&mut self, url: &str, length: usize) -> bool {
@@ -511,17 +493,12 @@ impl Tab {
     }
 
     pub fn set_darkreader(&mut self, enable: bool) -> Result<(), tauri::Error> {
-        let result = if enable {
-            self.eval(DARKREADER_ENABLE_SCRIPT)
+        self.eval(if enable {
+            DARKREADER_ENABLE_SCRIPT
         } else {
-            self.eval(DARKREADER_DISABLE_SCRIPT)
-        };
-
-        if result.is_ok() {
-            self.darkreader = enable;
-        }
-
-        result
+            DARKREADER_DISABLE_SCRIPT
+        })
+        .inspect(|_| self.darkreader = enable)
     }
 }
 
@@ -561,11 +538,9 @@ impl TabMap {
     }
 
     pub async fn close(&self, label: &str) -> Result<(), FrameworkError> {
-        let Some((_, tab)) = self.0.remove_async(label).await else {
-            return Ok(());
-        };
-
-        tab.close()?;
+        if let Some((_, tab)) = self.0.remove_async(label).await {
+            tab.close()?;
+        }
         Ok(())
     }
 
@@ -880,7 +855,6 @@ impl TabMap {
             .read_async(label, |_, tab| tab.print())
             .await
             .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
-
         Ok(())
     }
 
@@ -891,19 +865,19 @@ impl TabMap {
                 let url = tab.current_url()?;
                 let loading = tab.loading;
                 // 乐观 URL 覆盖：真实 URL 尚未追上时，用 click_link 设置的 URL 替代
-                if let Some(ref opt_url) = tab.optimistic_url {
-                    if url != *opt_url {
-                        return Ok(BrowserState {
-                            icon_url: tab.icon_url.clone(),
-                            title: tab.title.clone(),
-                            url: opt_url.clone(),
-                            loading: true,
-                            can_back: tab.can_back(),
-                            can_forward: tab.can_forward(),
-                            darkreader: tab.darkreader,
-                            ..Default::default()
-                        });
-                    }
+                if let Some(ref opt_url) = tab.optimistic_url
+                    && url != *opt_url
+                {
+                    return Ok(BrowserState {
+                        icon_url: tab.icon_url.clone(),
+                        title: tab.title.clone(),
+                        url: opt_url.clone(),
+                        loading: true,
+                        can_back: tab.can_back(),
+                        can_forward: tab.can_forward(),
+                        darkreader: tab.darkreader,
+                        ..Default::default()
+                    });
                 }
                 Ok(BrowserState {
                     icon_url: tab.icon_url.clone(),
@@ -923,63 +897,30 @@ impl TabMap {
     }
 
     pub async fn next(&self, label: &str) -> Option<TabId> {
-        if self.0.is_empty() {
+        let labels = self.keys().await;
+        if labels.len() <= 1 {
             return None;
         }
-
-        let mut rtn = None::<String>;
-        let mut max = label.to_owned();
-        self.0
-            .iter_async(|l, _| {
-                if l.as_str() < label {
-                    if rtn.is_none() {
-                        rtn = Some(l.to_owned());
-                    } else if let Some(ref r) = rtn
-                        && l > r
-                    {
-                        rtn = Some(l.to_owned());
-                    }
-                }
-
-                if l > &max {
-                    max = l.to_owned();
-                }
-                true
-            })
-            .await;
-
-        if rtn.is_none() && max != label {
-            Some(max)
-        } else {
-            rtn
+        let max = labels.iter().max().unwrap();
+        if max.as_str() == label {
+            return None;
         }
+        labels
+            .iter()
+            .filter(|l| l.as_str() < label)
+            .max()
+            .cloned()
+            .or_else(|| Some(max.clone()))
     }
 
     pub async fn near(&self, label: &str) -> Option<TabId> {
-        if self.0.is_empty() {
+        let labels = self.keys().await;
+        if labels.len() <= 1 {
             return None;
         }
-
-        let mut rtn = None::<String>;
-        self.0
-            .iter_async(|l, _| {
-                if l.as_str() > label {
-                    if rtn.is_none() {
-                        rtn = Some(l.to_owned());
-                    } else if let Some(ref r) = rtn
-                        && l < r
-                    {
-                        rtn = Some(l.to_owned());
-                    }
-                }
-                true
-            })
-            .await;
-
-        if rtn.is_none() {
-            self.next(label).await
-        } else {
-            rtn
+        if let Some(next) = labels.iter().filter(|l| l.as_str() > label).min().cloned() {
+            return Some(next);
         }
+        self.next(label).await
     }
 }

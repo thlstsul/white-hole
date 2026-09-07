@@ -277,17 +277,12 @@ async fn refresh_progress(
 }
 
 async fn collect_rows(manager: &DownloadManager) -> Vec<TrayRow> {
-    // 新 API：list_task_overviews 一次批量取回所有任务的概览，避免逐个任务多次异步查询
     let mut rows = Vec::new();
     for overview in manager.list_task_overviews().await {
-        // 文件名尚未解析时回退为 URL 末段文件名，避免托盘菜单显示 UUID
-        let name = match overview.filename {
-            Some(name) => name,
-            None => match downloader::extract_filename_from_url(&overview.url) {
-                Some(name) => name,
-                None => "下载中…".to_string(),
-            },
-        };
+        let name = overview.filename.unwrap_or_else(|| {
+            downloader::extract_filename_from_url(&overview.url)
+                .unwrap_or_else(|| "下载中…".to_string())
+        });
         let action = match overview.status {
             DownloadStatus::Pending | DownloadStatus::Downloading => Some(TrayAction::Pause),
             DownloadStatus::Paused => Some(TrayAction::Resume),
@@ -489,23 +484,19 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-/// 用系统默认程序打开文件（Windows 用 explorer，macOS/Linux 用 open/xdg-open）
 fn open_path(path: &Path) -> std::io::Result<()> {
-    #[cfg(windows)]
-    std::process::Command::new("explorer").arg(path).spawn()?;
-    #[cfg(target_os = "macos")]
-    std::process::Command::new("open").arg(path).spawn()?;
-    #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open").arg(path).spawn()?;
-
-    #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
-    return Ok(());
-    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
-    {
-        let _ = path;
+    let program = if cfg!(windows) {
+        "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "linux") {
+        "xdg-open"
+    } else {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             "当前平台暂不支持打开文件",
         ));
-    }
+    };
+    std::process::Command::new(program).arg(path).spawn()?;
+    Ok(())
 }

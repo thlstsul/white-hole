@@ -4,6 +4,11 @@ use sqlx::SqlitePool;
 
 use crate::{database::DB_PATH, public_suffix::sync_public_suffix};
 
+async fn connect_db() -> Option<SqlitePool> {
+    let db_path = DB_PATH.get()?;
+    SqlitePool::connect(&format!("sqlite:{db_path}")).await.ok()
+}
+
 pub fn setup() -> Result<(), TaskError> {
     let delay_timer = DelayTimerBuilder::default()
         .tokio_runtime_by_default()
@@ -18,10 +23,7 @@ pub fn setup() -> Result<(), TaskError> {
 fn startup_task() -> Result<Task, TaskError> {
     let mut task_builder = TaskBuilder::default();
     let body = || async {
-        let Some(db_path) = DB_PATH.get() else {
-            return;
-        };
-        let Ok(pool) = SqlitePool::connect(&format!("sqlite:{db_path}")).await else {
+        let Some(pool) = connect_db().await else {
             return;
         };
 
@@ -40,10 +42,7 @@ fn startup_task() -> Result<Task, TaskError> {
 fn everyday_task() -> Result<Task, TaskError> {
     let mut task_builder = TaskBuilder::default();
     let body = || async move {
-        let Some(db_path) = DB_PATH.get() else {
-            return;
-        };
-        let Ok(pool) = SqlitePool::connect(&format!("sqlite:{db_path}")).await else {
+        let Some(pool) = connect_db().await else {
             return;
         };
 

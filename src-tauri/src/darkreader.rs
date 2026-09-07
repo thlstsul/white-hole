@@ -27,9 +27,7 @@ pub async fn switch(pool: &SqlitePool, host: &str) -> bool {
     sqlx::query!("select id from darkreader_blacklist where host = ?", host)
         .fetch_optional(pool)
         .await
-        .ok()
-        .flatten()
-        .is_none()
+        .is_ok_and(|row| row.is_none())
 }
 
 pub async fn save_blacklist(pool: &SqlitePool, host: &str) -> Result<i64, sqlx::Error> {

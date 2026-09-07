@@ -196,23 +196,12 @@ pub struct HttpResponse {
 
 impl HttpRequest {
     pub fn new(url: String, method: String, header: Vec<HttpHeader>, body: String) -> Self {
-        let options = if method.is_empty() && header.is_empty() && body.is_empty() {
-            None
-        } else {
-            Some(FetchOptions {
-                method: if method.is_empty() {
-                    None
-                } else {
-                    Some(method)
-                },
-                headers: if header.is_empty() {
-                    None
-                } else {
-                    Some(header)
-                },
-                body: if body.is_empty() { None } else { Some(body) },
-            })
-        };
+        let options =
+            (!(method.is_empty() && header.is_empty() && body.is_empty())).then(|| FetchOptions {
+                method: (!method.is_empty()).then_some(method),
+                headers: (!header.is_empty()).then_some(header),
+                body: (!body.is_empty()).then_some(body),
+            });
 
         Self { url, options }
     }

@@ -19,6 +19,8 @@
 - **窗口状态保存**: 自动保存和恢复窗口位置及大小
 - **单实例运行**: 防止重复启动，支持命令行参数传递
 - **链接预览**: 支持链接悬停预览功能
+- **浮动标签页**: Ctrl+点击链接在当前窗口内以浮动视图打开预览，自带标题栏和控制按钮，支持最大化为常规标签页
+- **文件下载**: 支持文件下载管理，自动发送系统通知（开始/完成/失败）
 - **分屏浏览**: 支持画中画模式
 
 ### 技术特色
@@ -95,7 +97,6 @@ white-hole/
 │   ├── window_decoration.rs # 窗口装饰组件
 │   ├── url.rs              # URL 处理工具
 │   ├── api.rs              # Tauri 命令接口
-│   ├── settings.rs         # 设置页面组件
 │   ├── incognito.rs        # 无痕浏览模式
 │   ├── extension.rs        # 扩展功能
 │   ├── darkreader.rs       # 深色模式实现
@@ -107,12 +108,14 @@ white-hole/
 │   ├── src/
 │   │   ├── lib.rs          # Tauri 应用入口
 │   │   ├── main.rs         # 主函数入口
-│   │   ├── browser.rs      # 浏览器核心逻辑
-│   │   ├── tab.rs          # 标签页管理
+│   │   ├── browser.rs      # 浏览器核心逻辑 (窗口编排、浮动 Tab)
+│   │   ├── tab.rs          # 标签页管理 (Tab/TabMap 数据结构)
+│   │   ├── tab_service.rs  # 标签领域服务 (生命周期/历史同步/事件队列)
 │   │   ├── database.rs     # 数据库操作
-│   │   ├── command.rs      # 命令处理
+│   │   ├── command.rs      # 命令处理 (Tauri IPC 命令)
 │   │   ├── state.rs        # 应用状态管理
 │   │   ├── hotkey.rs       # 热键管理
+│   │   ├── download.rs     # 文件下载管理与系统通知
 │   │   ├── update.rs       # 更新检查
 │   │   ├── url.rs          # URL 处理
 │   │   ├── user_agent.rs   # 用户代理设置
@@ -121,6 +124,7 @@ white-hole/
 │   │   ├── task.rs         # 任务管理
 │   │   ├── log.rs          # 日志系统
 │   │   ├── error.rs        # 错误处理
+│   │   ├── history.rs      # 历史事件定义
 │   │   ├── darkreader.rs   # 深色模式实现
 │   │   ├── public_suffix.rs # 公共后缀处理
 │   │   ├── prevent_default.rs # 默认行为阻止 (Windows)
@@ -130,11 +134,11 @@ white-hole/
 │   │   └── ...
 │   ├── capabilities/       # Tauri 权限配置
 │   ├── permissions/        # 权限定义
-│   ├── js/                 # 注入的 WebView 脚本 (darkreader/copy_hook 等)
+│   ├── js/                 # 注入的 WebView 脚本 (darkreader/floating_tab 等)
 │   ├── windows/            # Windows 平台特定配置
 │   └── tauri.conf.json     # 应用配置文件
 ├── hotkey/                 # 热键功能模块
-├── hotkey-macros/          # 热键宏定义
+├── hotkey-macros/          # 热键宏定义 (proc-macro)
 ├── migrations/             # 数据库迁移文件
 ├── assets/                 # 静态资源 (CSS, 图标等)
 ├── dist/                   # 构建输出目录

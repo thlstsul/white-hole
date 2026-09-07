@@ -73,7 +73,5 @@ fn insert_public_suffix() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn is_release_build() -> bool {
-    std::env::var("PROFILE")
-        .map(|p| p == "release")
-        .unwrap_or(false)
+    std::env::var("PROFILE").is_ok_and(|p| p == "release")
 }

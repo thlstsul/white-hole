@@ -778,8 +778,7 @@ fn retry_loop_active(reown_in_flight: bool, retries_left: u32) -> bool {
 /// last_reown 在未来（时钟异常）时返回 false（视为不在冷却期），不会 panic
 fn in_cooldown(last_reown: std::time::Instant, now: std::time::Instant) -> bool {
     now.checked_duration_since(last_reown)
-        .map(|d| d < REOWN_COOLDOWN)
-        .unwrap_or(false)
+        .is_some_and(|d| d < REOWN_COOLDOWN)
 }
 
 /// abandoned_worker_pending 的恢复条件：旧 worker 的 DONE 是否已丢失超时。
@@ -843,7 +842,7 @@ fn is_owner_our_process() -> bool {
     }
     let mut pid = 0;
     unsafe { GetWindowThreadProcessId(owner, Some(&mut pid)) };
-    pid != 0 && pid == std::process::id()
+    pid == std::process::id()
 }
 
 /// should_reown 的决策结果（消息线程专用）
@@ -999,11 +998,6 @@ fn is_our_webview_owner() -> bool {
     }
     let mut pid = 0;
     unsafe { GetWindowThreadProcessId(owner, Some(&mut pid)) };
-    if pid == 0 {
-        return false;
-    }
-    // 只读缓存，绝不在此枚举进程表——剪贴板锁定期间全表枚举会阻塞
-    // 其他所有应用的复制/粘贴
     let (pids, _fresh) = cached_webview_pids();
     pids.contains(&pid)
 }

@@ -3,12 +3,13 @@ use std::sync::Arc;
 use log::error;
 use sqlx::SqlitePool;
 use tauri::{
-    App, Emitter as _, LogicalPosition, Manager, State, Theme, Url, Webview, WebviewBuilder,
-    WebviewUrl, Window, Wry,
+    App, Emitter as _, LogicalPosition, LogicalSize, Manager, State, Theme, Url, Webview,
+    WebviewBuilder, WebviewUrl, Window, Wry,
     async_runtime::{self, Mutex},
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
 use tokio::time::Instant;
+use uuid::Uuid;
 
 use crate::{
     IsMainView,
@@ -25,9 +26,10 @@ use crate::{
     public_suffix::get_public_suffix_cached,
     state::{Boolean, BrowserState},
     tab::bg_color,
-    tab_service::TabService,
+    tab_service::{TabService, on_floating_new_window, on_floating_page_load},
     task,
     url::parse_keyword,
+    user_agent::get_user_agent,
 };
 
 const WIDTH: f64 = 800.;
@@ -99,16 +101,50 @@ impl Browser {
         self.db.get().await
     }
 
+    /// 浮动 Tab 位置和尺寸计算（复用于 resize / open_floating_tab）
+    fn floating_layout(
+        &self,
+        window_size: LogicalSize<f64>,
+    ) -> (LogicalPosition<f64>, LogicalSize<f64>) {
+        let window_width = window_size.width;
+        let window_height = window_size.height;
+        let content_h = (window_height - Webview::TITLE_HEIGHT).max(0.0);
+        let float_w = window_width * 0.3;
+        let float_h = content_h * 0.3;
+        let margin = window_width * 0.02;
+        let x = (window_width - float_w - margin).max(0.0);
+        let y = (window_height - float_h - margin).max(Webview::TITLE_HEIGHT);
+        (
+            LogicalPosition::new(x, y),
+            LogicalSize::new(float_w, float_h),
+        )
+    }
+
     pub async fn resize(&self) -> Result<(), StateError> {
         let scale_factor = self.window.scale_factor()?;
         let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
+        let window_height = web_size.height;
         if !(self.tabs.current().await.is_empty()
             || web_size.height < HEIGHT
             || web_size.width < WIDTH)
         {
-            // 无TAB或最小化后，不需要变更大小
             web_size.height -= Webview::TITLE_HEIGHT;
             self.tabs.set_size(web_size).await;
+        }
+
+        // —— 浮动 Tab 跟随缩放 ——
+        {
+            let mut floating = self.tabs.floating_tab.lock().await;
+            if let Some(ref mut f) = *floating {
+                let (pos, size) =
+                    self.floating_layout(LogicalSize::new(web_size.width, window_height));
+                if let Err(e) = f.webview.set_size(size) {
+                    error!("浮动 Tab set_size 失败：{e}");
+                }
+                if let Err(e) = f.webview.set_position(pos) {
+                    error!("浮动 Tab set_position 失败：{e}");
+                }
+            }
         }
 
         self.emit(None).await?;
@@ -123,7 +159,23 @@ impl Browser {
         self.tabs.close_tab().await
     }
 
+    /// 同步读取 Ctrl 是否按下（避免异步竞态）
+    fn ctrl_pressed(&self) -> bool {
+        use ::hotkey::{Code, HotkeyManagerExt as _};
+        let hotkey = self.window.app_handle().hotkey();
+        hotkey.is_pressed(Code::ControlLeft) || hotkey.is_pressed(Code::ControlRight)
+    }
+
     pub async fn open_tab_by_url(&self, url: &Url, _active: bool) -> Result<(), TabError> {
+        if self.ctrl_pressed() {
+            self.open_floating_tab(url).await?;
+            return Ok(());
+        }
+        self.open_tab_regular(url).await
+    }
+
+    /// 以常规 Tab 方式打开 URL（不检测 Ctrl，供 promote 等需固定行为的路径复用）
+    async fn open_tab_regular(&self, url: &Url) -> Result<(), TabError> {
         let pool = self.db.get().await;
         let incognito = self.incognito.get().await;
         self.is_focused.set(false).await;
@@ -135,13 +187,10 @@ impl Browser {
             self.emit(None).await?;
             // 已打开的 tab 也刷新对应浏览记录的 last_time
             if let Err(e) = touch_log(&pool, id).await {
-                log::error!("刷新浏览记录 last_time 失败: {e}");
+                log::error!("刷新浏览记录 last_time 失败：{e}");
             }
         } else {
-            let label = self
-                .tabs
-                .create_tab(url, self.incognito.get().await)
-                .await?;
+            let label = self.tabs.create_tab(url, incognito).await?;
             let mut state = self.get_state(None).await?;
             state.url = url.to_string();
             self.emit(Some(state.clone())).await?;
@@ -154,25 +203,30 @@ impl Browser {
         }
 
         self.focus_changed().await?;
+        self.tabs.raise_floating_tab().await;
         Ok(())
     }
 
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
+        if self.ctrl_pressed() {
+            if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
+                self.open_floating_tab(&Url::parse(&url)?).await?;
+            }
+            return Ok(());
+        }
+
+        let pool = self.db.get().await;
         let incognito = self.incognito.get().await;
         self.is_focused.set(false).await;
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
             self.tabs.go_to(&label, index).await;
             self.tabs.switch_tab(&label).await?;
             self.emit(None).await?;
-            // 已打开的 tab 也刷新对应浏览记录的 last_time
-            if let Err(e) = touch_log(self.db.get().await.as_ref(), id).await {
-                log::error!("刷新浏览记录 last_time 失败: {e}");
+            if let Err(e) = touch_log(pool.as_ref(), id).await {
+                log::error!("刷新浏览记录 last_time 失败：{e}");
             }
-        } else if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
-            let label = self
-                .tabs
-                .create_tab(&Url::parse(&url)?, self.incognito.get().await)
-                .await?;
+        } else if let Some(url) = get_url(pool.as_ref(), id).await {
+            let label = self.tabs.create_tab(&Url::parse(&url)?, incognito).await?;
             let mut state = self.get_state(None).await?;
             state.url = url.clone();
             self.emit(Some(state.clone())).await?;
@@ -183,6 +237,7 @@ impl Browser {
         }
 
         self.focus_changed().await?;
+        self.tabs.raise_floating_tab().await;
         Ok(())
     }
 
@@ -200,6 +255,83 @@ impl Browser {
         }
 
         self.tabs.near_tab().await
+    }
+
+    /// 打开浮动 Tab：关闭已有 → 创建 webview（同窗口 add_child）→ 注入 JS 控制栏
+    pub async fn open_floating_tab(&self, url: &Url) -> Result<(), FrameworkError> {
+        // 1. 计算浮动 webview 位置和尺寸（主窗口内逻辑坐标，无锁）
+        let scale = self.window.scale_factor()?;
+        let win_size = self.window.inner_size()?.to_logical::<f64>(scale);
+        let (position, size) = self.floating_layout(win_size);
+
+        // 2. 构建 webview（无锁）
+        let label = format!("floating-{}", Uuid::now_v7());
+        let app_handle = self.window.app_handle().clone();
+        let is_dark = matches!(self.window.theme()?, Theme::Dark);
+        let incognito = self.incognito.get().await;
+        let builder = WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
+            .initialization_script(include_str!("../js/darkreader.js"))
+            .initialization_script(include_str!("../js/floating_tab.js"))
+            .user_agent(&get_user_agent())
+            .incognito(incognito)
+            .background_color(bg_color(is_dark))
+            .devtools(true)
+            .zoom_hotkeys_enabled(true)
+            .focused(false) // 不抢焦点：FT-3 要求原 Tab 保持不变
+            .on_new_window({
+                let app_handle = app_handle.clone();
+                move |url, _| on_floating_new_window(&app_handle, url)
+            })
+            .on_page_load(on_floating_page_load)
+            .on_download(crate::tab_service::on_download);
+
+        let webview = self.window.add_child(builder, position, size)?;
+
+        // 3. 原子操作：关闭已有 + 存储新 Tab（单次锁，消除并发竞态窗口）
+        let new_floating = crate::tab_service::FloatingTab {
+            label: label.clone(),
+            url: url.to_string(),
+            webview,
+        };
+        let mut lock = self.tabs.floating_tab.lock().await;
+        // 关闭已有浮动 Tab（如有）
+        if let Some(f) = lock.take() {
+            let _ = f.webview.close();
+        }
+        *lock = Some(new_floating);
+
+        Ok(())
+    }
+
+    /// 关闭浮动 Tab：销毁 webview，清理状态，恢复焦点到主窗口
+    pub async fn close_floating_tab(&self) -> Result<(), FrameworkError> {
+        let floating = self.tabs.floating_tab.lock().await.take();
+        if let Some(f) = floating {
+            f.webview.close()?;
+            // FT-11：销毁浮动 Tab 后，将焦点交还给主窗口（WebView2 未显式聚焦时
+            // 可能停留在浮动 Tab 最后交互的区域，需手动恢复）
+            let _ = self.window.set_focus();
+        }
+        Ok(())
+    }
+
+    /// 提升浮动 Tab 为常规 Tab：原子 take → 校验 URL → 关闭浮动 → 创建常规 Tab
+    pub async fn promote_floating_tab(&self) -> Result<(), TabError> {
+        // 同一锁内先校验 URL、再原子 take；解析失败时浮动 Tab 仍存活
+        let (url, webview) = {
+            let mut lock = self.tabs.floating_tab.lock().await;
+            let Some(f) = lock.as_ref() else {
+                return Ok(());
+            };
+            let url = Url::parse(&f.url)?;
+            let f = lock.take().expect("上一步已确认存在");
+            (url, f.webview)
+        };
+        webview.close()?;
+        let _ = self.window.set_focus();
+
+        self.open_tab_regular(&url).await?;
+        Ok(())
     }
 
     /// 文档标题变更（由 WebviewBuilder::on_document_title_changed 触发）
@@ -230,15 +362,13 @@ impl Browser {
     pub async fn maximize(&self) -> Result<(), StateError> {
         self.window.maximize()?;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn unmaximize(&self) -> Result<(), StateError> {
         self.window.unmaximize()?;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn focus(&self) -> Result<(), StateError> {
@@ -247,9 +377,9 @@ impl Browser {
         }
 
         self.mainview.reparent(&self.window)?;
+        self.tabs.raise_floating_tab().await;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn blur(&self) -> Result<(), StateError> {
@@ -261,9 +391,9 @@ impl Browser {
         if !label.is_empty() {
             self.tabs.top(&label).await?;
         }
+        self.tabs.raise_floating_tab().await;
 
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn back(&self) -> Result<(), StateError> {
@@ -304,6 +434,10 @@ impl Browser {
             // 确保内存库被关闭前无残留写入落回持久库
             self.is_focused.set(false).await;
             self.tabs.close_incognito().await?;
+            self.close_floating_tab()
+                .await
+                .inspect_err(|e| error!("关闭浮动 Tab 失败：{e}"))
+                .ok();
             self.db.close_memory().await?;
             self.incognito.set(false).await;
             // 恢复进入无痕模式前的 tab（由 TabService 的 current 机制管理）
@@ -369,7 +503,7 @@ impl Browser {
             .tabs
             .get_state(the_label.unwrap_or(label.as_str()))
             .await
-            .unwrap_or(BrowserState::default());
+            .unwrap_or_default();
 
         state.maximized = self.window.is_maximized()?;
         state.focus = self.is_focused.get().await;
@@ -400,8 +534,7 @@ impl Browser {
     pub async fn leave_picture_in_picture(&self, label: &str) -> Result<(), StateError> {
         self.blur().await?;
         self.tabs.switch_tab(label).await?;
-        self.emit(None).await?;
-        Ok(())
+        self.emit(None).await
     }
 
     pub async fn focus_link(&self, url: String) -> Result<(), StateError> {
@@ -442,10 +575,10 @@ impl Browser {
             async_runtime::spawn(async move {
                 if enable {
                     if let Err(e) = delete_blacklist(&pool, &host).await {
-                        error!("删除 darkreader 黑名单 {host} 失败: {e}");
+                        error!("删除 darkreader 黑名单 {host} 失败：{e}");
                     }
                 } else if let Err(e) = save_blacklist(&pool, &host).await {
-                    error!("保存 darkreader 黑名单 {host} 失败: {e}");
+                    error!("保存 darkreader 黑名单 {host} 失败：{e}");
                 }
             });
         }
@@ -460,7 +593,6 @@ impl Browser {
         self.tabs.print().await
     }
 
-    /// 重新聚焦webview
     pub async fn focus_changed(&self) -> Result<bool, FrameworkError> {
         let mut last_focus_changed = self.last_focus_changed.lock().await;
         if last_focus_changed.elapsed().as_millis() < 150 {
@@ -478,7 +610,6 @@ impl Browser {
         Ok(true)
     }
 
-    /// 根据系统主题更新窗口和 webview 背景色
     pub async fn update_theme(&self, theme: Theme) {
         let is_dark = matches!(theme, Theme::Dark);
         let bg = bg_color(is_dark);
@@ -517,15 +648,12 @@ impl Browser {
 
     /// 发射状态到主视图（TabService 经此通知 UI，发射与图标查询收敛于此）
     pub(crate) async fn emit(&self, state: Option<BrowserState>) -> Result<(), StateError> {
-        let mut state = if let Some(state) = state {
-            state
-        } else {
-            self.get_state(None).await?
+        let mut state = match state {
+            Some(state) => state,
+            None => self.get_state(None).await?,
         };
 
-        // 在 emit 之前查询 icon 而不影响 state 原始数据
         if state.icon_url.is_empty()
-            && !state.url.is_empty()
             && state.url.starts_with("http")
             && let Some(data_url) = self.get_cached_icon(&state.url).await
         {
