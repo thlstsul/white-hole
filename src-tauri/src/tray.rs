@@ -244,6 +244,11 @@ async fn refresh_progress(
         refresh_tray(app, manager, last_signature, items, last_rows).await;
         return;
     }
+    // 任务已进入终态（完成/失败/取消）：无需再刷进度，且下方快速路径硬编码了
+    // TrayAction::Pause 会把已正确显示的「✓ 已完成」覆写回「▼ 下载中」。
+    if !authoritative_active {
+        return;
+    }
     // 仅当该任务当前在菜单里才更新；状态已切换的任务由上面的 refresh_tray 重建
     let Some(entry) = items.get_mut(&stats.task_id) else {
         return;
