@@ -901,16 +901,12 @@ impl TabMap {
         if labels.len() <= 1 {
             return None;
         }
-        let max = labels.iter().max().unwrap();
-        if max.as_str() == label {
-            return None;
-        }
         labels
             .iter()
             .filter(|l| l.as_str() < label)
             .max()
             .cloned()
-            .or_else(|| Some(max.clone()))
+            .or_else(|| labels.iter().max().cloned())
     }
 
     pub async fn near(&self, label: &str) -> Option<TabId> {
