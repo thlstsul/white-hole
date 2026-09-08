@@ -184,23 +184,6 @@ pub async fn update_log_star(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Err
         .map(|_| ())
 }
 
-#[allow(dead_code)]
-pub async fn query_log_by_id(
-    pool: &SqlitePool,
-    ids: &[i64],
-) -> Result<Vec<NavigationLog>, sqlx::Error> {
-    let mut query_builder: QueryBuilder<'_, Sqlite> = QueryBuilder::new(
-        "select a.id, a.url, a.title, b.data_url as icon_url, a.star, a.last_time from navigation_log a left outer join icon_cached b on a.icon_id = b.id where a.id in (",
-    );
-    let mut separated = query_builder.separated(", ");
-    for id in ids {
-        separated.push_bind(*id);
-    }
-    separated.push_unseparated(") ");
-
-    query_builder.build_query_as().fetch_all(pool).await
-}
-
 pub async fn clear_log(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query!("delete from navigation_log where url = title or title is null or title = ''")
         .execute(pool)

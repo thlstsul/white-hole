@@ -865,20 +865,13 @@ impl TabMap {
                 let url = tab.current_url()?;
                 let loading = tab.loading;
                 // 乐观 URL 覆盖：真实 URL 尚未追上时，用 click_link 设置的 URL 替代
-                if let Some(ref opt_url) = tab.optimistic_url
+                let (url, loading) = if let Some(ref opt_url) = tab.optimistic_url
                     && url != *opt_url
                 {
-                    return Ok(BrowserState {
-                        icon_url: tab.icon_url.clone(),
-                        title: tab.title.clone(),
-                        url: opt_url.clone(),
-                        loading: true,
-                        can_back: tab.can_back(),
-                        can_forward: tab.can_forward(),
-                        darkreader: tab.darkreader,
-                        ..Default::default()
-                    });
-                }
+                    (opt_url.clone(), true)
+                } else {
+                    (url, loading)
+                };
                 Ok(BrowserState {
                     icon_url: tab.icon_url.clone(),
                     title: tab.title.clone(),

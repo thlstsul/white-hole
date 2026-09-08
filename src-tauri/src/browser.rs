@@ -166,7 +166,7 @@ impl Browser {
         hotkey.is_pressed(Code::ControlLeft) || hotkey.is_pressed(Code::ControlRight)
     }
 
-    pub async fn open_tab_by_url(&self, url: &Url, _active: bool) -> Result<(), TabError> {
+    pub async fn open_tab_by_url(&self, url: &Url) -> Result<(), TabError> {
         if self.ctrl_pressed() {
             self.open_floating_tab(url).await?;
             return Ok(());
@@ -493,8 +493,7 @@ impl Browser {
 
     pub async fn update_star(&self, id: i64) -> Result<(), DatabaseError> {
         let pool = self.db.get().await;
-        update_log_star(&pool, id).await?;
-        Ok(())
+        Ok(update_log_star(&pool, id).await?)
     }
 
     pub async fn get_state(&self, the_label: Option<&str>) -> Result<BrowserState, StateError> {

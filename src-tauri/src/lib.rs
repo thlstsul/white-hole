@@ -164,10 +164,7 @@ fn single_instance_init(app: &AppHandle, args: Vec<String>, _cwd: String) {
 
             let browser = window.browser();
             let url = url::parse_keyword(None, &url).await.expect("非法链接");
-            browser
-                .open_tab_by_url(&url, true)
-                .await
-                .expect("打开链接失败");
+            browser.open_tab_by_url(&url).await.expect("打开链接失败");
         }
     });
 }
@@ -224,6 +221,18 @@ fn setup_log<R: Runtime>() -> TauriPlugin<R> {
     let time_format =
         format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]");
 
+    let level = if cfg!(debug_assertions) {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Error
+    };
+
+    let builder = tauri_plugin_log::Builder::new().level(level).targets([
+        Target::new(TargetKind::Stdout),
+        Target::new(TargetKind::LogDir { file_name: None }),
+        Target::new(TargetKind::Webview),
+    ]);
+
     let builder = if cfg!(debug_assertions) {
         use colored::Colorize as _;
         use fern::colors::{Color, ColoredLevelConfig};
@@ -235,59 +244,44 @@ fn setup_log<R: Runtime>() -> TauriPlugin<R> {
             .debug(Color::Blue)
             .trace(Color::Magenta);
 
-        tauri_plugin_log::Builder::new()
-            .level(LevelFilter::Debug)
-            .targets([
-                Target::new(TargetKind::Stdout),
-                Target::new(TargetKind::LogDir { file_name: None }),
-                Target::new(TargetKind::Webview),
-            ])
-            .format(move |out, message, record| {
-                let now = TimezoneStrategy::UseLocal.get_now();
-                let now = now.format(time_format).unwrap_or_default().dimmed();
-                let level_colored = level_colors.color(record.level());
+        builder.format(move |out, message, record| {
+            let now = TimezoneStrategy::UseLocal.get_now();
+            let now = now.format(time_format).unwrap_or_default().dimmed();
+            let level_colored = level_colors.color(record.level());
 
-                let location = if let (Some(file), Some(line)) = (record.file(), record.line()) {
-                    format!("{}:{}", file, line).cyan()
-                } else {
-                    "".cyan()
-                };
+            let location = if let (Some(file), Some(line)) = (record.file(), record.line()) {
+                format!("{}:{}", file, line).cyan()
+            } else {
+                "".cyan()
+            };
 
-                // 输出带颜色的日志信息
-                out.finish(format_args!(
-                    "{} [{}] {} - {}",
-                    now,
-                    level_colored,
-                    location,
-                    message.to_string().white()
-                ));
-            })
+            out.finish(format_args!(
+                "{} [{}] {} - {}",
+                now,
+                level_colored,
+                location,
+                message.to_string().white()
+            ));
+        })
     } else {
-        tauri_plugin_log::Builder::new()
-            .level(LevelFilter::Error)
-            .targets([
-                Target::new(TargetKind::Stdout),
-                Target::new(TargetKind::LogDir { file_name: None }),
-                Target::new(TargetKind::Webview),
-            ])
-            .format(move |out, message, record| {
-                let now = TimezoneStrategy::UseLocal.get_now();
-                let now = now.format(time_format).unwrap_or_default();
+        builder.format(move |out, message, record| {
+            let now = TimezoneStrategy::UseLocal.get_now();
+            let now = now.format(time_format).unwrap_or_default();
 
-                let location = if let (Some(file), Some(line)) = (record.file(), record.line()) {
-                    format!("{}:{}", file, line)
-                } else {
-                    String::new()
-                };
+            let location = if let (Some(file), Some(line)) = (record.file(), record.line()) {
+                format!("{}:{}", file, line)
+            } else {
+                String::new()
+            };
 
-                out.finish(format_args!(
-                    "{} [{}] {} - {}",
-                    now,
-                    record.level(),
-                    location,
-                    message
-                ));
-            })
+            out.finish(format_args!(
+                "{} [{}] {} - {}",
+                now,
+                record.level(),
+                location,
+                message
+            ));
+        })
     };
 
     builder.build()

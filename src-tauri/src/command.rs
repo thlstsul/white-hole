@@ -73,7 +73,7 @@ pub async fn search(browser: State<'_, Browser>, keyword: String) -> Result<(), 
     let Some(url) = browser.parse_keyword(&keyword).await else {
         return Ok(());
     };
-    browser.open_tab_by_url(&url, true).await
+    browser.open_tab_by_url(&url).await
 }
 
 #[command]

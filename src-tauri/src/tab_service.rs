@@ -805,7 +805,7 @@ pub(crate) fn on_new_window(app_handle: &AppHandle, url: Url) -> NewWindowRespon
             } else {
                 // target="_blank" / window.open → 打开常规 Tab
                 let _ = browser
-                    .open_tab_by_url(&url, true)
+                    .open_tab_by_url(&url)
                     .await
                     .inspect_err(|e| error!("打开链接{url}失败：{e}"));
             }

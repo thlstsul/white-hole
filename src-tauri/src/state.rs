@@ -41,11 +41,6 @@ impl Default for BrowserState {
 pub struct Boolean(RwLock<bool>);
 
 impl Boolean {
-    #[allow(dead_code)]
-    pub fn new(b: bool) -> Self {
-        Self(RwLock::new(b))
-    }
-
     pub async fn set(&self, value: bool) -> bool {
         let mut guard = self.0.write().await;
         if *guard == value {

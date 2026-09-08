@@ -32,7 +32,7 @@ pub async fn get_icon_data_url(pool: &SqlitePool, icon_url: &str) -> Result<Stri
         let url = icon_url.to_owned();
 
         async move {
-            let get_date_url = GET_DATA_URL.get_or_init(|| {
+            let get_data_url = GET_DATA_URL.get_or_init(|| {
                 let user_agent = get_user_agent();
                 info!("User-Agent: {}", user_agent);
                 let Ok(client) = Client::builder()
@@ -44,7 +44,7 @@ pub async fn get_icon_data_url(pool: &SqlitePool, icon_url: &str) -> Result<Stri
                 };
                 GetDataUrl::with_client(client)
             });
-            if let Ok(data_url) = get_date_url
+            if let Ok(data_url) = get_data_url
                 .fetch(&url)
                 .await
                 .map(|data_url| data_url.to_string())
@@ -91,21 +91,11 @@ async fn upsert_data_url(
     url: &str,
     data_url: &str,
 ) -> Result<SqliteQueryResult, sqlx::Error> {
-    if let Some(id) = get_id(pool, url).await {
-        sqlx::query!(
-            "update icon_cached set data_url = ?, update_time = datetime('now', 'localtime')  where id = ?",
-            data_url,
-            id
-        )
-        .execute(pool)
-        .await
-    } else {
-        sqlx::query!(
-            "insert into icon_cached (url, data_url, update_time) values (?, ?, datetime('now', 'localtime'))",
-            url,
-            data_url
-        ).execute(pool).await
-    }
+    sqlx::query!(
+        "insert into icon_cached (url, data_url, update_time) values (?, ?, datetime('now', 'localtime')) on conflict(url) do update set data_url = excluded.data_url, update_time = excluded.update_time",
+        url,
+        data_url
+    ).execute(pool).await
 }
 
 #[cached(key = "String", convert = r#"{ String::from(url) }"#, option = true)]

@@ -1,8 +1,15 @@
+use std::sync::OnceLock;
+
 use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 use crate::error::FetchError;
+
+static CLIENT: OnceLock<Client> = OnceLock::new();
+fn client() -> &'static Client {
+    CLIENT.get_or_init(Client::new)
+}
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct HttpHeader {
@@ -31,21 +38,19 @@ pub struct Response {
 
 /// 核心 fetch 函数，返回一个支持序列化的 Response
 pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response, FetchError> {
-    let client = Client::new();
-
     // 构建请求
     let mut request_builder: RequestBuilder = match options.as_ref().and_then(|o| o.method.as_ref())
     {
         Some(method) => match method.to_uppercase().as_str() {
-            "GET" => client.get(url),
-            "POST" => client.post(url),
-            "PUT" => client.put(url),
-            "DELETE" => client.delete(url),
-            "HEAD" => client.head(url),
-            "PATCH" => client.patch(url),
-            _ => client.get(url),
+            "GET" => client().get(url),
+            "POST" => client().post(url),
+            "PUT" => client().put(url),
+            "DELETE" => client().delete(url),
+            "HEAD" => client().head(url),
+            "PATCH" => client().patch(url),
+            _ => client().get(url),
         },
-        None => client.get(url),
+        None => client().get(url),
     };
 
     // 添加请求头
