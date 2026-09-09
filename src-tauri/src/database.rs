@@ -70,6 +70,9 @@ impl Database {
     pub async fn migrate_memory(&self) -> Result<(), DatabaseError> {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
+            .min_connections(1)
+            .idle_timeout(None)
+            .max_lifetime(None)
             .connect("sqlite::memory:")
             .await?;
         sqlx::migrate!("../migrations").run(&pool).await?;
