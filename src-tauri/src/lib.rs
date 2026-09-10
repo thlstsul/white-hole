@@ -79,21 +79,6 @@ pub fn run() -> Result<(), SetupError> {
 
     builder
         .setup(|app| {
-            // Windows：设置进程级 AppUserModelID，让 toast 通知以应用身份（而非 PowerShell）显示。
-            // 开发模式下 exe 位于 target 目录（未安装、无开始菜单快捷方式），
-            // 通过 SetCurrentProcessExplicitAppUserModelID 注册进程 AUMID 后，
-            // download::send_notification 中使用该 AUMID 的自定义 toast 才能生效。
-            #[cfg(windows)]
-            {
-                use windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
-                use windows::core::HSTRING;
-
-                let app_id = HSTRING::from(app.config().identifier.as_str());
-                if let Err(e) = unsafe { SetCurrentProcessExplicitAppUserModelID(&app_id) } {
-                    error!("设置进程 AppUserModelID 失败：{e}");
-                }
-            }
-
             Browser::setup(app)?;
             // 自建下载器（下载任务管理、终止事件通知）
             download::setup(app.handle());

@@ -56,7 +56,6 @@ pub(crate) fn download_dir(app: &AppHandle) -> PathBuf {
 
 /// 监听下载事件流（开始/完成/失败/取消），发送系统通知
 ///
-/// Windows 下通过 `send_notification` 使用应用 AUMID + 自定义 appLogo 图标（见函数注释）；
 /// 所有下载通知统一在此处理：开始（TaskStarted）、终止（完成/失败/取消），
 /// 暂停/恢复为生命周期中间态，不打扰用户。
 async fn event_listener_loop(app: AppHandle, manager: DownloadManager) {
@@ -145,48 +144,10 @@ fn friendly_error(err: &DownloadError) -> String {
     }
 }
 
-/// 发送系统通知。
-///
-/// Windows 下不使用 tauri-plugin-notification：该插件在开发模式下不设置 `app_id`，
-/// notify-rust 会回退到 PowerShell 的 AUMID，导致通知显示 PowerShell 图标/名称。
-/// 这里直接调用 tauri-winrt-notification，显式指定应用 AUMID（配合 lib.rs 中的
-/// SetCurrentProcessExplicitAppUserModelID），使通知以应用身份显示；
-/// 不设置 appLogoOverride 图标（避免左侧出现大图标），并显式 short 时长让通知自动关闭。
-/// 其他平台仍走插件（macOS/Linux 插件工作正常）。
+/// 发送系统通知（Windows 及其他平台统一走 tauri-plugin-notification）。
 fn send_notification(app: &AppHandle, title: &str, body: &str) {
-    #[cfg(windows)]
-    {
-        use tauri_winrt_notification::{Duration, Toast};
-        use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-
-        // Toast 基于 WinRT，show() 前需保证当前线程已初始化 COM。
-        // S_OK(0) 表示本次由我们完成初始化，结束后应 CoUninitialize；
-        // S_FALSE(1) 表示线程此前已初始化过（复用即可，不重复 Uninitialize）。
-        let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-        let initialized = hr.is_ok() && hr.0 == 0;
-        if !hr.is_ok() {
-            error!("初始化 COM 失败：{hr}");
-        }
-
-        let app_id = app.config().identifier.clone();
-        if let Err(e) = Toast::new(&app_id)
-            .duration(Duration::Short)
-            .title(title)
-            .text1(body)
-            .show()
-        {
-            error!("发送下载通知失败：{e}");
-        }
-
-        if initialized {
-            unsafe { CoUninitialize() };
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        use tauri_plugin_notification::NotificationExt;
-        if let Err(e) = app.notification().builder().title(title).body(body).show() {
-            error!("发送下载通知失败：{e}");
-        }
+    use tauri_plugin_notification::NotificationExt;
+    if let Err(e) = app.notification().builder().title(title).body(body).show() {
+        error!("发送下载通知失败：{e}");
     }
 }
