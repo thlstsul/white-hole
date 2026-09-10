@@ -213,9 +213,15 @@ pub async fn blur_link(browser: State<'_, Browser>) -> Result<(), StateError> {
     browser.blur_link().await
 }
 
+/// Navigation API navigate 事件上报：引擎确认的目的地 URL 设置为乐观 URL
 #[command]
-pub async fn click_link(browser: State<'_, Browser>, url: String) -> Result<(), StateError> {
-    browser.click_link(url).await
+pub async fn navigate_started(
+    browser: State<'_, Browser>,
+    webview: Webview,
+    url: String,
+) -> Result<(), StateError> {
+    let label = webview.label().to_string();
+    browser.navigate_started(&label, url).await
 }
 
 #[command]

@@ -73,10 +73,6 @@
     link.addEventListener("blur", function () {
       blurLink();
     });
-
-    link.addEventListener("click", function () {
-      clickLink(url);
-    });
   }
 
   function webviewIpcInvoke(cmd, payload = {}) {
@@ -99,9 +95,5 @@
 
   function blurLink() {
     webviewIpcInvoke("blur_link");
-  }
-
-  function clickLink(url) {
-    webviewIpcInvoke("click_link", { url });
   }
 })();

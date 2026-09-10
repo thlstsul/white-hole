@@ -11,7 +11,7 @@
           "leave_picture_in_picture",
           "focus_link",
           "blur_link",
-          "click_link",
+          "navigate_started",
           "fetch",
           "history_snapshot",
           "close_floating_tab",

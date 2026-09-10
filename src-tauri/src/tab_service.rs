@@ -604,8 +604,8 @@ impl TabService {
             let redirecting = map.is_loading(label).await;
             map.start_loading(label).await;
             map.set_redirecting(label, redirecting).await;
-            // 快照当前 click_count，用于 on_page_load(Finished) 检测 stale 事件
-            map.snapshot_click_count(label).await;
+            // 快照当前乐观 URL，用于 on_page_load(Finished) 检测 stale 事件
+            map.snapshot_optimistic_url(label).await;
             // 真实加载已开始，loading 交由 PageLoadEvent::Finished 清理
             map.set_nav_pending(label, false).await;
             return Ok(());
@@ -667,6 +667,11 @@ impl TabService {
         if map.take_nav_pending(label).await {
             map.set_loading(label, false).await;
         }
+        // 快照由页面自身上报，是对当前 URL 的权威确认，乐观 URL 至此已被追上或
+        // 证伪，读 state 之前一律清除。同文档导航（pushState）没有 PageLoad
+        // Finished 兜底清理，残留会导致 get_state 永远合成 loading=true（Tab 卡
+        // 加载态）、标题落库写进乐观 URL 的记录（title/url 错配）
+        map.clear_optimistic_url(label).await;
         // 快照不含 title/icon，当前条目（replaceState 改 URL）落库时从标签页取；
         // 当前条目的位置用对账后的镜像位置 cur 而非片段内 index（跨源时两者不同）
         let state = map.get_state(label).await?;
@@ -901,6 +906,9 @@ pub(crate) fn on_download(webview: Webview, event: DownloadEvent) -> bool {
             let app = webview.app_handle().clone();
             let manager = webview.state::<DownloadManager>().inner().clone();
             async_runtime::spawn(async move {
+                // 下载不产生页面加载事件（乐观 URL 无兜底清理路径），此处清掉
+                // 乐观 URL 与 loading，防止 UI 卡在加载态
+                app.browser().set_loading(false).await;
                 // 在异步线程读取该 URL 的 cookie：cookies_for_url 在同步命令/事件处理器中
                 // 会死锁（wry#583），此处运行在 tokio 工作线程，不会阻塞 WebView2 UI 线程
                 let cookies = url

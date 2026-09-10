@@ -116,7 +116,7 @@ pub fn run() -> Result<(), SetupError> {
             leave_picture_in_picture,
             focus_link,
             blur_link,
-            click_link,
+            navigate_started,
             darkreader,
             fetch,
             close_floating_tab,

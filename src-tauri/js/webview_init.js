@@ -82,6 +82,15 @@
   if (window.navigation) {
     // Navigation API（Chromium 102+ / WebView2）提供权威完整会话历史
     window.navigation.addEventListener("currententrychange", reportSnapshot);
+    // navigate 事件：导航真实发起的瞬间触发，destination.url 是引擎确认的
+    // 目的地（乐观 URL 唯一来源）：无假阳性、SPA 改写后的最终 URL 已包含
+    window.navigation.addEventListener("navigate", function (e) {
+      // 下载不是导航；hashChange 为纯同文档锚点跳转，不产生新页面
+      if (e.downloadRequest || e.hashChange) {
+        return;
+      }
+      webviewIpcInvoke("navigate_started", { url: e.destination.url });
+    });
   } else {
     // 非 Chromium 引擎（macOS WKWebView / Linux WebKitGTK）没有 Navigation API：
     // 退化为 popstate / hashchange 兜底上报，保证同文档导航

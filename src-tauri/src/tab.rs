@@ -54,13 +54,12 @@ pub struct Tab {
     /// 加载期间到达但被跳过落库的标题（loading 守卫防止标题错位）：
     /// 待快照对账后用权威 URL 补写，避免同文档导航无 PageLoad Finished 事件而丢失
     pending_title: Option<String>,
-    /// 点击链接时乐观设置的 URL（按 tab 隔离），在真实导航追上之前，
-    /// get_state 会使用此值覆盖 URL 与 loading，避免网络延迟时 UI 无反应。
+    /// 导航发起时乐观设置的 URL（按 tab 隔离），在真实导航追上之前，
+    /// get_state 会使用此值覆盖 URL 与 loading，避免网络延迟时无反应。
     optimistic_url: Option<String>,
-    /// click_link 调用计数器，每次 click_link 递增。
-    click_count: u64,
-    /// on_page_load(Started) 时的 click_count 快照，用于检测 stale Finished 事件。
-    start_click_count: u64,
+    /// on_page_load(Started) 时的乐观 URL 快照：Finished 时若快照与当前乐观 URL
+    /// 不一致，说明期间有新导航上报，Finished 属于旧导航，不得误清新导航的乐观 URL
+    start_optimistic_url: Option<String>,
     darkreader: bool,
     index: isize,
     /// 当前加载是否为重定向（reload / 302 / meta refresh）：
@@ -123,8 +122,7 @@ impl Tab {
             load_finished_pending: false,
             pending_title: None,
             optimistic_url: None,
-            click_count: 0,
-            start_click_count: 0,
+            start_optimistic_url: None,
             darkreader: true,
             redirecting: false,
             history_queue,
@@ -642,21 +640,16 @@ impl TabMap {
 
     pub async fn set_optimistic_url(&self, label: &str, url: String) {
         self.0
-            .update_async(label, |_, tab| {
-                tab.click_count += 1;
-                tab.optimistic_url = Some(url);
-            })
+            .update_async(label, |_, tab| tab.optimistic_url = Some(url))
             .await;
     }
 
-    /// 安全清除乐观 URL：仅当 click_count 未变化时（即无新 click_link 发生）清除，
-    /// 避免 stale on_page_load(Finished) 误清除新导航设置的乐观 URL。
-    /// 原理：on_page_load(Started) 快照了当时的 click_count，
-    /// 若 Finished 时 click_count 已变化，说明期间有新的 click_link，Finished 属于旧导航。
+    /// 安全清除乐观 URL：乐观 URL 与 on_page_load(Started) 时的快照不一致，
+    /// 说明本次 Finished 属于旧导航，不得误清新导航设置的乐观 URL
     pub async fn try_clear_optimistic_url(&self, label: &str) {
         self.0
             .update_async(label, |_, tab| {
-                if tab.click_count == tab.start_click_count {
+                if tab.optimistic_url == tab.start_optimistic_url {
                     tab.optimistic_url = None
                 }
             })
@@ -669,11 +662,12 @@ impl TabMap {
             .await;
     }
 
-    /// 快照当前 click_count 到 start_click_count，用于 on_page_load(Finished)
-    /// 检测期间是否有新的 click_link 发生。
-    pub async fn snapshot_click_count(&self, label: &str) {
+    /// 快照当前乐观 URL，用于 on_page_load(Finished) 检测 stale 事件
+    pub async fn snapshot_optimistic_url(&self, label: &str) {
         self.0
-            .update_async(label, |_, tab| tab.start_click_count = tab.click_count)
+            .update_async(label, |_, tab| {
+                tab.start_optimistic_url = tab.optimistic_url.clone()
+            })
             .await;
     }
 
@@ -864,7 +858,7 @@ impl TabMap {
             .read_async(label, |_, tab| {
                 let url = tab.current_url()?;
                 let loading = tab.loading;
-                // 乐观 URL 覆盖：真实 URL 尚未追上时，用 click_link 设置的 URL 替代
+                // 乐观 URL 覆盖：真实 URL 尚未追上时，用 navigate_started 设置的 URL 替代
                 let (url, loading) = if let Some(ref opt_url) = tab.optimistic_url
                     && url != *opt_url
                 {
