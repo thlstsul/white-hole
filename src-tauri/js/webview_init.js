@@ -32,6 +32,11 @@
     if (!current || all.length === 0) {
       return;
     }
+    // 错误页快照不上报（会覆盖镜像当前 URL 并污染历史条目）；
+    // 只看当前条目：历史栈里的旧错误页条目不影响后续正常快照上报
+    if (isErrorPageUrl(current.url)) {
+      return;
+    }
 
     const entries = [];
     const keys = [];
@@ -99,7 +104,18 @@
     window.addEventListener("hashchange", reportFallback, false);
   }
 
+  // 加载失败（DNS/超时等）时 Chromium 会把 webview 导航到内部错误页
+  // chrome-error://chromewebdata/，该 URL 不是真实地址：上报会把它写进
+  // 历史镜像、访问记录并覆盖地址栏。跳过上报以保留原 URL（乐观 URL /
+  // 旧镜像不动，loading 由后端 PageLoad Finished 正常清除）
+  function isErrorPageUrl(url) {
+    return typeof url === "string" && url.startsWith("chrome-error://");
+  }
+
   function contentLoaded() {
+    if (isErrorPageUrl(window.location.href)) {
+      return;
+    }
     webviewIpcInvoke("content_loaded", {
       url: window.location.href,
       iconUrl: getIcon(),
