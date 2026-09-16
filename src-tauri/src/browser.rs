@@ -550,12 +550,7 @@ impl Browser {
     /// Navigation API navigate 事件上报：导航真实发起时由引擎确认目的地 URL，
     /// 设置乐观 URL 让 UI 即时反映（乐观 URL 唯一来源，label 取自发起导航的 webview）
     pub async fn navigate_started(&self, label: &str, url: String) -> Result<(), StateError> {
-        if label.is_empty() {
-            return Ok(());
-        }
-        self.tabs.set_optimistic_url(label, url).await;
-        let state = self.get_state(Some(label)).await?;
-        self.emit(Some(state)).await
+        self.tabs.set_optimistic_url(label, url).await
     }
 
     pub async fn darkreader(&self) -> Result<(), StateError> {

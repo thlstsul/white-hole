@@ -372,10 +372,17 @@ impl TabService {
         map.get_state(label).await
     }
 
-    pub async fn set_optimistic_url(&self, label: &str, url: String) {
-        if let Some(map) = self.map_for(label).await {
-            map.set_optimistic_url(label, url).await;
+    pub async fn set_optimistic_url(&self, label: &str, url: String) -> Result<(), StateError> {
+        let Some(map) = self.map_for(label).await else {
+            return Ok(());
+        };
+
+        map.set_optimistic_url(label, url).await;
+        if self.current.eq(label).await {
+            self.emit(None).await?;
         }
+
+        Ok(())
     }
 
     // ============ 每 tab 命令 ============
