@@ -42,10 +42,3 @@ fn Switcher(#[props(default)] class: String, onswitch: EventHandler<()>) -> Elem
         }
     }
 }
-
-#[component]
-fn Divide(#[props(default)] class: String) -> Element {
-    rsx! {
-        div { class: "divider mx-6 {class}" }
-    }
-}

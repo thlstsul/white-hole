@@ -27,12 +27,12 @@ pub fn TitleBar(#[props(default)] class: String) -> Element {
 
     rsx! {
         div {
-            class: "title-bar navbar min-h-10 h-10 {class}",
+            class: "title-bar navbar pl-0 pr-0 min-h-10 h-10 {class}",
             onmousedown: start_dragging,
 
             Navigator { class: "flex-none" }
             TitleBarContent {}
-            div { class: "fixed top-0 right-0 join",
+            div { class: "flex-none ml-auto join",
                 Extension {
                     Incognito { class: "tab" }
                     HttpClientGate { class: "tab" }
@@ -47,10 +47,13 @@ pub fn TitleBar(#[props(default)] class: String) -> Element {
 #[component]
 fn TitleBarContent() -> Element {
     rsx! {
-        div {
-            class: "title-bar-content flex flex-row items-center max-w-2/3 group",
-            onclick: |_| async { focus().await },
-            onmousedown: |e| e.stop_propagation(),
+        div { class: "title-bar-content relative flex flex-row items-center flex-1 min-w-0 group",
+            // 左半：点击触发 focus 并拦截 mousedown 阻止拖动；右半无拦截，冒泡到 title-bar 拖动
+            div {
+                class: "absolute left-0 top-0 w-1/2 h-full",
+                onclick: |_| async { focus().await },
+                onmousedown: |e| e.stop_propagation(),
+            }
 
             Icon {}
             div { class: "px-2 flex flex-col w-full",
