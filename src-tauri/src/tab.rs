@@ -91,8 +91,14 @@ impl Tab {
         let mut size = window
             .inner_size()?
             .to_logical::<f64>(window.scale_factor()?);
-        size.height -= Webview::TITLE_HEIGHT;
-        let position = LogicalPosition::new(0., Webview::TITLE_HEIGHT);
+        // 窗口可能启动即处于全屏（恢复窗口状态），此时没有标题栏
+        let is_fullscreen = window.is_fullscreen()?;
+        let position = if is_fullscreen {
+            LogicalPosition::new(0., 0.)
+        } else {
+            size.height -= Webview::TITLE_HEIGHT;
+            LogicalPosition::new(0., Webview::TITLE_HEIGHT)
+        };
 
         let app_handle = window.app_handle().clone();
         let is_dark = matches!(window.theme()?, Theme::Dark);
