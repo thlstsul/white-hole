@@ -47,10 +47,10 @@ pub fn TitleBar(#[props(default)] class: String) -> Element {
 #[component]
 fn TitleBarContent() -> Element {
     rsx! {
-        div { class: "title-bar-content relative flex flex-row items-center flex-1 min-w-0 group",
+        div { class: "title-bar-content relative flex flex-row items-center flex-1 min-w-0 group cursor-grab active:cursor-grabbing",
             // 左半：点击触发 focus 并拦截 mousedown 阻止拖动；右半无拦截，冒泡到 title-bar 拖动
             div {
-                class: "absolute left-0 top-0 w-1/2 h-full",
+                class: "absolute left-0 top-0 w-1/2 h-full cursor-default",
                 onclick: |_| async { focus().await },
                 onmousedown: |e| e.stop_propagation(),
             }
