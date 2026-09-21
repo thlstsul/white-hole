@@ -124,12 +124,19 @@ impl Browser {
         let scale_factor = self.window.scale_factor()?;
         let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
         let window_height = web_size.height;
+        let is_fullscreen = self.window.is_fullscreen()?;
         if !(self.tabs.current().await.is_empty()
             || web_size.height < HEIGHT
             || web_size.width < WIDTH)
         {
-            web_size.height -= Webview::TITLE_HEIGHT;
+            // 全屏时没有标题栏，webview 占满整个窗口
+            if !is_fullscreen {
+                web_size.height -= Webview::TITLE_HEIGHT;
+            }
             self.tabs.set_size(web_size).await;
+            if is_fullscreen {
+                self.tabs.set_position(LogicalPosition::new(0., 0.)).await;
+            }
         }
 
         // —— 浮动 Tab 跟随缩放 ——
