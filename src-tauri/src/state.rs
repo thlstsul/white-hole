@@ -40,6 +40,12 @@ impl Default for BrowserState {
 #[derive(Default)]
 pub struct Boolean(RwLock<bool>);
 
+impl From<bool> for Boolean {
+    fn from(value: bool) -> Self {
+        Self(RwLock::new(value))
+    }
+}
+
 impl Boolean {
     pub async fn set(&self, value: bool) -> bool {
         let mut guard = self.0.write().await;

@@ -48,6 +48,11 @@ pub struct Browser {
     is_focused: Boolean,
     incognito: Boolean,
     is_client: Boolean,
+    /// 自维护的全屏状态：窗口切换走 tao 的 set_fullscreen，
+    /// 本字段与窗口实际状态同步，供布局与 F11 方向判断使用
+    is_fullscreen: Boolean,
+    /// 进入全屏前是否最大化（持久化字段，避免退出时重读 is_maximized 恒为 false）
+    was_maximized: Boolean,
     last_focus_changed: Mutex<Instant>,
 }
 
@@ -77,6 +82,8 @@ impl Browser {
             let _ = mainview.set_background_color(Some(bg));
 
             let db = Database::new(app).await?;
+            let is_fullscreen = Boolean::from(window.is_fullscreen()?);
+            let was_maximized = Boolean::from(window.is_maximized()?);
 
             let state = Browser {
                 db,
@@ -86,6 +93,8 @@ impl Browser {
                 is_focused: Boolean::default(),
                 incognito: Boolean::default(),
                 is_client: Boolean::default(),
+                is_fullscreen,
+                was_maximized,
                 last_focus_changed: Mutex::new(Instant::now()),
             };
             app.manage(state);
@@ -120,31 +129,55 @@ impl Browser {
         )
     }
 
-    pub async fn resize(&self) -> Result<(), StateError> {
+    /// 计算 webview 应占用的位置与尺寸，基于窗口客户区。
+    /// 全屏时窗口已由 set_fullscreen 铺满显示器（其触发的 WM_SIZE → resize
+    /// 中 inner_size 即屏幕尺寸），无需另取显示器大小。
+    /// `deduct_title` 为 true 时减去自绘标题栏高度
+    /// （tab webview），false 时占满整个窗口（mainview 标签栏 UI）。
+    fn webview_rect(
+        &self,
+        is_fullscreen: bool,
+        deduct_title: bool,
+    ) -> Result<(LogicalPosition<f64>, LogicalSize<f64>), FrameworkError> {
         let scale_factor = self.window.scale_factor()?;
-        let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
-        let window_height = web_size.height;
-        let is_fullscreen = self.window.is_fullscreen()?;
-        if !(self.tabs.current().await.is_empty()
-            || web_size.height < HEIGHT
-            || web_size.width < WIDTH)
-        {
-            // 全屏时没有标题栏，webview 占满整个窗口
-            if !is_fullscreen {
-                web_size.height -= Webview::TITLE_HEIGHT;
-            }
+        let mut size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
+        let position = if is_fullscreen {
+            LogicalPosition::new(0., 0.)
+        } else if deduct_title {
+            size.height -= Webview::TITLE_HEIGHT;
+            LogicalPosition::new(0., Webview::TITLE_HEIGHT)
+        } else {
+            LogicalPosition::new(0., 0.)
+        };
+        Ok((position, size))
+    }
+
+    pub async fn resize(&self) -> Result<(), StateError> {
+        let is_fullscreen = self.is_fullscreen.get().await;
+        // tab 始终跟随窗口尺寸（全屏时位 (0,0)，普通时减标题栏），
+        // 不能因窗口小于初始尺寸而跳过——否则退出全屏后 tab 保持全屏尺寸盖住标题栏
+        let (position, web_size) = self.webview_rect(is_fullscreen, true)?;
+        if !self.tabs.current().await.is_empty() {
+            self.tabs.set_position(position).await;
             self.tabs.set_size(web_size).await;
-            if is_fullscreen {
-                self.tabs.set_position(LogicalPosition::new(0., 0.)).await;
-            }
         }
+        // mainview（标签栏 UI）占满整个窗口/屏幕，不依赖 auto_resize
+        let (main_pos, main_size) = self.webview_rect(is_fullscreen, false)?;
+        if let Err(e) = self.mainview.set_position(main_pos) {
+            error!("mainview set_position 失败：{e}");
+        }
+        if let Err(e) = self.mainview.set_size(main_size) {
+            error!("mainview set_size 失败：{e}");
+        }
+        // floating_layout 期望完整窗口尺寸（内部再扣标题栏），
+        // 复用 main_size 而非已扣除标题栏的 web_size，避免高度双重扣除
+        let window_size = main_size;
 
         // —— 浮动 Tab 跟随缩放 ——
         {
             let mut floating = self.tabs.floating_tab.lock().await;
             if let Some(ref mut f) = *floating {
-                let (pos, size) =
-                    self.floating_layout(LogicalSize::new(web_size.width, window_height));
+                let (pos, size) = self.floating_layout(window_size);
                 if let Err(e) = f.webview.set_size(size) {
                     error!("浮动 Tab set_size 失败：{e}");
                 }
@@ -486,7 +519,8 @@ impl Browser {
             return Ok(());
         }
 
-        self.fullscreen_changed(!self.window.is_fullscreen()?).await
+        self.fullscreen_changed(!self.is_fullscreen.get().await)
+            .await
     }
 
     pub async fn query_navigation_log(
@@ -520,20 +554,46 @@ impl Browser {
     }
 
     pub async fn fullscreen_changed(&self, is_fullscreen: bool) -> Result<(), FrameworkError> {
-        self.window.set_fullscreen(is_fullscreen)?;
-        let scale_factor = self.window.scale_factor()?;
-        let mut web_size = self.window.inner_size()?.to_logical::<f64>(scale_factor);
-        if !is_fullscreen {
-            web_size.height -= Webview::TITLE_HEIGHT;
+        // 乐观标记目标状态：Boolean::set 返回 false 表示已在目标状态，
+        // 直接忽略（F11 快速连按第二次读到旧值也不会重复进/退，防方向错乱）
+        if !self.is_fullscreen.set(is_fullscreen).await {
+            return Ok(());
         }
-        self.tabs.set_size(web_size).await;
-        self.tabs
-            .set_position(if is_fullscreen {
-                LogicalPosition::new(0., 0.)
-            } else {
-                LogicalPosition::new(0., Webview::TITLE_HEIGHT)
-            })
-            .await;
+        let result = if is_fullscreen {
+            self.enter_fullscreen().await
+        } else {
+            self.exit_fullscreen().await
+        };
+        if let Err(e) = result {
+            // 失败回滚状态，避免 is_fullscreen 与窗口实际状态不一致
+            self.is_fullscreen.set(!is_fullscreen).await;
+            return Err(e);
+        }
+        // 布局无需在此处理：set_fullscreen 切换必触发 WM_SIZE → resize()，
+        // 由 resize 读取 is_fullscreen 统一收敛布局
+        Ok(())
+    }
+
+    /// 进入全屏：记录 was_maximized → 若最大化则先 unmaximize()
+    /// （清除 WS_MAXIMIZE，解除最大化工作区的客户区钳制，避免全屏底部漏出任务栏）
+    /// → 再 set_fullscreen(true)。webview 布局由 fullscreen_changed 按屏幕大小重算。
+    async fn enter_fullscreen(&self) -> Result<(), FrameworkError> {
+        let was_maximized = self.window.is_maximized()?;
+        self.was_maximized.set(was_maximized).await;
+        if was_maximized {
+            self.window.unmaximize()?;
+        }
+        self.window.set_fullscreen(true)?;
+        Ok(())
+    }
+
+    /// 退出全屏：set_fullscreen(false) 后若进入前是最大化，显式 maximize() 恢复。
+    /// 用持久化字段 was_maximized，避免"退出时重读 is_maximized 恒为 false"的缺陷。
+    async fn exit_fullscreen(&self) -> Result<(), FrameworkError> {
+        self.window.set_fullscreen(false)?;
+        if self.was_maximized.get().await {
+            self.window.maximize()?;
+        }
         Ok(())
     }
 
