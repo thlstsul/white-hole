@@ -106,7 +106,7 @@ pub async fn save_log(
     Ok(id)
 }
 
-#[cached(key = "i64", convert = r#"{ id }"#, option = true)]
+#[cached(key = "i64", convert = r#"{ id }"#)]
 pub async fn get_url(pool: &SqlitePool, id: i64) -> Option<String> {
     sqlx::query!("select url from navigation_log where id = ?", id)
         .fetch_optional(pool)
@@ -115,7 +115,7 @@ pub async fn get_url(pool: &SqlitePool, id: i64) -> Option<String> {
         .map(|record| record.url)
 }
 
-#[cached(key = "String", convert = r#"{ String::from(url) }"#, option = true)]
+#[cached(key = "String", convert = r#"{ String::from(url) }"#)]
 pub async fn get_id(pool: &SqlitePool, url: &str) -> Option<i64> {
     sqlx::query!(
         r#"select id as "id!" from navigation_log where url = ?"#,
@@ -132,7 +132,7 @@ pub async fn query_log(
     keyword: &str,
     page_token: PageToken,
 ) -> Result<QueryLogResponse, sqlx::Error> {
-    let mut query_builder: QueryBuilder<'_, Sqlite> = QueryBuilder::new(
+    let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
         "select a.id, a.url, a.title, b.data_url as icon_url, a.star, a.last_time from navigation_log a left outer join icon_cached b on a.icon_id = b.id where 1 = 1 ",
     );
     let mut is_empty = true;

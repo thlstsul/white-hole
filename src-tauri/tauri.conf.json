@@ -41,9 +41,9 @@
       },
       "wix": {
         "componentRefs": [
+          "StartMenuInternetRegistry",
           "WhiteHoleRegistry",
-          "HttpsRegistry",
-          "HttpRegistry"
+          "RegisteredApplicationsRegistry"
         ],
         "fragmentPaths": [
           "./windows/registry.wxs"

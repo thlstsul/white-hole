@@ -4,7 +4,7 @@ use sqlx::{SqlitePool, sqlite::SqliteQueryResult};
 
 use crate::error::{GetPublicSuffixError, SyncPublicSuffixError};
 
-#[once(time = 90000, sync_writes = true, result = true)]
+#[once(ttl_secs = 90000, sync_writes = true)]
 pub async fn get_public_suffix_cached(pool: &SqlitePool) -> Result<List, GetPublicSuffixError> {
     let content = get_public_suffix(pool, false).await?;
     Ok(content.parse()?)

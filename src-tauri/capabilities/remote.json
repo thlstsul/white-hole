@@ -1,4 +1,5 @@
 {
+  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "remote",
   "description": "Remote call",
   "windows": ["main"],
