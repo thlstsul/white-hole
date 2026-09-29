@@ -2,43 +2,53 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
     <DirectoryRef Id="TARGETDIR">
+      <!-- StartMenuInternet: 让系统在“默认应用”中识别本浏览器 -->
+      <Component Id="StartMenuInternetRegistry" Guid="*">
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Clients\StartMenuInternet\white-hole.exe">
+          <RegistryValue Type="string" Value="White Hole" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Clients\StartMenuInternet\white-hole.exe\Capabilities">
+          <RegistryValue Type="string" Name="ApplicationName" Value="White Hole" />
+          <RegistryValue Type="string" Name="ApplicationDescription" Value="White Hole Browser" />
+          <RegistryValue Type="string" Name="ApplicationIcon" Value="&quot;[!Path]&quot;,0" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Clients\StartMenuInternet\white-hole.exe\Capabilities\URLAssociations">
+          <RegistryValue Type="string" Name="http" Value="WhiteHoleHTM" />
+          <RegistryValue Type="string" Name="https" Value="WhiteHoleHTM" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Clients\StartMenuInternet\white-hole.exe\Capabilities\FileAssociations">
+          <RegistryValue Type="string" Name=".html" Value="WhiteHoleHTM" />
+          <RegistryValue Type="string" Name=".htm" Value="WhiteHoleHTM" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Clients\StartMenuInternet\white-hole.exe\DefaultIcon">
+          <RegistryValue Type="string" Value="&quot;[!Path]&quot;,0" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="SOFTWARE\Clients\StartMenuInternet\white-hole.exe\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[!Path]&quot;" />
+        </RegistryKey>
+      </Component>
+      <!-- ProgID: http/https/.html 打开方式 -->
       <Component Id="WhiteHoleRegistry" Guid="*">
+        <RegistryKey Root="HKCR" Key="WhiteHoleHTM">
+          <RegistryValue Type="string" Value="White Hole HTML Document" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="WhiteHoleHTM\DefaultIcon">
+          <RegistryValue Type="string" Value="&quot;[!Path]&quot;,0" />
+        </RegistryKey>
         <RegistryKey Root="HKCR" Key="WhiteHoleHTM\shell\open\command">
-          <RegistryValue
-                        Type="string"
-                        Value="&quot;[!Path]&quot; &quot;%1&quot;"
-                    />
+          <RegistryValue Type="string" Value="&quot;[!Path]&quot; &quot;%1&quot;" />
         </RegistryKey>
         <RegistryKey Root="HKCR" Key="WhiteHoleHTM\Application">
+          <RegistryValue Type="string" Name="ApplicationIcon" Value="&quot;[!Path]&quot;,0" />
+        </RegistryKey>
+      </Component>
+      <!-- RegisteredApplications: 向系统声明应用能力 -->
+      <Component Id="RegisteredApplicationsRegistry" Guid="*">
+        <RegistryKey Root="HKCU" Key="SOFTWARE\RegisteredApplications">
           <RegistryValue
                         Type="string"
-                        Name="ApplicationIcon"
-                        Value="&quot;[!Path]&quot;,0"
-                    />
-        </RegistryKey>
-      </Component>
-      <Component Id="HttpsRegistry" Guid="*">
-        <RegistryKey
-                    Root="HKCU"
-                    Key="Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice"
-                >
-              <RegistryValue
-                        Type="string"
-                        Name="ProgId"
-                        Value="WhiteHoleHTM"
-                        KeyPath="yes"
-                    />
-        </RegistryKey>
-      </Component>
-      <Component Id="HttpRegistry" Guid="*">
-        <RegistryKey
-                    Root="HKCU"
-                    Key="Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
-                >
-              <RegistryValue
-                        Type="string"
-                        Name="ProgId"
-                        Value="WhiteHoleHTM"
+                        Name="WhiteHole"
+                        Value="SOFTWARE\Clients\StartMenuInternet\white-hole.exe\Capabilities"
                         KeyPath="yes"
                     />
         </RegistryKey>

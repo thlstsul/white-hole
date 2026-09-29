@@ -32,6 +32,8 @@ mod page;
 #[cfg(windows)]
 mod prevent_default;
 mod public_suffix;
+#[cfg(windows)]
+mod registration;
 mod request;
 mod state;
 mod tab;
@@ -80,6 +82,9 @@ pub fn run() -> Result<(), SetupError> {
     builder
         .setup(|app| {
             Browser::setup(app)?;
+            // 启动自检：确保已注册为 Windows 可识别的浏览器
+            #[cfg(windows)]
+            registration::setup();
             // 自建下载器（下载任务管理、终止事件通知）
             download::setup(app.handle());
             // 托盘：展示下载进度、提供暂停/恢复/打开/移除入口
