@@ -91,6 +91,10 @@ opt-level = "s"
 panic = "abort"
 strip = true
 
+[profile.wasm-release]
+inherits = "release"
+strip = false
+
 [profile.server-dev]
 inherits = "dev"
 
