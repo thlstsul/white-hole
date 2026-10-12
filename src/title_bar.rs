@@ -50,7 +50,7 @@ fn TitleBarContent() -> Element {
         div { class: "title-bar-content relative flex flex-row items-center flex-1 min-w-0 group cursor-grab active:cursor-grabbing",
             // 左半：点击触发 focus 并拦截 mousedown 阻止拖动；右半无拦截，冒泡到 title-bar 拖动
             div {
-                class: "absolute left-0 top-0 w-1/2 h-full cursor-default",
+                class: "absolute left-0 top-0 w-1/2 h-full z-10 cursor-default",
                 onclick: |_| async { focus().await },
                 onmousedown: |e| e.stop_propagation(),
             }
@@ -94,14 +94,14 @@ fn Icon() -> Element {
 #[component]
 fn Title() -> Element {
     rsx! {
-        div { class: "title text-sm font-semibold truncate", {use_browser().title} }
+        div { class: "title text-sm font-semibold truncate select-none", {use_browser().title} }
     }
 }
 
 #[component]
 fn Url() -> Element {
     rsx! {
-        div { class: "url text-xs text-blue-300 truncate",
+        div { class: "url text-xs text-blue-300 truncate select-none",
             DecodeUrl { url: use_browser().url }
         }
     }
