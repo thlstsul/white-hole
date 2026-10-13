@@ -1,7 +1,8 @@
 use dioxus::prelude::dioxus_stores;
 use dioxus::stores::Store;
+use dioxus_logger::tracing::error;
 use serde::{Deserialize, Serialize};
-use tauri_sys::core::{invoke, invoke_result};
+use tauri_sys::core::invoke_result;
 use time::OffsetDateTime;
 
 pub async fn get_state() -> Result<BrowserState, Error> {
@@ -35,56 +36,56 @@ pub async fn query_navigation_log(
 }
 
 pub async fn back() {
-    invoke::<()>("back", &()).await;
+    invoke("back").await;
 }
 
 pub async fn forward() {
-    invoke::<()>("forward", &()).await;
+    invoke("forward").await;
 }
 
 pub async fn reload() {
-    invoke::<()>("reload", &()).await;
+    invoke("reload").await;
 }
 
 pub async fn incognito() {
-    invoke::<()>("incognito", &()).await;
+    invoke("incognito").await;
 }
 
 pub async fn http_client() {
-    invoke::<()>("http_client", &()).await;
+    invoke("http_client").await;
 }
 
 pub async fn start_dragging() {
-    invoke::<()>("start_dragging", &()).await;
+    invoke("start_dragging").await;
 }
 
 pub async fn focus() {
-    invoke::<()>("focus", &()).await;
+    invoke("focus").await;
 }
 
 #[allow(dead_code)]
 pub async fn blur() {
-    invoke::<()>("blur", &()).await;
+    invoke("blur").await;
 }
 
 pub async fn minimize() {
-    invoke::<()>("minimize", &()).await;
+    invoke("minimize").await;
 }
 
 pub async fn maximize() {
-    invoke::<()>("maximize", &()).await;
+    invoke("maximize").await;
 }
 
 pub async fn unmaximize() {
-    invoke::<()>("unmaximize", &()).await;
+    invoke("unmaximize").await;
 }
 
 pub async fn close() {
-    invoke::<()>("close", &()).await;
+    tauri_sys::core::invoke::<()>("close", &()).await;
 }
 
 pub async fn darkreader() {
-    invoke::<()>("darkreader", &()).await;
+    invoke("darkreader").await;
 }
 
 pub async fn fetch(req: HttpRequest) -> Result<HttpResponse, Error> {
@@ -142,22 +143,6 @@ pub struct NavigationLog {
     pub last_time: Option<OffsetDateTime>,
 }
 
-#[derive(Serialize)]
-struct SearchRequest {
-    keyword: String,
-}
-
-#[derive(Serialize)]
-struct TouchLogRequest {
-    id: i64,
-}
-
-#[derive(Serialize)]
-struct QueryLogRequest {
-    pub keyword: String,
-    pub page_token: PageToken,
-}
-
 #[derive(Clone, Default, Deserialize)]
 pub struct QueryLogResponse {
     pub next_page_token: Option<PageToken>,
@@ -204,5 +189,27 @@ impl HttpRequest {
             });
 
         Self { url, options }
+    }
+}
+
+#[derive(Serialize)]
+struct SearchRequest {
+    keyword: String,
+}
+
+#[derive(Serialize)]
+struct TouchLogRequest {
+    id: i64,
+}
+
+#[derive(Serialize)]
+struct QueryLogRequest {
+    pub keyword: String,
+    pub page_token: PageToken,
+}
+
+async fn invoke(command: &str) {
+    if let Err(e) = invoke_result::<(), Error>(command, &()).await {
+        error!("{command}: {e}");
     }
 }
