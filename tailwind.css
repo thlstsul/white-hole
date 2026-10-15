@@ -7,3 +7,14 @@
 }
 
 @source "./src/**/*.{rs,html,css}";
+
+@layer components {
+    .list .list-row:focus-visible {
+        outline: none;
+        background-color: color-mix(
+            in oklab,
+            var(--color-base-content) 12%,
+            transparent
+        );
+    }
+}
