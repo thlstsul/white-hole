@@ -2,12 +2,13 @@ use std::fs::File;
 use std::io;
 use std::process::{Command, Stdio};
 use std::thread;
+use std::{env, fs};
 
 fn main() {
     if is_release_build() {
         // dx、tauri 没有清空捆绑文件，会导致越编译越大
-        let _ = std::fs::remove_dir_all("./target/dx");
-        let _ = std::fs::remove_dir_all("./dist/public");
+        let _ = fs::remove_dir_all("./target/dx");
+        let _ = fs::remove_dir_all("./dist/public");
         println!("cargo:rerun-if-changed=./");
     }
 
@@ -31,7 +32,7 @@ fn run_command_safely(command: &str, args: &[&str], output_file: Option<&str>) -
 }
 
 fn is_release_build() -> bool {
-    std::env::var("PROFILE").is_ok_and(|p| p == "release")
+    env::var("PROFILE").is_ok_and(|p| p == "release")
 }
 
 fn run_sync(command: &str, args: &[&str], output_file: Option<&str>) -> io::Result<()> {

@@ -2,7 +2,9 @@ use dioxus::prelude::dioxus_stores;
 use dioxus::stores::Store;
 use dioxus_logger::tracing::error;
 use serde::{Deserialize, Serialize};
-use tauri_sys::core::invoke_result;
+use std::error;
+use std::fmt::{self, Display};
+use tauri_sys::core::{invoke as tauri_invoke, invoke_result};
 use time::OffsetDateTime;
 
 pub async fn get_state() -> Result<BrowserState, Error> {
@@ -63,11 +65,6 @@ pub async fn focus() {
     invoke("focus").await;
 }
 
-#[allow(dead_code)]
-pub async fn blur() {
-    invoke("blur").await;
-}
-
 pub async fn minimize() {
     invoke("minimize").await;
 }
@@ -81,7 +78,7 @@ pub async fn unmaximize() {
 }
 
 pub async fn close() {
-    tauri_sys::core::invoke::<()>("close", &()).await;
+    tauri_invoke::<()>("close", &()).await;
 }
 
 pub async fn darkreader() {
@@ -95,13 +92,13 @@ pub async fn fetch(req: HttpRequest) -> Result<HttpResponse, Error> {
 #[derive(Debug, Deserialize)]
 pub struct Error(String);
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl std::error::Error for Error {}
+impl error::Error for Error {}
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct BrowserState {

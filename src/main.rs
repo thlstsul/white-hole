@@ -13,7 +13,7 @@ mod window_decoration;
 
 use app::App;
 use dioxus::prelude::*;
-use dioxus_logger::tracing::Level;
+use dioxus_logger::{init, tracing::Level};
 
 fn main() {
     let log_level = if cfg!(debug_assertions) {
@@ -21,6 +21,6 @@ fn main() {
     } else {
         Level::ERROR
     };
-    dioxus_logger::init(log_level).expect("failed to init logger");
+    init(log_level).expect("failed to init logger");
     launch(App);
 }

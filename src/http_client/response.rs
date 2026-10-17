@@ -7,8 +7,8 @@ use encoding::{
     all::{ASCII, GB18030, GBK, ISO_8859_1, UTF_8},
 };
 use http::StatusCode;
-use mime::{CHARSET, Mime};
-use serde_json::Value;
+use mime::{CHARSET, Mime, UTF_8 as MIME_UTF8};
+use serde_json::{Value, from_slice, to_vec_pretty};
 use time::{OffsetDateTime, macros::format_description};
 
 #[component]
@@ -49,8 +49,8 @@ fn Body(body: Vec<u8>, content_type: Option<Mime>) -> Element {
             || sub.contains("xml")
         {
             let body = if "json" == sub {
-                serde_json::from_slice::<Value>(&body)
-                    .and_then(|body| serde_json::to_vec_pretty(&body))
+                from_slice::<Value>(&body)
+                    .and_then(|body| to_vec_pretty(&body))
                     .unwrap_or(body)
             } else {
                 body
@@ -58,7 +58,7 @@ fn Body(body: Vec<u8>, content_type: Option<Mime>) -> Element {
 
             let charset = content_type
                 .get_param(CHARSET)
-                .unwrap_or(mime::UTF_8)
+                .unwrap_or(MIME_UTF8)
                 .as_str();
 
             decode(body, charset)?

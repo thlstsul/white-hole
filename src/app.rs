@@ -1,3 +1,4 @@
+use dioxus::document::Stylesheet;
 use dioxus::prelude::*;
 use dioxus_logger::tracing;
 use futures_util::StreamExt as _;
@@ -90,7 +91,7 @@ fn InnerApp() -> Element {
     let is_client = use_browser().is_client;
 
     rsx! {
-        document::Stylesheet { href: CSS }
+        Stylesheet { href: CSS }
 
         if is_client() {
             HttpClient {}

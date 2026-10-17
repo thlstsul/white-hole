@@ -1,4 +1,9 @@
-use std::{borrow::Cow, collections::VecDeque, slice, str::Utf8Error};
+use std::{
+    borrow::Cow,
+    collections::VecDeque,
+    ptr, slice,
+    str::{self, Utf8Error},
+};
 
 use dioxus::prelude::*;
 
@@ -134,7 +139,7 @@ impl<'a> PercentDecode<'a> {
     /// This is return `Err` when the percent-decoded bytes are not well-formed in UTF-8.
     pub fn decode_utf8(self) -> Result<Cow<'a, str>, Utf8Error> {
         match self.clone().into() {
-            Cow::Borrowed(bytes) => std::str::from_utf8(bytes).map(|s| s.into()),
+            Cow::Borrowed(bytes) => str::from_utf8(bytes).map(|s| s.into()),
             Cow::Owned(bytes) => String::from_utf8(bytes)
                 .map_err(|e| e.utf8_error())
                 .map(|s| s.into()),
@@ -167,7 +172,7 @@ fn decode_utf8_lossy(input: Cow<'_, [u8]>) -> Cow<'_, str> {
 
                     // First we do a debug_assert to confirm our description above.
                     let raw_utf8: *const [u8] = utf8.as_bytes();
-                    debug_assert!(std::ptr::addr_eq(raw_utf8, &*bytes as *const [u8]));
+                    debug_assert!(ptr::addr_eq(raw_utf8, &*bytes as *const [u8]));
 
                     // Given we know the original input bytes are valid UTF-8,
                     // and we have ownership of those bytes, we re-use them and
