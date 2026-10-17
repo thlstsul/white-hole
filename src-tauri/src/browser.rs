@@ -191,12 +191,14 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn close_tab(&self) -> Result<(), TabError> {
+    /// 返回是否实际执行了 tab 操作，供调用方决定是否需要跟进 focus_changed
+    pub async fn close_tab(&self) -> Result<bool, TabError> {
         if self.is_focused.get().await {
-            return Ok(());
+            return Ok(false);
         }
 
-        self.tabs.close_tab().await
+        self.tabs.close_tab().await?;
+        Ok(true)
     }
 
     /// 同步读取 Ctrl 是否按下（避免异步竞态）
@@ -281,20 +283,24 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn next_tab(&self) -> Result<(), TabError> {
+    /// 返回是否实际执行了 tab 操作，供调用方决定是否需要跟进 focus_changed
+    pub async fn next_tab(&self) -> Result<bool, TabError> {
         if self.is_focused.get().await {
-            return Ok(());
+            return Ok(false);
         }
 
-        self.tabs.next_tab().await
+        self.tabs.next_tab().await?;
+        Ok(true)
     }
 
-    pub async fn near_tab(&self) -> Result<(), TabError> {
+    /// 返回是否实际执行了 tab 操作，供调用方决定是否需要跟进 focus_changed
+    pub async fn near_tab(&self) -> Result<bool, TabError> {
         if self.is_focused.get().await {
-            return Ok(());
+            return Ok(false);
         }
 
-        self.tabs.near_tab().await
+        self.tabs.near_tab().await?;
+        Ok(true)
     }
 
     /// 打开浮动 Tab：关闭已有 → 创建 webview（同窗口 add_child）→ 注入 JS 控制栏
@@ -411,20 +417,23 @@ impl Browser {
         self.emit(None).await
     }
 
-    pub async fn focus(&self) -> Result<(), StateError> {
+    /// 返回主视图状态是否实际变化，供调用方决定是否需要跟进 focus_changed
+    pub async fn focus(&self) -> Result<bool, StateError> {
         if !self.is_focused.set(true).await {
-            return Ok(());
+            return Ok(false);
         }
 
         self.mainview.reparent(&self.window)?;
         self.tabs.raise_floating_tab().await;
 
-        self.emit(None).await
+        self.emit(None).await?;
+        Ok(true)
     }
 
-    pub async fn blur(&self) -> Result<(), StateError> {
+    /// 返回主视图状态是否实际变化，供调用方决定是否需要跟进 focus_changed
+    pub async fn blur(&self) -> Result<bool, StateError> {
         if !self.is_focused.set(false).await {
-            return Ok(());
+            return Ok(false);
         }
 
         let label = self.tabs.current().await;
@@ -433,7 +442,8 @@ impl Browser {
         }
         self.tabs.raise_floating_tab().await;
 
-        self.emit(None).await
+        self.emit(None).await?;
+        Ok(true)
     }
 
     pub async fn back(&self) -> Result<(), StateError> {

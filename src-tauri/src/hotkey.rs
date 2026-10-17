@@ -2,7 +2,14 @@ use hotkey::{Code, Modifiers, hotkey};
 use log::error;
 use tauri::AppHandle;
 
-use crate::browser::BrowserExt as _;
+use crate::browser::{Browser, BrowserExt as _};
+
+/// 同步焦点到当前顶层 webview，失败仅记日志
+async fn sync_focus(browser: &Browser) {
+    if let Err(e) = browser.focus_changed().await {
+        error!("焦点变化失败：{e}");
+    }
+}
 
 #[hotkey([(Modifiers::CONTROL, Code::KeyR), (Modifiers::empty(), Code::F5)])]
 async fn reload(app_handle: AppHandle) {
@@ -31,55 +38,50 @@ async fn forward(app_handle: AppHandle) {
 #[hotkey(Modifiers::CONTROL, Code::KeyL)]
 async fn focus(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    if let Err(e) = browser.focus().await {
-        error!("进入主视图失败：{e}");
-    }
-    if let Err(e) = browser.focus_changed().await {
-        error!("焦点变化失败：{e}");
+    match browser.focus().await {
+        Ok(true) => sync_focus(&browser).await,
+        Ok(false) => {}
+        Err(e) => error!("进入主视图失败：{e}"),
     }
 }
 
 #[hotkey(Modifiers::empty(), Code::Escape)]
 async fn blur(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    if let Err(e) = browser.blur().await {
-        error!("退出主视图失败：{e}");
-    }
-    if let Err(e) = browser.focus_changed().await {
-        error!("焦点变化失败：{e}");
+    match browser.blur().await {
+        Ok(true) => sync_focus(&browser).await,
+        Ok(false) => {}
+        Err(e) => error!("退出主视图失败：{e}"),
     }
 }
 
 #[hotkey(Modifiers::CONTROL, Code::KeyW)]
 async fn close_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    if let Err(e) = browser.close_tab().await {
-        error!("关闭标签失败：{e}");
-    }
-    if let Err(e) = browser.focus_changed().await {
-        error!("焦点变化失败：{e}");
+    match browser.close_tab().await {
+        Ok(true) => sync_focus(&browser).await,
+        Ok(false) => {}
+        Err(e) => error!("关闭标签失败：{e}"),
     }
 }
 
 #[hotkey(Modifiers::CONTROL, Code::Tab)]
 async fn next_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    if let Err(e) = browser.next_tab().await {
-        error!("切换标签失败：{e}");
-    }
-    if let Err(e) = browser.focus_changed().await {
-        error!("焦点变化失败：{e}");
+    match browser.next_tab().await {
+        Ok(true) => sync_focus(&browser).await,
+        Ok(false) => {}
+        Err(e) => error!("切换标签失败：{e}"),
     }
 }
 
 #[hotkey(Modifiers::CONTROL | Modifiers::SHIFT, Code::Tab)]
 async fn near_tab(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    if let Err(e) = browser.near_tab().await {
-        error!("切换标签失败：{e}");
-    }
-    if let Err(e) = browser.focus_changed().await {
-        error!("焦点变化失败：{e}");
+    match browser.near_tab().await {
+        Ok(true) => sync_focus(&browser).await,
+        Ok(false) => {}
+        Err(e) => error!("切换标签失败：{e}"),
     }
 }
 

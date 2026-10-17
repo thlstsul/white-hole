@@ -55,12 +55,12 @@ pub async fn start_dragging(
 
 #[command]
 pub async fn focus(browser: State<'_, Browser>) -> Result<(), StateError> {
-    browser.focus().await
+    browser.focus().await.map(|_| ())
 }
 
 #[command]
 pub async fn blur(browser: State<'_, Browser>) -> Result<(), StateError> {
-    browser.blur().await
+    browser.blur().await.map(|_| ())
 }
 
 #[command]
