@@ -17,10 +17,10 @@ use crate::{
     database::Database,
     error::*,
     history::HistoryEvent,
-    icon::{get_cached_icon, get_icon_data_url},
+    icon::{clear_cache as clear_icon_cache, get_cached_icon, get_icon_data_url},
     log::{
-        NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, touch_log,
-        update_log_star,
+        NavigationLog, QueryLogResponse, clear_cache as clear_log_cache, get_id, get_url,
+        query_log, save_log, touch_log, update_log_star,
     },
     page::PageToken,
     public_suffix::get_public_suffix_cached,
@@ -108,6 +108,11 @@ impl Browser {
     /// 供 TabService 复用数据库连接池
     pub(crate) async fn db(&self) -> Arc<SqlitePool> {
         self.db.get().await
+    }
+
+    /// 供 TabService 查询无痕状态（历史落库的缓存隔离依赖此标志）
+    pub(crate) async fn is_incognito(&self) -> bool {
+        self.incognito.get().await
     }
 
     /// 浮动 Tab 位置和尺寸计算（复用于 resize / open_floating_tab）
@@ -221,7 +226,7 @@ impl Browser {
         let pool = self.db.get().await;
         let incognito = self.incognito.get().await;
         self.is_focused.set(false).await;
-        if let Some(id) = get_id(&pool, url.as_str()).await
+        if let Some(id) = get_id(&pool, incognito, url.as_str()).await
             && let Some((label, index)) = self.tabs.any_open(id, incognito).await
         {
             self.tabs.go_to(&label, index).await;
@@ -251,7 +256,8 @@ impl Browser {
 
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
         if self.ctrl_pressed() {
-            if let Some(url) = get_url(self.db.get().await.as_ref(), id).await {
+            let incognito = self.incognito.get().await;
+            if let Some(url) = get_url(self.db.get().await.as_ref(), incognito, id).await {
                 self.open_floating_tab(&Url::parse(&url)?).await?;
             }
             return Ok(());
@@ -267,7 +273,7 @@ impl Browser {
             if let Err(e) = touch_log(pool.as_ref(), id).await {
                 log::error!("刷新浏览记录 last_time 失败：{e}");
             }
-        } else if let Some(url) = get_url(pool.as_ref(), id).await {
+        } else if let Some(url) = get_url(pool.as_ref(), incognito, id).await {
             let label = self.tabs.create_tab(&Url::parse(&url)?, incognito).await?;
             let mut state = self.get_state(None).await?;
             state.url = url.clone();
@@ -490,6 +496,10 @@ impl Browser {
                 .ok();
             self.db.close_memory().await?;
             self.incognito.set(false).await;
+            // 翻转标志后再清空全局缓存：此后新调用均以普通侧 key 查询持久库，
+            // 不会把内存库结果写回 (true, …) 缓存条目（在途调用已由 close_incognito 排空）
+            clear_log_cache().await;
+            clear_icon_cache().await;
             // 恢复进入无痕模式前的 tab（由 TabService 的 current 机制管理）
             self.tabs.restore_previous_tab().await?;
         } else {
@@ -704,17 +714,20 @@ impl Browser {
 
     async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
         let pool = self.db.get().await;
-        Ok(save_log(&pool, log).await?)
+        let incognito = self.incognito.get().await;
+        Ok(save_log(&pool, incognito, log).await?)
     }
 
     async fn get_icon_data_url(&self, icon_url: &str) -> Result<String, IconError> {
         let pool = self.db.get().await;
-        get_icon_data_url(&pool, icon_url).await
+        let incognito = self.incognito.get().await;
+        get_icon_data_url(&pool, incognito, icon_url).await
     }
 
     async fn get_cached_icon(&self, url: &str) -> Option<String> {
         let pool = self.db.get().await;
-        get_cached_icon(&pool, url).await
+        let incognito = self.incognito.get().await;
+        get_cached_icon(&pool, incognito, url).await
     }
 
     /// 发射状态到主视图（TabService 经此通知 UI，发射与图标查询收敛于此）

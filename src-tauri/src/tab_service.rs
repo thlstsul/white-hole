@@ -153,7 +153,8 @@ impl TabService {
 
     async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
         let pool = self.db().await;
-        Ok(save_log(&pool, log).await?)
+        let incognito = self.browser().is_incognito().await;
+        Ok(save_log(&pool, incognito, log).await?)
     }
 
     // ============ 当前 tab ============
