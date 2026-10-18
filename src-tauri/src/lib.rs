@@ -179,10 +179,10 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
                 }
                 WindowEvent::Focused(true) => {
                     // Webview::set_focus 后，会触发 WindowEvent::Focused 事件；所以 focus_changed 做了防抖
-                    let browser = window.browser();
-                    if let Err(e) = browser.focus_changed().await {
-                        error!("聚焦变更失败：{e}");
-                    }
+                    // let browser = window.browser();
+                    // if let Err(e) = browser.focus_changed().await {
+                    //     error!("聚焦变更失败：{e}");
+                    // }
                 }
                 WindowEvent::Focused(false) => {
                     // 窗口重新失焦时，清空残留已按下按键
