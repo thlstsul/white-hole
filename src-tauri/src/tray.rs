@@ -2,13 +2,19 @@ use std::{collections::HashMap, path::Path};
 
 use log::error;
 use tauri::{
-    AppHandle, Manager, Wry,
+    AppHandle, Error, Manager, Wry,
+    async_runtime::spawn,
     menu::{Menu, MenuEvent, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
 };
 use tokio::sync::broadcast::error::RecvError;
 
-use downloader::{DownloadEvent, DownloadManager, DownloadStatus};
+use downloader::{
+    DownloadEvent, DownloadManager, DownloadStats, DownloadStatus, extract_filename_from_url,
+};
+use std::io::Error as IoError;
+use std::io::ErrorKind;
+use std::process::Command;
 
 use crate::download::download_dir;
 
@@ -50,12 +56,12 @@ pub(crate) fn setup(app: &AppHandle) {
 
     let manager = app.state::<DownloadManager>().inner().clone();
     let app1 = app.clone();
-    tauri::async_runtime::spawn(async move {
+    spawn(async move {
         tray_event_loop(app1, manager).await;
     });
 }
 
-fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+fn build_tray(app: &AppHandle) -> Result<(), Error> {
     let Some(icon) = app.default_window_icon().cloned() else {
         error!("未找到默认窗口图标，跳过托盘创建");
         return Ok(());
@@ -221,7 +227,7 @@ async fn refresh_tray(
 async fn refresh_progress(
     app: &AppHandle,
     manager: &DownloadManager,
-    stats: &downloader::DownloadStats,
+    stats: &DownloadStats,
     items: &mut HashMap<String, TrayMenuItems>,
     last_rows: &mut Vec<TrayRow>,
     last_signature: &mut Vec<String>,
@@ -280,8 +286,7 @@ async fn collect_rows(manager: &DownloadManager) -> Vec<TrayRow> {
     let mut rows = Vec::new();
     for overview in manager.list_task_overviews().await {
         let name = overview.filename.unwrap_or_else(|| {
-            downloader::extract_filename_from_url(&overview.url)
-                .unwrap_or_else(|| "下载中…".to_string())
+            extract_filename_from_url(&overview.url).unwrap_or_else(|| "下载中…".to_string())
         });
         let action = match overview.status {
             DownloadStatus::Pending | DownloadStatus::Downloading => Some(TrayAction::Pause),
@@ -307,7 +312,7 @@ async fn collect_rows(manager: &DownloadManager) -> Vec<TrayRow> {
 fn build_menu(
     app: &AppHandle,
     rows: &[TrayRow],
-) -> tauri::Result<(Menu<Wry>, HashMap<String, TrayMenuItems>)> {
+) -> Result<(Menu<Wry>, HashMap<String, TrayMenuItems>), Error> {
     let menu = Menu::new(app)?;
     let mut items = HashMap::new();
     if rows.is_empty() {
@@ -426,7 +431,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
     if let Some(task_id) = id.strip_prefix("pause-") {
         let manager = app.state::<DownloadManager>().inner().clone();
         let task_id = task_id.to_string();
-        tauri::async_runtime::spawn(async move {
+        spawn(async move {
             manager.pause_task(&task_id).await;
         });
         return;
@@ -434,7 +439,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
     if let Some(task_id) = id.strip_prefix("resume-") {
         let manager = app.state::<DownloadManager>().inner().clone();
         let task_id = task_id.to_string();
-        tauri::async_runtime::spawn(async move {
+        spawn(async move {
             manager.resume_task(&task_id).await;
         });
         return;
@@ -443,7 +448,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         let manager = app.state::<DownloadManager>().inner().clone();
         let task_id = task_id.to_string();
         let dir = download_dir(app);
-        tauri::async_runtime::spawn(async move {
+        spawn(async move {
             let filename = manager.get_task_filename(&task_id).await;
             if let Some(name) = filename {
                 let path = dir.join(name);
@@ -458,7 +463,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         // 失败任务重试：Failed 状态可直接再次 start_task（downloader 会从断点续传）
         let manager = app.state::<DownloadManager>().inner().clone();
         let task_id = task_id.to_string();
-        tauri::async_runtime::spawn(async move {
+        spawn(async move {
             if let Err(e) = manager.start_task(&task_id).await {
                 error!("重试任务 {task_id} 失败：{e}");
             }
@@ -468,7 +473,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
     if let Some(task_id) = id.strip_prefix("remove-") {
         let manager = app.state::<DownloadManager>().inner().clone();
         let task_id = task_id.to_string();
-        tauri::async_runtime::spawn(async move {
+        spawn(async move {
             if !manager.remove_task(&task_id).await {
                 error!("移除任务 {task_id} 失败或任务不存在");
             }
@@ -484,7 +489,7 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-fn open_path(path: &Path) -> std::io::Result<()> {
+fn open_path(path: &Path) -> Result<(), IoError> {
     let program = if cfg!(windows) {
         "explorer"
     } else if cfg!(target_os = "macos") {
@@ -492,11 +497,11 @@ fn open_path(path: &Path) -> std::io::Result<()> {
     } else if cfg!(target_os = "linux") {
         "xdg-open"
     } else {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
+        return Err(IoError::new(
+            ErrorKind::Unsupported,
             "当前平台暂不支持打开文件",
         ));
     };
-    std::process::Command::new(program).arg(path).spawn()?;
+    Command::new(program).arg(path).spawn()?;
     Ok(())
 }

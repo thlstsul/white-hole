@@ -1,12 +1,19 @@
 use ::hotkey::HotkeyManagerExt as _;
+use ::log::LevelFilter;
 use ::log::error;
+use colored::Colorize as _;
 use command::*;
+use fern::colors::{Color, ColoredLevelConfig};
 use tauri::{
-    AppHandle, DeviceEvent, DeviceId, Manager, Runtime, Webview, Window, WindowEvent,
+    AppHandle, Builder, DeviceEvent, DeviceId, Manager, Runtime, Webview, Window, WindowEvent,
     async_runtime, plugin::TauriPlugin,
 };
-use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
-use tauri_plugin_window_state::{AppHandleExt as _, StateFlags};
+use tauri_plugin_deep_link::init as deep_link_init;
+use tauri_plugin_log::{Builder as LogBuilder, Target, TargetKind, TimezoneStrategy};
+use tauri_plugin_notification::init as notification_init;
+use tauri_plugin_single_instance::init as single_instance_plugin_init;
+use tauri_plugin_updater::Builder as UpdaterBuilder;
+use tauri_plugin_window_state::{AppHandleExt as _, Builder as WindowStateBuilder, StateFlags};
 use time::macros::format_description;
 
 use crate::{
@@ -63,17 +70,17 @@ impl IsMainView for Webview {
 pub fn run() -> Result<(), SetupError> {
     setup_user_agent();
 
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_notification::init())
+    let mut builder = Builder::default()
+        .plugin(deep_link_init())
+        .plugin(UpdaterBuilder::new().build())
+        .plugin(notification_init())
         .plugin(setup_log());
 
     #[cfg(desktop)]
     {
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(single_instance_init))
-            .plugin(tauri_plugin_window_state::Builder::new().build())
+            .plugin(single_instance_plugin_init(single_instance_init))
+            .plugin(WindowStateBuilder::new().build())
             .plugin(::hotkey::init());
 
         #[cfg(windows)]
@@ -153,8 +160,6 @@ fn single_instance_init(app: &AppHandle, args: Vec<String>, _cwd: String) {
     async_runtime::spawn({
         let url = args[1].clone();
         async move {
-            use crate::browser::BrowserExt as _;
-
             let browser = window.browser();
             let url = url::parse_keyword(None, &url).await.expect("非法链接");
             browser.open_tab_by_url(&url).await.expect("打开链接失败");
@@ -209,8 +214,6 @@ fn on_device_event<ID: DeviceId>(app: &AppHandle, _id: ID, event: DeviceEvent) {
 }
 
 fn setup_log<R: Runtime>() -> TauriPlugin<R> {
-    use ::log::LevelFilter;
-
     let time_format =
         format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]");
 
@@ -220,16 +223,13 @@ fn setup_log<R: Runtime>() -> TauriPlugin<R> {
         LevelFilter::Error
     };
 
-    let builder = tauri_plugin_log::Builder::new().level(level).targets([
+    let builder = LogBuilder::new().level(level).targets([
         Target::new(TargetKind::Stdout),
         Target::new(TargetKind::LogDir { file_name: None }),
         Target::new(TargetKind::Webview),
     ]);
 
     let builder = if cfg!(debug_assertions) {
-        use colored::Colorize as _;
-        use fern::colors::{Color, ColoredLevelConfig};
-
         let level_colors = ColoredLevelConfig::new()
             .error(Color::Red)
             .warn(Color::Yellow)

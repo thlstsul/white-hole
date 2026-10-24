@@ -4,7 +4,7 @@ use cached::proc_macro::cached;
 use get_data_url::GetDataUrl;
 use log::{error, info};
 use reqwest::Client;
-use sqlx::{SqlitePool, sqlite::SqliteQueryResult};
+use sqlx::{Error, SqlitePool, sqlite::SqliteQueryResult};
 use tauri::async_runtime;
 
 use crate::{error::IconError, user_agent::get_user_agent};
@@ -75,7 +75,7 @@ pub async fn get_cached_icon(pool: &SqlitePool, _incognito: bool, url: &str) -> 
     ).fetch_optional(pool).await.ok()?.map(|record| record.data_url)?
 }
 
-pub async fn save_icon(pool: &SqlitePool, incognito: bool, url: &str) -> Result<i64, sqlx::Error> {
+pub async fn save_icon(pool: &SqlitePool, incognito: bool, url: &str) -> Result<i64, Error> {
     if let Some(id) = get_id(pool, incognito, url).await {
         return Ok(id);
     }
@@ -87,7 +87,7 @@ pub async fn save_icon(pool: &SqlitePool, incognito: bool, url: &str) -> Result<
     ).execute(pool).await.map(|result| result.last_insert_rowid())
 }
 
-pub async fn clear_icon(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+pub async fn clear_icon(pool: &SqlitePool) -> Result<(), Error> {
     sqlx::query!("delete from icon_cached where not exists (select 1 from navigation_log where icon_id = icon_cached.id)")
         .execute(pool)
         .await
@@ -98,7 +98,7 @@ async fn upsert_data_url(
     pool: &SqlitePool,
     url: &str,
     data_url: &str,
-) -> Result<SqliteQueryResult, sqlx::Error> {
+) -> Result<SqliteQueryResult, Error> {
     sqlx::query!(
         "insert into icon_cached (url, data_url, update_time) values (?, ?, datetime('now', 'localtime')) on conflict(url) do update set data_url = excluded.data_url, update_time = excluded.update_time",
         url,

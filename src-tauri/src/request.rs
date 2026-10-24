@@ -2,6 +2,7 @@ use std::sync::OnceLock;
 
 use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, from_str};
 use time::OffsetDateTime;
 
 use crate::error::FetchError;
@@ -65,7 +66,7 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
             // 仅当请求方已显式声明 JSON Content-Type 时才做 JSON 校验，
             // 避免误伤以 { 或 [ 开头的普通原始报文（YAML、JSON5、测试畸形数据等）
             if has_json_content_type(&opts.headers) {
-                serde_json::from_str::<serde_json::Value>(body).map_err(FetchError::InvalidJson)?;
+                from_str::<Value>(body).map_err(FetchError::InvalidJson)?;
             }
             request_builder = request_builder.body(body.clone());
         }

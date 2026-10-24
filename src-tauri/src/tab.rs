@@ -1,9 +1,11 @@
+use std::collections::HashMap as StdHashMap;
 use std::ops::Deref;
 
 use log::{error, info};
 use scc::HashMap;
 use tauri::{
-    LogicalPosition, LogicalSize, Manager as _, Theme, Webview, WebviewBuilder, WebviewUrl, Window,
+    Error, LogicalPosition, LogicalSize, Manager as _, Theme, Webview, WebviewBuilder, WebviewUrl,
+    Window,
     async_runtime::{self, RwLock},
     window::Color,
 };
@@ -212,7 +214,7 @@ impl Tab {
 
     /// 当前条目 URL：优先取快照对账后的镜像（SPA pushState/replaceState 下
     /// webview 原生 URL 更新滞后，镜像才是权威值）；空镜像回退原生 URL
-    pub fn current_url(&self) -> Result<String, tauri::Error> {
+    pub fn current_url(&self) -> Result<String, Error> {
         let url = match self.history.get(self.index.max(0) as usize) {
             Some(entry) => entry.url.clone(),
             None => self.url()?.to_string(),
@@ -378,7 +380,7 @@ impl Tab {
     ) -> (Vec<(usize, String)>, usize) {
         // key 作为条目身份：同 key 且 URL 未变的条目保留原 id，
         // 新 key 或 URL 变更（replaceState）置占位 -1 等待回填
-        let id_by_key: std::collections::HashMap<&str, (i64, &str)> = self
+        let id_by_key: StdHashMap<&str, (i64, &str)> = self
             .history
             .iter()
             .filter_map(|entry| {
@@ -496,7 +498,7 @@ impl Tab {
         }
     }
 
-    pub fn set_darkreader(&mut self, enable: bool) -> Result<(), tauri::Error> {
+    pub fn set_darkreader(&mut self, enable: bool) -> Result<(), Error> {
         self.eval(if enable {
             DARKREADER_ENABLE_SCRIPT
         } else {
@@ -585,7 +587,7 @@ impl TabMap {
         self.0
             .read_async(label, |_, tab| tab.reparent(window))
             .await
-            .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
+            .unwrap_or(Err(Error::WebviewNotFound))?;
         Ok(())
     }
 
@@ -593,7 +595,7 @@ impl TabMap {
         self.0
             .read_async(label, |_, tab| tab.set_focus())
             .await
-            .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
+            .unwrap_or(Err(Error::WebviewNotFound))?;
         Ok(())
     }
 
@@ -811,25 +813,21 @@ impl TabMap {
         self.0.read_async(label, |_, tab| tab.reload()).await;
     }
 
-    pub async fn set_darkreader(&self, label: &str, enable: bool) -> Result<(), tauri::Error> {
+    pub async fn set_darkreader(&self, label: &str, enable: bool) -> Result<(), Error> {
         self.0
             .update_async(label, |_, tab| tab.set_darkreader(enable))
             .await
             .unwrap_or(Ok(()))
     }
 
-    pub async fn set_background_color(
-        &self,
-        label: &str,
-        color: Color,
-    ) -> Result<(), tauri::Error> {
+    pub async fn set_background_color(&self, label: &str, color: Color) -> Result<(), Error> {
         self.0
             .update_async(label, |_, tab| tab.set_background_color(Some(color)))
             .await
             .unwrap_or(Ok(()))
     }
 
-    pub async fn darkreader(&self, label: &str) -> Result<bool, tauri::Error> {
+    pub async fn darkreader(&self, label: &str) -> Result<bool, Error> {
         self.0
             .update_async(label, |_, tab| {
                 tab.set_darkreader(!tab.darkreader).map(|_| tab.darkreader)
@@ -854,7 +852,7 @@ impl TabMap {
         self.0
             .read_async(label, |_, tab| tab.print())
             .await
-            .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
+            .unwrap_or(Err(Error::WebviewNotFound))?;
         Ok(())
     }
 
@@ -884,7 +882,7 @@ impl TabMap {
                 })
             })
             .await
-            .unwrap_or(Err(tauri::Error::WebviewNotFound))?;
+            .unwrap_or(Err(Error::WebviewNotFound))?;
 
         Ok(state)
     }

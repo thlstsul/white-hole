@@ -1,15 +1,17 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::Token;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{ExprTuple, ItemFn, parse_macro_input, punctuated::Punctuated};
+use syn::{
+    Error as SynError, Expr, ExprTuple, Ident, ItemFn, Result as SynResult, Token,
+    parse_macro_input, punctuated::Punctuated, token::Bracket,
+};
 
 enum HotkeyArgs {
     Single {
-        modifiers: Box<syn::Expr>,
+        modifiers: Box<Expr>,
         _comma: Token![,],
-        code: Box<syn::Expr>,
+        code: Box<Expr>,
     },
     Multiple {
         hotkeys: Punctuated<ExprTuple, Token![,]>,
@@ -17,15 +19,15 @@ enum HotkeyArgs {
 }
 
 impl Parse for HotkeyArgs {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(syn::token::Bracket) {
+    fn parse(input: ParseStream) -> SynResult<Self> {
+        if input.peek(Bracket) {
             let content;
             syn::bracketed!(content in input);
 
             let hotkeys = Punctuated::<ExprTuple, Token![,]>::parse_terminated(&content)?;
 
             if hotkeys.is_empty() {
-                return Err(syn::Error::new(content.span(), "至少需要一个热键参数"));
+                return Err(SynError::new(content.span(), "至少需要一个热键参数"));
             }
 
             Ok(HotkeyArgs::Multiple { hotkeys })
@@ -46,7 +48,7 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
     let vis = &input_fn.vis;
     let fn_async = input_fn.sig.asyncness.is_some();
     let fn_name = &input_fn.sig.ident;
-    let wrapper_name = syn::Ident::new(&format!("_{}", fn_name), fn_name.span());
+    let wrapper_name = Ident::new(&format!("_{}", fn_name), fn_name.span());
 
     let args = parse_macro_input!(args as HotkeyArgs);
 
@@ -80,7 +82,7 @@ pub fn hotkey(args: TokenStream, input: TokenStream) -> TokenStream {
 
             for hotkey_tuple in hotkeys.iter() {
                 if hotkey_tuple.elems.len() != 2 {
-                    return syn::Error::new(
+                    return SynError::new(
                         hotkey_tuple.span(),
                         "每个热键参数必须是 (modifiers, code) 形式的元组",
                     )

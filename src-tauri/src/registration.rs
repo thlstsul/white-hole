@@ -4,7 +4,7 @@
 //! 更换安装目录、注册表被清理等场景导致的注册失效。全部写入 HKCU，
 //! 无需管理员权限。开发模式跳过，避免默认浏览器指向 debug 构建。
 
-use std::io;
+use std::{env::current_exe, io};
 
 use log::{error, info};
 use windows::Win32::Foundation::{ERROR_SUCCESS, WIN32_ERROR};
@@ -17,6 +17,7 @@ use windows::core::{PCWSTR, w};
 const REG_KEY: PCWSTR = w!("SOFTWARE\\Clients\\StartMenuInternet\\white-hole.exe");
 const REGISTERED_NAME: PCWSTR = w!("WhiteHole");
 const REGISTERED_VALUE: &str = "SOFTWARE\\Clients\\StartMenuInternet\\white-hole.exe\\Capabilities";
+
 const PROG_ID: &str = "WhiteHoleHTM";
 const APP_NAME: &str = "White Hole";
 
@@ -25,7 +26,7 @@ pub fn setup() {
         return;
     }
 
-    let Ok(exe) = std::env::current_exe() else {
+    let Ok(exe) = current_exe() else {
         return;
     };
     let Some(exe) = exe.to_str() else {

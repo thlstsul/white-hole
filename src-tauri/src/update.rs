@@ -1,4 +1,8 @@
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use log::error;
+use minisign_verify::{PublicKey, Signature};
+use std::fs::read;
 use tauri::{AppHandle, Manager, async_runtime};
 use tauri_plugin_updater::UpdaterExt as _;
 use tokio::sync::broadcast::error::RecvError;
@@ -78,8 +82,7 @@ pub fn update(app: AppHandle) {
             return;
         };
         let path = download::download_dir(&app).join(&filename);
-        let Ok(bytes) = std::fs::read(&path).inspect_err(|e| error!("读取更新包失败：{e}"))
-        else {
+        let Ok(bytes) = read(&path).inspect_err(|e| error!("读取更新包失败：{e}")) else {
             return;
         };
 
@@ -108,11 +111,8 @@ fn read_pubkey(app: &AppHandle) -> Option<String> {
 
 /// 复刻 tauri-plugin-updater 的 minisign 签名校验逻辑
 fn verify_signature(data: &[u8], release_signature: &str, pubkey: &str) -> Result<(), String> {
-    use base64::Engine as _;
-    use minisign_verify::{PublicKey, Signature};
-
     let base64_to_string = |s: &str| -> Result<String, String> {
-        let bytes = base64::engine::general_purpose::STANDARD
+        let bytes = STANDARD
             .decode(s)
             .map_err(|e| format!("base64 解码失败：{e}"))?;
         String::from_utf8(bytes).map_err(|e| format!("UTF-8 解码失败：{e}"))

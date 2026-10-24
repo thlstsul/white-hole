@@ -8,9 +8,15 @@
 //! 创建的消息窗口注册 [`AddClipboardFormatListener`]，系统在内容变化时投递
 //! `WM_CLIPBOARDUPDATE`，检测到本应用 WebView2 复制后自行重接管（带节流）。
 
+use core::ffi::c_void;
+use std::mem::{size_of, zeroed};
+use std::process::id;
+use std::ptr::copy_nonoverlapping;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use log::warn;
 use tauri::{AppHandle, Manager};
@@ -68,10 +74,10 @@ const WEBVIEW_PIDS_RECENT_MISS_TTL: Duration = Duration::from_secs(2);
 
 /// WebView2 子进程 PID 列表缓存：(枚举时刻, PID 列表)。
 /// 用 Arc 共享，命中时只克隆 Arc 而非整个 Vec
-static WEBVIEW_PIDS_CACHE: Mutex<Option<(std::time::Instant, Arc<Vec<u32>>)>> = Mutex::new(None);
+static WEBVIEW_PIDS_CACHE: Mutex<Option<(Instant, Arc<Vec<u32>>)>> = Mutex::new(None);
 /// 最近判定为非本应用的 owner PID 列表（含判定时刻）：节流用，
 /// 避免同一外部 PID 反复触发全表遍历阻塞消息线程
-static WEBVIEW_PIDS_RECENT_MISS: Mutex<Vec<(u32, std::time::Instant)>> = Mutex::new(Vec::new());
+static WEBVIEW_PIDS_RECENT_MISS: Mutex<Vec<(u32, Instant)>> = Mutex::new(Vec::new());
 /// 当前 worker 代数（消息线程写，worker 线程读）：reown 破坏性阶段前核对
 /// 自身代数，过期（超时中止/新派发后旧 worker 仍存活）则放弃重设，避免
 /// 旧内容覆盖用户新复制的内容
@@ -103,7 +109,7 @@ struct ListenerCtx {
     app: AppHandle,
     /// 最近一次成功重接管的时间；None 表示尚未重接管过（启动初期），
     /// 此时跳过冷却检查，保证开机后首次复制不被节流
-    last_reown: Option<std::time::Instant>,
+    last_reown: Option<Instant>,
     /// 剩余重试次数：OpenClipboard 竞争失败后由定时器重试
     retries_left: u32,
     /// 是否有 reown 正在 worker 线程执行：避免重试定时器在 worker 未完成
@@ -111,7 +117,7 @@ struct ListenerCtx {
     reown_in_flight: bool,
     /// 派发 reown 的时刻：用于检测 WM_REOWN_DONE 丢失（超时后重置
     /// reown_in_flight，避免功能永久失效）
-    reown_started_at: Option<std::time::Instant>,
+    reown_started_at: Option<Instant>,
     /// 递增的 worker 代数：超时后可能派发新 worker，旧 DONE 会迟到；用代数
     /// 区分并忽略过期结果，避免误清 in_flight/误消耗预算/误盖冷却戳
     reown_generation: u64,
@@ -126,7 +132,7 @@ struct ListenerCtx {
     /// 缓存，worker 处理并回传 WM_REOWN_DONE。进程表枚举等慢操作都在 worker
     /// 线程执行。有界容量：worker 阻塞时不追加排队，Full 即进 abandoned
     /// 等待期，避免堆积
-    reown_tx: std::sync::mpsc::SyncSender<WorkerMsg>,
+    reown_tx: SyncSender<WorkerMsg>,
     /// 当前剪贴板事件的首次派发是否尚未完成：WM_CLIPBOARDUPDATE 置位、首次
     /// 派发后清除。owner 检查只在首次派发时执行（重试期间 GetClipboardOwner
     /// 瞬时返回 NULL/错误，每次重查会把合法重试当非本应用中止）；用显式标志
@@ -139,7 +145,7 @@ struct ListenerCtx {
     /// 置位 abandoned_worker_pending 的时刻：若 DONE 永久丢失（PostMessageW
     /// 失败/worker 异常退出）该标志会卡死 reown；超时后 WM_TIMER 门控清除
     /// 标志放行重新派发，迟到结果由代数检查忽略
-    abandoned_since: Option<std::time::Instant>,
+    abandoned_since: Option<Instant>,
     /// 重试/在飞窗口内是否到达过新复制事件：门控在 retry_loop_active 时把事件
     /// 整体吞掉（不布防、不重置），若吞掉的是用户真正的新复制而非反馈事件，
     /// 该复制将永不重接管、不进 Win+V 历史。置位后由 DONE 终态分支重新布防
@@ -158,7 +164,7 @@ struct ListenerCtx {
 /// 系统在剪贴板内容变化时向该窗口投递 `WM_CLIPBOARDUPDATE`。
 /// 只处理本应用发起的复制（所有者进程过滤），避免干扰其他程序。
 pub fn watch(app: AppHandle) {
-    std::thread::spawn(move || unsafe {
+    thread::spawn(move || unsafe {
         // 注册消息专用窗口类（同一进程内只会注册一次，返回值可忽略）
         let class_name = w!("WhiteHoleClipboardListener");
         let hinstance = GetModuleHandleW(None)
@@ -182,7 +188,7 @@ pub fn watch(app: AppHandle) {
         // reown 任务经有界队列（容量 1）交给常驻 worker 线程执行：worker
         // 阻塞（OpenClipboard 无超时）时不追加排队，try_send 返回 Full 即
         // 进入 abandoned 等待期，避免 mpsc 无限堆积（内存增长 + 旧任务倾泻）
-        let (reown_tx, reown_rx) = std::sync::mpsc::sync_channel::<WorkerMsg>(1);
+        let (reown_tx, reown_rx) = sync_channel::<WorkerMsg>(1);
         let ctx = Box::into_raw(Box::new(ListenerCtx {
             app,
             // None 表示尚未重接管过：启动后首次复制不被冷却检查丢弃
@@ -225,7 +231,7 @@ pub fn watch(app: AppHandle) {
             Some(HWND_MESSAGE),
             None,
             Some(hinstance),
-            Some(ctx as *const core::ffi::c_void),
+            Some(ctx as *const c_void),
         ) {
             Ok(hwnd) => hwnd,
             Err(_) => {
@@ -260,10 +266,10 @@ pub fn watch(app: AppHandle) {
         // WM_REOWN_DONE。窗口销毁（WM_NCDESTROY 回收 ctx 时 drop sender）
         // 会关闭 channel，recv 返回 Err 使线程自然退出
         let listener_hwnd_val = hwnd.0 as usize;
-        std::thread::spawn(move || reown_worker(reown_rx, listener_hwnd_val));
+        thread::spawn(move || reown_worker(reown_rx, listener_hwnd_val));
 
         // 消息循环：系统在剪贴板内容变化时向本窗口投递 WM_CLIPBOARDUPDATE
-        let mut msg: MSG = std::mem::zeroed();
+        let mut msg: MSG = zeroed();
         while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
             let _ = TranslateMessage(&msg);
             let _ = DispatchMessageW(&msg);
@@ -374,13 +380,13 @@ unsafe extern "system" fn clipboard_wnd_proc(
                             HeartbeatVerdict::Alive => {
                                 ctx.worker_progress_seen = progress;
                                 ctx.timeout_strikes = false;
-                                ctx.reown_started_at = Some(std::time::Instant::now());
+                                ctx.reown_started_at = Some(Instant::now());
                                 return LRESULT(0);
                             }
                             HeartbeatVerdict::FirstStrike => {
                                 // 第一次无推进：记录标记，重置超时窗口再等一轮
                                 ctx.timeout_strikes = true;
-                                ctx.reown_started_at = Some(std::time::Instant::now());
+                                ctx.reown_started_at = Some(Instant::now());
                                 return LRESULT(0);
                             }
                             HeartbeatVerdict::Stuck => {
@@ -401,7 +407,7 @@ unsafe extern "system" fn clipboard_wnd_proc(
                                 // （避免并发重设覆盖新内容）；回传永久丢失时由门控超时
                                 // 清除并放行，迟到结果被代数忽略
                                 ctx.abandoned_worker_pending = true;
-                                ctx.abandoned_since = Some(std::time::Instant::now());
+                                ctx.abandoned_since = Some(Instant::now());
                                 // 恢复满预算：否则 WM_CLIPBOARDUPDATE 的重置门控会永久
                                 // 吞掉后续新事件，reown 功能直到应用重启都失效
                                 ctx.retries_left = budget_after_retry_abort();
@@ -477,12 +483,12 @@ unsafe extern "system" fn clipboard_wnd_proc(
                             })) {
                                 Ok(()) => {
                                     ctx.reown_in_flight = true;
-                                    ctx.reown_started_at = Some(std::time::Instant::now());
+                                    ctx.reown_started_at = Some(Instant::now());
                                     ctx.reown_generation = generation;
                                     // 首次派发完成：后续重试不再重复 owner 检查
                                     ctx.first_attempt_pending = false;
                                 }
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                Err(TrySendError::Full(_)) => {
                                     // 投递失败（队列满）：保持已发布代数并同步
                                     // ctx.reown_generation（不回退，理由见上）
                                     ctx.reown_generation = generation;
@@ -493,12 +499,12 @@ unsafe extern "system" fn clipboard_wnd_proc(
                                         "剪贴板重接管 worker 任务队列已满（worker 阻塞中），进入 abandoned 等待期"
                                     );
                                     ctx.abandoned_worker_pending = true;
-                                    ctx.abandoned_since = Some(std::time::Instant::now());
+                                    ctx.abandoned_since = Some(Instant::now());
                                     // 恢复满预算：否则重置门控会永久吞掉后续新事件
                                     ctx.retries_left = budget_after_retry_abort();
                                     return LRESULT(0);
                                 }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                Err(TrySendError::Disconnected(_)) => {
                                     // 投递失败（worker 已退出）：保持已发布代数并
                                     // 同步 ctx.reown_generation（不回退，理由见上）
                                     ctx.reown_generation = generation;
@@ -574,7 +580,7 @@ unsafe extern "system" fn clipboard_wnd_proc(
                         } else {
                             // 成功且无待处理事件：盖冷却戳（阻止 reown 自身
                             // 触发的反馈循环），停止定时器
-                            ctx.last_reown = Some(std::time::Instant::now());
+                            ctx.last_reown = Some(Instant::now());
                             let _ = unsafe { KillTimer(Some(hwnd), REOWN_TIMER_ID) };
                         }
                     }
@@ -776,7 +782,7 @@ fn retry_loop_active(reown_in_flight: bool, retries_left: u32) -> bool {
 
 /// 是否处于冷却期内：最近一次成功重接管距今不足 REOWN_COOLDOWN。
 /// last_reown 在未来（时钟异常）时返回 false（视为不在冷却期），不会 panic
-fn in_cooldown(last_reown: std::time::Instant, now: std::time::Instant) -> bool {
+fn in_cooldown(last_reown: Instant, now: Instant) -> bool {
     now.checked_duration_since(last_reown)
         .is_some_and(|d| d < REOWN_COOLDOWN)
 }
@@ -784,7 +790,7 @@ fn in_cooldown(last_reown: std::time::Instant, now: std::time::Instant) -> bool 
 /// abandoned_worker_pending 的恢复条件：旧 worker 的 DONE 是否已丢失超时。
 /// 回传永久丢失（PostMessageW 失败/worker 异常退出）时 reown 永远卡死；超过
 /// REOWN_IN_FLIGHT_TIMEOUT 后门控清除标志放行重新派发，迟到结果按代数忽略
-fn abandoned_worker_expired(abandoned_since: Option<std::time::Instant>) -> bool {
+fn abandoned_worker_expired(abandoned_since: Option<Instant>) -> bool {
     abandoned_since.is_some_and(|t| t.elapsed() >= REOWN_IN_FLIGHT_TIMEOUT)
 }
 
@@ -842,7 +848,7 @@ fn is_owner_our_process() -> bool {
     }
     let mut pid = 0;
     unsafe { GetWindowThreadProcessId(owner, Some(&mut pid)) };
-    pid == std::process::id()
+    pid == id()
 }
 
 /// should_reown 的决策结果（消息线程专用）
@@ -864,7 +870,7 @@ fn should_reown(ctx: &mut ListenerCtx) -> ShouldReown {
     // None（从未重接管过）跳过冷却，保证启动后首次复制不被节流
     if ctx
         .last_reown
-        .is_some_and(|t| in_cooldown(t, std::time::Instant::now()))
+        .is_some_and(|t| in_cooldown(t, Instant::now()))
     {
         return ShouldReown::Stop;
     }
@@ -883,7 +889,7 @@ fn should_reown(ctx: &mut ListenerCtx) -> ShouldReown {
                 // 是 reown 自身反馈的余波：盖冷却戳并停止（否则每次重接管后
                 // 反馈再触发 owner 检查 + 全表枚举，节流失效）；外部不盖戳
                 if is_owner_our_process() {
-                    ctx.last_reown = Some(std::time::Instant::now());
+                    ctx.last_reown = Some(Instant::now());
                 }
                 return ShouldReown::Stop;
             }
@@ -928,7 +934,7 @@ fn is_our_webview_owner_cached(ctx: &mut ListenerCtx) -> OwnerCheck {
     }
     // owner 是本进程（main 窗口）：reown 自身反馈而非子进程复制（子进程 PID
     // 必不等于本进程），直接判定非本应用无需刷新，should_reown 据此盖戳
-    if pid == std::process::id() {
+    if pid == id() {
         return OwnerCheck::NotOurs;
     }
     // 只读缓存：命中即本应用；未命中且非已知外部时请求 worker 异步刷新。
@@ -963,15 +969,15 @@ fn is_our_webview_owner_cached(ctx: &mut ListenerCtx) -> OwnerCheck {
             ctx.refresh_pending_target = Some(pid);
             OwnerCheck::RefreshPending
         }
-        Err(std::sync::mpsc::TrySendError::Full(_)) => OwnerCheck::RefreshPending,
-        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => OwnerCheck::NotOurs,
+        Err(TrySendError::Full(_)) => OwnerCheck::RefreshPending,
+        Err(TrySendError::Disconnected(_)) => OwnerCheck::NotOurs,
     }
 }
 
 /// 只读缓存（消息线程专用）：返回 (PID 列表 Arc, 缓存是否新鲜)。
 /// 绝不在此线程执行进程表枚举
 fn cached_webview_pids() -> (Arc<Vec<u32>>, bool) {
-    let now = std::time::Instant::now();
+    let now = Instant::now();
     let cache = WEBVIEW_PIDS_CACHE.lock().unwrap_or_else(|e| e.into_inner());
     match cache.as_ref() {
         Some((cached_at, pids)) => {
@@ -1005,7 +1011,7 @@ fn is_our_webview_owner() -> bool {
 /// 立即重枚举 WebView2 PID 缓存并返回结果（不节流）。
 /// 仅 worker 线程调用；消息线程只读缓存，绝不在此枚举。返回列表供调用方复用
 fn refresh_webview_pids_now() -> Arc<Vec<u32>> {
-    let now = std::time::Instant::now();
+    let now = Instant::now();
     // 只建一个 Arc：缓存存 Arc::clone（共享同一份 Vec），返回给调用方的
     // 也是同一份，避免 Vec 双份分配（Arc 不可变，共享安全）
     let pids = Arc::new(enumerate_webview_pids());
@@ -1016,7 +1022,7 @@ fn refresh_webview_pids_now() -> Arc<Vec<u32>> {
 
 /// 该 PID 是否在 recent-miss 记忆内（最近已判定为非本应用）
 fn is_recent_miss(pid: u32) -> bool {
-    let now = std::time::Instant::now();
+    let now = Instant::now();
     let mut recent = WEBVIEW_PIDS_RECENT_MISS
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -1030,7 +1036,7 @@ fn is_recent_miss(pid: u32) -> bool {
 
 /// 记录该 PID 判定为非本应用（供节流使用）
 fn record_recent_miss(pid: u32) {
-    let now = std::time::Instant::now();
+    let now = Instant::now();
     let mut recent = WEBVIEW_PIDS_RECENT_MISS
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -1053,14 +1059,14 @@ fn enumerate_webview_pids() -> Vec<u32> {
     };
 
     let mut entry = PROCESSENTRY32W {
-        dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+        dwSize: size_of::<PROCESSENTRY32W>() as u32,
         ..Default::default()
     };
 
     let mut ok = unsafe { Process32FirstW(snapshot, &mut entry).is_ok() };
     while ok {
         // 父进程是本进程 且 进程名为 WebView2 浏览器进程
-        if entry.th32ParentProcessID == std::process::id() && is_webview2_exe(&entry.szExeFile) {
+        if entry.th32ParentProcessID == id() && is_webview2_exe(&entry.szExeFile) {
             pids.push(entry.th32ProcessID);
         }
         ok = unsafe { Process32NextW(snapshot, &mut entry).is_ok() };
@@ -1150,7 +1156,7 @@ fn reown(hwnd: Option<HWND>, generation: u64) -> ReownResult {
                 let mut offset = 0usize;
                 while offset < size {
                     let n = (size - offset).min(COPY_CHUNK);
-                    std::ptr::copy_nonoverlapping(
+                    copy_nonoverlapping(
                         (ptr as *const u8).add(offset),
                         copied.as_mut_ptr().add(offset),
                         n,
@@ -1201,7 +1207,7 @@ fn reown(hwnd: Option<HWND>, generation: u64) -> ReownResult {
                 alloc_failed = true;
                 break;
             }
-            std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr as *mut u8, bytes.len());
+            copy_nonoverlapping(bytes.as_ptr(), ptr as *mut u8, bytes.len());
             let _ = GlobalUnlock(handle);
             handles.push(handle);
         }
@@ -1248,15 +1254,15 @@ fn reown(hwnd: Option<HWND>, generation: u64) -> ReownResult {
 }
 
 /// 常驻 reown worker 线程：从 channel 取任务执行，完成后经 WM_REOWN_DONE
-/// 回传。替代每次派发 std::thread::spawn；channel 关闭（ctx 释放时 drop
+/// 回传。替代每次派发 thread::spawn；channel 关闭（ctx 释放时 drop
 /// sender）后 recv 返回 Err 自然退出。进程表全量枚举（慢操作）也在此线程
 /// 执行（RefreshPids），消息泵只读缓存 Arc，永不被枚举阻塞
-fn reown_worker(rx: std::sync::mpsc::Receiver<WorkerMsg>, listener_hwnd_val: usize) {
+fn reown_worker(rx: Receiver<WorkerMsg>, listener_hwnd_val: usize) {
     while let Ok(msg) = rx.recv() {
         match msg {
             WorkerMsg::Reown(job) => {
-                let main_hwnd = HWND(job.main_hwnd_val as *mut core::ffi::c_void);
-                let listener_hwnd = HWND(listener_hwnd_val as *mut core::ffi::c_void);
+                let main_hwnd = HWND(job.main_hwnd_val as *mut c_void);
+                let listener_hwnd = HWND(listener_hwnd_val as *mut c_void);
                 // 派发与执行之间可能相隔 2s，期间 main 窗口可能已被销毁：
                 // 陈旧句柄下 EmptyClipboard 会清空剪贴板而 SetClipboardData
                 // 因所有者窗口无效全部失败——用户内容被破坏性清空。执行
@@ -1666,9 +1672,9 @@ mod tests {
         let first_attempt_pending = false; // 已派发过、无新事件待派发
         let idle = !reown_in_flight && retries_left == max && !first_attempt_pending;
         assert!(idle);
-        let last_reown = std::time::Instant::now();
+        let last_reown = Instant::now();
         // 冷却期内：后续反馈事件被拦截
-        assert!(in_cooldown(last_reown, std::time::Instant::now()));
+        assert!(in_cooldown(last_reown, Instant::now()));
     }
 
     /// abandoned_worker_pending 的恢复超时（"DONE 永不回传"路径）：

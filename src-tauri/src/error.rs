@@ -1,6 +1,16 @@
-use std::fmt;
+use std::{error::Error as StdError, fmt};
 
+use delay_timer::error::TaskError;
 use error_set::error_set;
+use get_data_url::Error as GetDataUrlError;
+use publicsuffix::Error as PublicSuffixError;
+use reqwest::Error as ReqwestError;
+use serde_json::Error as SerdeJsonError;
+use sqlx::Error as SqlxError;
+use sqlx::migrate::MigrateError;
+use tauri::Error as TauriError;
+use time::error::IndeterminateOffset;
+use url::ParseError as UrlParseError;
 
 use crate::impl_serialize;
 
@@ -14,28 +24,28 @@ impl fmt::Display for TabNotFoundError {
     }
 }
 
-impl std::error::Error for TabNotFoundError {}
+impl StdError for TabNotFoundError {}
 
 error_set! {
     ParseError := {
         #[display("无法解析的URL: {0}")]
-        Url(url::ParseError),
+        Url(UrlParseError),
         #[display("无法解析的公共后缀: {0}")]
-        PublicSuffix(publicsuffix::Error),
+        PublicSuffix(PublicSuffixError),
     }
     FrameworkError := {
         #[display("Tauri 框架错误: {0}")]
-        Tauri(tauri::Error),
+        Tauri(TauriError),
     }
     DatabaseError := {
         #[display("数据库执行错误: {0}")]
-        Execute(sqlx::Error),
+        Execute(SqlxError),
         #[display("数据库迁移错误: {0}")]
-        Migrate(sqlx::migrate::MigrateError),
+        Migrate(MigrateError),
     }
     SetupError := {
         #[display("后台进程设置错误: {0}")]
-        Task(delay_timer::error::TaskError),
+        Task(TaskError),
     } || DatabaseError || FrameworkError || ParseError
     TabError := StateError || FrameworkError || ParseError
     StateError := {
@@ -44,19 +54,19 @@ error_set! {
     } || FrameworkError || DatabaseError || IconError
     IconError := {
         #[display("无法获取图标数据：{0}")]
-        GetDataUrl(get_data_url::Error),
+        GetDataUrl(GetDataUrlError),
         #[display("无法保存图标：{0}")]
-        SaveIcon(sqlx::Error),
+        SaveIcon(SqlxError),
         #[display("图标获取中")]
         Fetching,
     }
     FetchError := {
         #[display("网络请求失败：{0}")]
-        Fetch(reqwest::Error),
+        Fetch(ReqwestError),
         #[display("请求体不是合法的 JSON：{0}")]
-        InvalidJson(serde_json::Error),
+        InvalidJson(SerdeJsonError),
         #[display("计算耗时失败：{0}")]
-        Time(time::error::IndeterminateOffset),
+        Time(IndeterminateOffset),
     }
     SyncPublicSuffixError := FetchError || DatabaseError
     GetPublicSuffixError := ParseError || DatabaseError

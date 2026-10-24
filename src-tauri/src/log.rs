@@ -1,7 +1,7 @@
 use cached::proc_macro::cached;
 use log::error;
 use serde::Serialize;
-use sqlx::{FromRow, QueryBuilder, Sqlite, SqlitePool};
+use sqlx::{Error, FromRow, QueryBuilder, Sqlite, SqlitePool};
 use tauri::async_runtime;
 use time::OffsetDateTime;
 
@@ -39,7 +39,7 @@ pub async fn save_log(
         icon_url,
         ..
     }: NavigationLog,
-) -> Result<i64, sqlx::Error> {
+) -> Result<i64, Error> {
     if url.is_empty() || url == "about:blank" {
         return Ok(-1);
     }
@@ -144,7 +144,7 @@ pub async fn query_log(
     pool: &SqlitePool,
     keyword: &str,
     page_token: PageToken,
-) -> Result<QueryLogResponse, sqlx::Error> {
+) -> Result<QueryLogResponse, Error> {
     let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
         "select a.id, a.url, a.title, b.data_url as icon_url, a.star, a.last_time from navigation_log a left outer join icon_cached b on a.icon_id = b.id where 1 = 1 ",
     );
@@ -180,7 +180,7 @@ pub async fn query_log(
     })
 }
 
-pub async fn touch_log(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
+pub async fn touch_log(pool: &SqlitePool, id: i64) -> Result<(), Error> {
     sqlx::query!(
         "update navigation_log set last_time = datetime('now', 'localtime') where id = ?",
         id
@@ -190,14 +190,14 @@ pub async fn touch_log(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
     .map(|_| ())
 }
 
-pub async fn update_log_star(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
+pub async fn update_log_star(pool: &SqlitePool, id: i64) -> Result<(), Error> {
     sqlx::query!("update navigation_log set star = not star where id = ?", id)
         .execute(pool)
         .await
         .map(|_| ())
 }
 
-pub async fn clear_log(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+pub async fn clear_log(pool: &SqlitePool) -> Result<(), Error> {
     sqlx::query!("delete from navigation_log where url = title or title is null or title = ''")
         .execute(pool)
         .await

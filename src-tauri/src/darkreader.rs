@@ -1,4 +1,4 @@
-use sqlx::SqlitePool;
+use sqlx::{Error, SqlitePool};
 
 pub const DARKREADER_DISABLE_SCRIPT: &str = r#"DarkReader.auto(false)"#;
 pub const DARKREADER_ENABLE_SCRIPT: &str = r#"
@@ -30,14 +30,14 @@ pub async fn switch(pool: &SqlitePool, host: &str) -> bool {
         .is_ok_and(|row| row.is_none())
 }
 
-pub async fn save_blacklist(pool: &SqlitePool, host: &str) -> Result<i64, sqlx::Error> {
+pub async fn save_blacklist(pool: &SqlitePool, host: &str) -> Result<i64, Error> {
     sqlx::query!("insert into darkreader_blacklist (host) values (?)", host)
         .execute(pool)
         .await
         .map(|result| result.last_insert_rowid())
 }
 
-pub async fn delete_blacklist(pool: &SqlitePool, host: &str) -> Result<u64, sqlx::Error> {
+pub async fn delete_blacklist(pool: &SqlitePool, host: &str) -> Result<u64, Error> {
     sqlx::query!("delete from darkreader_blacklist where host = ?", host)
         .execute(pool)
         .await

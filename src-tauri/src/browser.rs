@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+use hotkey::{Code, HotkeyManagerExt as _};
 use log::error;
 use sqlx::SqlitePool;
 use tauri::{
     App, Emitter as _, LogicalPosition, LogicalSize, Manager, State, Theme, Url, Webview,
     WebviewBuilder, WebviewUrl, Window, Wry,
     async_runtime::{self, Mutex},
+    window::WindowBuilder,
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
 use tokio::time::Instant;
@@ -57,7 +59,7 @@ pub struct Browser {
 impl Browser {
     pub fn setup(app: &mut App) -> Result<(), SetupError> {
         async_runtime::block_on(async {
-            let window = tauri::window::WindowBuilder::new(app, "main")
+            let window = WindowBuilder::new(app, "main")
                 .title("白洞")
                 .inner_size(WIDTH, HEIGHT)
                 .min_inner_size(WIDTH, HEIGHT)
@@ -172,7 +174,6 @@ impl Browser {
 
     /// 同步读取 Ctrl 是否按下（避免异步竞态）
     fn ctrl_pressed(&self) -> bool {
-        use ::hotkey::{Code, HotkeyManagerExt as _};
         let hotkey = self.window.app_handle().hotkey();
         hotkey.is_pressed(Code::ControlLeft) || hotkey.is_pressed(Code::ControlRight)
     }
@@ -600,15 +601,12 @@ impl Browser {
     }
 
     fn init_mainview() -> WebviewBuilder<Wry> {
-        tauri::webview::WebviewBuilder::new(
-            Webview::MAINVIEW_LABEL,
-            WebviewUrl::App(Default::default()),
-        )
-        .auto_resize()
-        .transparent(true)
-        .zoom_hotkeys_enabled(false)
-        .focused(true)
-        .devtools(cfg!(debug_assertions))
+        WebviewBuilder::new(Webview::MAINVIEW_LABEL, WebviewUrl::App(Default::default()))
+            .auto_resize()
+            .transparent(true)
+            .zoom_hotkeys_enabled(false)
+            .focused(true)
+            .devtools(cfg!(debug_assertions))
     }
 
     async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {

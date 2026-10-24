@@ -2,7 +2,9 @@ use delay_timer::prelude::*;
 use log::error;
 use sqlx::SqlitePool;
 
-use crate::{database::DB_PATH, public_suffix::sync_public_suffix};
+use crate::{
+    database::DB_PATH, icon::clear_icon, log::clear_log, public_suffix::sync_public_suffix,
+};
 
 pub fn setup() -> Result<(), TaskError> {
     let delay_timer = DelayTimerBuilder::default()
@@ -57,7 +59,7 @@ fn clear_log_everyday() -> Result<Task, TaskError> {
                 return;
             };
 
-            if let Err(e) = crate::log::clear_log(&pool).await {
+            if let Err(e) = clear_log(&pool).await {
                 error!("清理浏览记录失败：{e}");
             }
         })
@@ -73,7 +75,7 @@ fn clear_icon_everyday() -> Result<Task, TaskError> {
                 return;
             };
 
-            if let Err(e) = crate::icon::clear_icon(&pool).await {
+            if let Err(e) = clear_icon(&pool).await {
                 error!("清理图标缓存失败：{e}");
             }
         })

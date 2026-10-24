@@ -1,6 +1,7 @@
 use cached::proc_macro::once;
 use publicsuffix::List;
-use sqlx::{SqlitePool, sqlite::SqliteQueryResult};
+use reqwest::get;
+use sqlx::{Error, SqlitePool, sqlite::SqliteQueryResult};
 
 use crate::error::{GetPublicSuffixError, SyncPublicSuffixError};
 
@@ -15,7 +16,7 @@ pub async fn sync_public_suffix(pool: &SqlitePool) -> Result<(), SyncPublicSuffi
         return Ok(());
     }
 
-    let content: String = reqwest::get("https://publicsuffix.org/list/public_suffix_list.dat")
+    let content: String = get("https://publicsuffix.org/list/public_suffix_list.dat")
         .await?
         .text()
         .await?;
@@ -25,7 +26,7 @@ pub async fn sync_public_suffix(pool: &SqlitePool) -> Result<(), SyncPublicSuffi
     Ok(())
 }
 
-pub async fn get_public_suffix(pool: &SqlitePool, must_today: bool) -> Result<String, sqlx::Error> {
+pub async fn get_public_suffix(pool: &SqlitePool, must_today: bool) -> Result<String, Error> {
     if must_today {
         sqlx::query_scalar!(
             "select content from public_suffix_list where create_time > date('now', 'localtime') limit 1"
@@ -42,6 +43,6 @@ pub async fn get_public_suffix(pool: &SqlitePool, must_today: bool) -> Result<St
 pub async fn update_public_suffix(
     pool: &SqlitePool,
     content: &str,
-) -> Result<SqliteQueryResult, sqlx::Error> {
+) -> Result<SqliteQueryResult, Error> {
     sqlx::query!("delete from public_suffix_list;insert into public_suffix_list(content, create_time) values (?, datetime('now', 'localtime'))", content).execute(pool).await
 }

@@ -9,7 +9,7 @@ use tauri::{
     AppHandle, LogicalPosition, LogicalSize, Manager as _, Theme, Url, Webview, WebviewBuilder,
     WebviewUrl, Window, Wry,
     async_runtime::{self, Mutex},
-    webview::{NewWindowResponse, PageLoadPayload},
+    webview::{NewWindowResponse, PageLoadEvent, PageLoadPayload},
 };
 use uuid::Uuid;
 
@@ -167,8 +167,8 @@ fn on_floating_page_load(webview: Webview, payload: PageLoadPayload) {
     async_runtime::spawn(async move {
         let label = webview.label();
         let loading = match event {
-            tauri::webview::PageLoadEvent::Started => true,
-            tauri::webview::PageLoadEvent::Finished => false,
+            PageLoadEvent::Started => true,
+            PageLoadEvent::Finished => false,
         };
         // 页面加载完成时预读 URL（锁外调用，避免阻塞其他浮动 Tab 操作）
         let current_url = if !loading {

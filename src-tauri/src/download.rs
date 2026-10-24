@@ -1,7 +1,9 @@
+use std::env::temp_dir;
 use std::path::PathBuf;
 
 use log::{error, info};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, async_runtime::spawn};
+use tauri_plugin_notification::NotificationExt;
 use tokio::sync::broadcast::error::RecvError;
 
 use downloader::{DownloadConfig, DownloadError, DownloadEvent, DownloadManager};
@@ -14,7 +16,7 @@ pub(crate) fn setup(app: &AppHandle) {
     app.manage(manager.clone());
 
     let app1 = app.clone();
-    tauri::async_runtime::spawn(async move {
+    spawn(async move {
         event_listener_loop(app1, manager).await;
     });
 }
@@ -51,7 +53,7 @@ pub(crate) fn download_dir(app: &AppHandle) -> PathBuf {
     app.path()
         .download_dir()
         .or_else(|_| app.path().app_data_dir().map(|dir| dir.join("downloads")))
-        .unwrap_or_else(|_| std::env::temp_dir().join("white-hole-downloads"))
+        .unwrap_or_else(|_| temp_dir().join("white-hole-downloads"))
 }
 
 /// 监听下载事件流（开始/完成/失败/取消），发送系统通知
@@ -146,7 +148,6 @@ fn friendly_error(err: &DownloadError) -> String {
 
 /// 发送系统通知（Windows 及其他平台统一走 tauri-plugin-notification）。
 fn send_notification(app: &AppHandle, title: &str, body: &str) {
-    use tauri_plugin_notification::NotificationExt;
     if let Err(e) = app.notification().builder().title(title).body(body).show() {
         error!("发送下载通知失败：{e}");
     }

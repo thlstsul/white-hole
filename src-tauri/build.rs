@@ -1,4 +1,7 @@
-use std::{io::Write as _, thread};
+use std::{env::var, error::Error, fs::OpenOptions, io::Write as _, thread};
+
+use reqwest::blocking::get;
+use tauri_build::{Attributes, WindowsAttributes, build, try_build};
 
 fn main() {
     if is_release_build() {
@@ -22,11 +25,11 @@ fn main() {
     // 测试 harness）都带 v6 清单；同时不再让 tauri-build 以 winres 资源嵌入
     // 清单，避免 bin 出现重复的 RT_MANIFEST。清单内容与 tauri-build 默认的
     // windows-app-manifest.xml 完全一致。
-    let target = std::env::var("TARGET").unwrap_or_default();
+    let target = var("TARGET").unwrap_or_default();
     if target.contains("pc-windows-msvc") {
-        let attrs = tauri_build::Attributes::default()
-            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
-        tauri_build::try_build(attrs).expect("failed to run tauri build script");
+        let attrs =
+            Attributes::default().windows_attributes(WindowsAttributes::new_without_app_manifest());
+        try_build(attrs).expect("failed to run tauri build script");
 
         println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
         println!(
@@ -35,15 +38,14 @@ fn main() {
              processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
         );
     } else {
-        tauri_build::build()
+        build()
     }
 }
 
-fn darkreader() -> Result<(), Box<dyn std::error::Error>> {
-    let darkreader: String =
-        reqwest::blocking::get("https://unpkg.com/darkreader@latest/darkreader.js")?.text()?;
+fn darkreader() -> Result<(), Box<dyn Error>> {
+    let darkreader: String = get("https://unpkg.com/darkreader@latest/darkreader.js")?.text()?;
 
-    let mut darkreader_file = std::fs::OpenOptions::new()
+    let mut darkreader_file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
@@ -53,16 +55,16 @@ fn darkreader() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn insert_public_suffix() -> Result<(), Box<dyn std::error::Error>> {
+fn insert_public_suffix() -> Result<(), Box<dyn Error>> {
     let public_suffix: String =
-        reqwest::blocking::get("https://publicsuffix.org/list/public_suffix_list.dat")?.text()?;
+        get("https://publicsuffix.org/list/public_suffix_list.dat")?.text()?;
 
     let sql = format!(
         "insert into public_suffix_list (create_time, content) values (datetime('now', 'localtime'), '{}');",
         public_suffix.replace("'", "''")
     );
 
-    let mut sql_file = std::fs::OpenOptions::new()
+    let mut sql_file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
@@ -73,5 +75,5 @@ fn insert_public_suffix() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn is_release_build() -> bool {
-    std::env::var("PROFILE").is_ok_and(|p| p == "release")
+    var("PROFILE").is_ok_and(|p| p == "release")
 }

@@ -3,20 +3,25 @@ use std::{borrow::Borrow, fmt::Display, str::FromStr};
 
 use error_set::error_set;
 pub use hotkey_macros::hotkey;
+use inventory::iter;
 pub use inventory::submit;
+use keyboard_types::Code::*;
 pub use keyboard_types::{Code, KeyState, Modifiers};
+// glob 导入会把 `Code::Fn` 键位带入作用域，显式导入 Fn trait 以覆盖它
 use log::error;
 use scc::{HashMap, HashSet};
-use tauri::plugin::TauriPlugin;
+use std::fmt::{Formatter, Result as FmtResult};
+use std::ops::Fn;
+use tauri::plugin::{Builder as PluginBuilder, TauriPlugin};
 use tauri::{AppHandle, Manager, Runtime, Wry};
 
 type HandlerFn<R> = Box<dyn Fn(AppHandle<R>) + Send + Sync + 'static>;
 
 pub fn init() -> TauriPlugin<Wry> {
-    tauri::plugin::Builder::new("hotkey-manager")
+    PluginBuilder::new("hotkey-manager")
         .setup(move |app, _api| {
             let mut manager = HotkeyManager::new(app.clone());
-            for factory in inventory::iter::<&dyn HotkeyRegistrar> {
+            for factory in iter::<&dyn HotkeyRegistrar> {
                 manager = factory.register(manager);
             }
             app.manage(manager);
@@ -164,7 +169,7 @@ impl Hotkey {
 }
 
 impl Display for Hotkey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.into_string())
     }
 }
@@ -264,7 +269,6 @@ fn parse_hotkey(hotkey: &str) -> Result<Hotkey, HotkeyParseError> {
 }
 
 fn parse_key(key: &str) -> Result<Code, HotkeyParseError> {
-    use Code::*;
     match key.to_uppercase().as_str() {
         "BACKQUOTE" | "`" => Ok(Backquote),
         "BACKSLASH" | "\\" => Ok(Backslash),

@@ -3,12 +3,13 @@ use std::{
     sync::Arc,
 };
 
+use hotkey::{Code, HotkeyManagerExt as _};
 use log::{error, info};
 use sqlx::SqlitePool;
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager as _, Url, Webview, Window, Wry,
+    AppHandle, Error, LogicalPosition, LogicalSize, Manager as _, State, Url, Webview, Window, Wry,
     async_runtime::{self, Mutex},
-    webview::{DownloadEvent, NewWindowResponse, PageLoadPayload},
+    webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, PageLoadPayload},
     window::Color,
 };
 use uuid::Uuid;
@@ -107,10 +108,10 @@ impl TabService {
     fn window(&self) -> Result<Window, FrameworkError> {
         self.app_handle
             .get_window("main")
-            .ok_or(FrameworkError::Tauri(tauri::Error::WindowNotFound))
+            .ok_or(FrameworkError::Tauri(Error::WindowNotFound))
     }
 
-    fn browser(&self) -> tauri::State<'_, Browser> {
+    fn browser(&self) -> State<'_, Browser> {
         self.app_handle.browser()
     }
 
@@ -156,7 +157,7 @@ impl TabService {
     async fn map_for_or_webview_not_found(&self, label: &str) -> Result<&TabMap, FrameworkError> {
         self.map_for(label)
             .await
-            .ok_or(FrameworkError::Tauri(tauri::Error::WebviewNotFound))
+            .ok_or(FrameworkError::Tauri(Error::WebviewNotFound))
     }
 
     // ============ 生命周期 ============
@@ -370,10 +371,10 @@ impl TabService {
     }
 
     /// 切换当前 tab 的暗色模式，返回新状态
-    pub async fn toggle_darkreader(&self, label: &str) -> Result<bool, tauri::Error> {
+    pub async fn toggle_darkreader(&self, label: &str) -> Result<bool, Error> {
         self.map_for(label)
             .await
-            .ok_or(tauri::Error::WebviewNotFound)?
+            .ok_or(Error::WebviewNotFound)?
             .darkreader(label)
             .await
     }
@@ -393,14 +394,10 @@ impl TabService {
         self.incognito.tabs().set_position(position).await;
     }
 
-    pub async fn set_background_color(
-        &self,
-        label: &str,
-        color: Color,
-    ) -> Result<(), tauri::Error> {
+    pub async fn set_background_color(&self, label: &str, color: Color) -> Result<(), Error> {
         self.map_for(label)
             .await
-            .ok_or(tauri::Error::WebviewNotFound)?
+            .ok_or(Error::WebviewNotFound)?
             .set_background_color(label, color)
             .await
     }
@@ -726,8 +723,6 @@ impl TabService {
 pub(crate) fn on_new_window(app_handle: &AppHandle, url: Url) -> NewWindowResponse<Wry> {
     // 同步捕获 Ctrl 状态：避免异步任务中的 TOCTOU 竞态
     let ctrl = {
-        use ::hotkey::Code;
-        use ::hotkey::HotkeyManagerExt as _;
         let hotkey = app_handle.hotkey();
         hotkey.is_pressed(Code::ControlLeft) || hotkey.is_pressed(Code::ControlRight)
     };
@@ -778,8 +773,8 @@ pub(crate) fn on_page_load(webview: Webview, payload: PageLoadPayload) {
 
         let browser = webview.browser();
         let loading = match event {
-            tauri::webview::PageLoadEvent::Started => true,
-            tauri::webview::PageLoadEvent::Finished => false,
+            PageLoadEvent::Started => true,
+            PageLoadEvent::Finished => false,
         };
 
         browser
@@ -803,7 +798,7 @@ pub(crate) fn on_download(webview: Webview, event: DownloadEvent) -> bool {
                 // 在异步线程读取该 URL 的 cookie：cookies_for_url 在同步命令/事件处理器中
                 // 会死锁（wry#583），此处运行在 tokio 工作线程，不会阻塞 WebView2 UI 线程
                 let cookies = url
-                    .parse::<url::Url>()
+                    .parse::<Url>()
                     .ok()
                     .and_then(|u| webview.cookies_for_url(u).ok())
                     .map(|list| {

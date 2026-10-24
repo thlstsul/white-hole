@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::env::{consts::ARCH, set_var, var};
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -6,7 +7,7 @@ pub const USER_AGENT: &str = "USER_AGENT";
 
 pub fn setup_user_agent() {
     unsafe {
-        std::env::set_var(
+        set_var(
             USER_AGENT,
             UserAgentPlatform::default()
                 .to_user_agent_string()
@@ -16,7 +17,7 @@ pub fn setup_user_agent() {
 }
 
 pub fn get_user_agent() -> String {
-    std::env::var(USER_AGENT).unwrap_or_default()
+    var(USER_AGENT).unwrap_or_default()
 }
 
 pub enum UserAgentPlatform {
@@ -88,7 +89,7 @@ impl UserAgentPlatform {
                 "i686"
             } else {
                 // For other architectures (ARM, RISC-V, etc.), use the actual target architecture
-                std::env::consts::ARCH
+                ARCH
             };
 
             Cow::Owned(format!(

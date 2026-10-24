@@ -1,5 +1,6 @@
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use publicsuffix::{List, Psl as _};
+use tokio::fs::try_exists;
 use url::{Host, Url};
 
 const ALLOWED_SCHEMES: [&str; 5] = ["http", "https", "file", "data", "ftp"];
@@ -18,7 +19,7 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
     }
 
     if (input.contains("\\") || input.contains("/"))
-        && let Ok(true) = tokio::fs::try_exists(input).await
+        && let Ok(true) = try_exists(input).await
     {
         // Windows 文件路径会被误解为URL
         return Url::parse(&format!("file:///{input}")).ok();
