@@ -9,13 +9,13 @@ use tauri::{
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
 use tokio::time::Instant;
-use uuid::Uuid;
 
 use crate::{
     IsMainView,
     darkreader::{delete_blacklist, save_blacklist},
     database::Database,
     error::*,
+    floating_tab::{self, FloatingTab, FloatingTabState},
     fullscreen::Fullscreen,
     history::HistoryEvent,
     icon::{clear_cache as clear_icon_cache, get_cached_icon, get_icon_data_url},
@@ -27,10 +27,9 @@ use crate::{
     public_suffix::get_public_suffix_cached,
     state::{Boolean, BrowserState},
     tab::bg_color,
-    tab_service::{TabService, on_floating_new_window, on_floating_page_load},
+    tab_service::TabService,
     task,
     url::parse_keyword,
-    user_agent::get_user_agent,
 };
 
 const WIDTH: f64 = 800.;
@@ -46,6 +45,8 @@ pub struct Browser {
     mainview: Webview,
     /// 标签领域服务（标签生命周期 / 历史镜像同步 / 每 tab 命令）
     pub(crate) tabs: TabService,
+    /// 浮动 Tab 状态（数据与布局内聚在 floating_tab 模块）
+    pub(crate) floating: FloatingTabState,
     is_focused: Boolean,
     incognito: Boolean,
     is_client: Boolean,
@@ -87,6 +88,7 @@ impl Browser {
                 window,
                 mainview,
                 tabs: TabService::new(app.handle().clone()),
+                floating: FloatingTabState::default(),
                 is_focused: Boolean::default(),
                 incognito: Boolean::default(),
                 is_client: Boolean::default(),
@@ -109,25 +111,6 @@ impl Browser {
     /// 供 TabService 查询无痕状态（历史落库的缓存隔离依赖此标志）
     pub(crate) async fn is_incognito(&self) -> bool {
         self.incognito.get().await
-    }
-
-    /// 浮动 Tab 位置和尺寸计算（复用于 resize / open_floating_tab）
-    fn floating_layout(
-        &self,
-        window_size: LogicalSize<f64>,
-    ) -> (LogicalPosition<f64>, LogicalSize<f64>) {
-        let window_width = window_size.width;
-        let window_height = window_size.height;
-        let content_h = (window_height - Webview::TITLE_HEIGHT).max(0.0);
-        let float_w = window_width * 0.3;
-        let float_h = content_h * 0.3;
-        let margin = window_width * 0.02;
-        let x = (window_width - float_w - margin).max(0.0);
-        let y = (window_height - float_h - margin).max(Webview::TITLE_HEIGHT);
-        (
-            LogicalPosition::new(x, y),
-            LogicalSize::new(float_w, float_h),
-        )
     }
 
     /// 计算 webview 应占用的位置与尺寸，基于窗口客户区。
@@ -172,21 +155,7 @@ impl Browser {
         }
         // floating_layout 期望完整窗口尺寸（内部再扣标题栏），
         // 复用 main_size 而非已扣除标题栏的 web_size，避免高度双重扣除
-        let window_size = main_size;
-
-        // —— 浮动 Tab 跟随缩放 ——
-        {
-            let mut floating = self.tabs.floating_tab.lock().await;
-            if let Some(ref mut f) = *floating {
-                let (pos, size) = self.floating_layout(window_size);
-                if let Err(e) = f.webview.set_size(size) {
-                    error!("浮动 Tab set_size 失败：{e}");
-                }
-                if let Err(e) = f.webview.set_position(pos) {
-                    error!("浮动 Tab set_position 失败：{e}");
-                }
-            }
-        }
+        self.floating.resize(main_size).await;
 
         self.emit(None).await?;
         Ok(())
@@ -246,7 +215,7 @@ impl Browser {
         }
 
         self.focus_changed().await?;
-        self.tabs.raise_floating_tab().await;
+        self.floating.raise(&self.window).await;
         Ok(())
     }
 
@@ -281,7 +250,7 @@ impl Browser {
         }
 
         self.focus_changed().await?;
-        self.tabs.raise_floating_tab().await;
+        self.floating.raise(&self.window).await;
         Ok(())
     }
 
@@ -310,51 +279,29 @@ impl Browser {
         // 1. 计算浮动 webview 位置和尺寸（主窗口内逻辑坐标，无锁）
         let scale = self.window.scale_factor()?;
         let win_size = self.window.inner_size()?.to_logical::<f64>(scale);
-        let (position, size) = self.floating_layout(win_size);
+        let (position, size) = floating_tab::layout(win_size);
 
         // 2. 构建 webview（无锁）
-        let label = format!("floating-{}", Uuid::now_v7());
-        let app_handle = self.window.app_handle().clone();
-        let is_dark = matches!(self.window.theme()?, Theme::Dark);
         let incognito = self.incognito.get().await;
-        let builder = WebviewBuilder::new(&label, WebviewUrl::External(url.clone()))
-            .initialization_script(include_str!("../js/darkreader.js"))
-            .initialization_script(include_str!("../js/floating_tab.js"))
-            .user_agent(&get_user_agent())
-            .incognito(incognito)
-            .background_color(bg_color(is_dark))
-            .devtools(true)
-            .zoom_hotkeys_enabled(true)
-            .focused(false) // 不抢焦点：FT-3 要求原 Tab 保持不变
-            .on_new_window({
-                let app_handle = app_handle.clone();
-                move |url, _| on_floating_new_window(&app_handle, url)
-            })
-            .on_page_load(on_floating_page_load)
-            .on_download(crate::tab_service::on_download);
-
+        let (label, builder) = floating_tab::webview_builder(&self.window, url, incognito)?;
         let webview = self.window.add_child(builder, position, size)?;
 
         // 3. 原子操作：关闭已有 + 存储新 Tab（单次锁，消除并发竞态窗口）
-        let new_floating = crate::tab_service::FloatingTab {
+        let new_floating = FloatingTab {
             label: label.clone(),
             url: url.to_string(),
             webview,
         };
-        let mut lock = self.tabs.floating_tab.lock().await;
-        // 关闭已有浮动 Tab（如有）
-        if let Some(f) = lock.take() {
-            let _ = f.webview.close();
+        if let Some(old) = self.floating.replace(new_floating).await {
+            let _ = old.webview.close();
         }
-        *lock = Some(new_floating);
 
         Ok(())
     }
 
     /// 关闭浮动 Tab：销毁 webview，清理状态，恢复焦点到主窗口
     pub async fn close_floating_tab(&self) -> Result<(), FrameworkError> {
-        let floating = self.tabs.floating_tab.lock().await.take();
-        if let Some(f) = floating {
+        if let Some(f) = self.floating.take().await {
             f.webview.close()?;
             // FT-11：销毁浮动 Tab 后，将焦点交还给主窗口（WebView2 未显式聚焦时
             // 可能停留在浮动 Tab 最后交互的区域，需手动恢复）
@@ -363,19 +310,13 @@ impl Browser {
         Ok(())
     }
 
-    /// 提升浮动 Tab 为常规 Tab：原子 take → 校验 URL → 关闭浮动 → 创建常规 Tab
+    /// 提升浮动 Tab 为常规 Tab：原子 take（锁内解析 URL）→ 关闭浮动 → 创建常规 Tab
     pub async fn promote_floating_tab(&self) -> Result<(), TabError> {
-        // 同一锁内先校验 URL、再原子 take；解析失败时浮动 Tab 仍存活
-        let (url, webview) = {
-            let mut lock = self.tabs.floating_tab.lock().await;
-            let Some(f) = lock.as_ref() else {
-                return Ok(());
-            };
-            let url = Url::parse(&f.url)?;
-            let f = lock.take().expect("上一步已确认存在");
-            (url, f.webview)
+        // 同一锁内解析 URL 并原子取出；解析失败时浮动 Tab 仍存活
+        let Some((url, f)) = self.floating.take_validated(Url::parse).await? else {
+            return Ok(());
         };
-        webview.close()?;
+        f.webview.close()?;
         let _ = self.window.set_focus();
 
         self.open_tab_regular(&url).await?;
@@ -426,7 +367,7 @@ impl Browser {
         }
 
         self.mainview.reparent(&self.window)?;
-        self.tabs.raise_floating_tab().await;
+        self.floating.raise(&self.window).await;
 
         self.emit(None).await?;
         Ok(true)
@@ -442,7 +383,7 @@ impl Browser {
         if !label.is_empty() {
             self.tabs.top(&label).await?;
         }
-        self.tabs.raise_floating_tab().await;
+        self.floating.raise(&self.window).await;
 
         self.emit(None).await?;
         Ok(true)
