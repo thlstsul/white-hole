@@ -188,7 +188,8 @@ pub async fn fullscreen_changed(
         "{} webview fullscreen changed: {is_fullscreen}",
         webview.label()
     );
-    browser.fullscreen_changed(is_fullscreen).await
+    // 视频全屏：窗口全屏由 wry 原生处理，这里只同步标志与布局
+    browser.webview_fullscreen_changed(is_fullscreen).await
 }
 
 #[command]

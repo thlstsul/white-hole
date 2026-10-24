@@ -16,6 +16,7 @@ use crate::{
     darkreader::{delete_blacklist, save_blacklist},
     database::Database,
     error::*,
+    fullscreen::Fullscreen,
     history::HistoryEvent,
     icon::{clear_cache as clear_icon_cache, get_cached_icon, get_icon_data_url},
     log::{
@@ -48,11 +49,8 @@ pub struct Browser {
     is_focused: Boolean,
     incognito: Boolean,
     is_client: Boolean,
-    /// 自维护的全屏状态：窗口切换走 tao 的 set_fullscreen，
-    /// 本字段与窗口实际状态同步，供布局与 F11 方向判断使用
-    is_fullscreen: Boolean,
-    /// 进入全屏前是否最大化（持久化字段，避免退出时重读 is_maximized 恒为 false）
-    was_maximized: Boolean,
+    /// 全屏状态机（F11 窗口全屏 + webview 视频全屏的标志与窗口切换）
+    fullscreen: Fullscreen,
     last_focus_changed: Mutex<Instant>,
 }
 
@@ -82,8 +80,7 @@ impl Browser {
             let _ = mainview.set_background_color(Some(bg));
 
             let db = Database::new(app).await?;
-            let is_fullscreen = Boolean::from(window.is_fullscreen()?);
-            let was_maximized = Boolean::from(window.is_maximized()?);
+            let fullscreen = Fullscreen::new(window.clone())?;
 
             let state = Browser {
                 db,
@@ -93,8 +90,7 @@ impl Browser {
                 is_focused: Boolean::default(),
                 incognito: Boolean::default(),
                 is_client: Boolean::default(),
-                is_fullscreen,
-                was_maximized,
+                fullscreen,
                 last_focus_changed: Mutex::new(Instant::now()),
             };
             app.manage(state);
@@ -158,7 +154,7 @@ impl Browser {
     }
 
     pub async fn resize(&self) -> Result<(), StateError> {
-        let is_fullscreen = self.is_fullscreen.get().await;
+        let is_fullscreen = self.fullscreen.is_active().await;
         // tab 始终跟随窗口尺寸（全屏时位 (0,0)，普通时减标题栏），
         // 不能因窗口小于初始尺寸而跳过——否则退出全屏后 tab 保持全屏尺寸盖住标题栏
         let (position, web_size) = self.webview_rect(is_fullscreen, true)?;
@@ -539,8 +535,8 @@ impl Browser {
             return Ok(());
         }
 
-        self.fullscreen_changed(!self.is_fullscreen.get().await)
-            .await
+        let is_fullscreen = !self.fullscreen.is_active().await;
+        self.fullscreen.toggle_window(is_fullscreen).await
     }
 
     pub async fn query_navigation_log(
@@ -573,46 +569,18 @@ impl Browser {
         Ok(state)
     }
 
-    pub async fn fullscreen_changed(&self, is_fullscreen: bool) -> Result<(), FrameworkError> {
-        // 乐观标记目标状态：Boolean::set 返回 false 表示已在目标状态，
-        // 直接忽略（F11 快速连按第二次读到旧值也不会重复进/退，防方向错乱）
-        if !self.is_fullscreen.set(is_fullscreen).await {
-            return Ok(());
-        }
-        let result = if is_fullscreen {
-            self.enter_fullscreen().await
-        } else {
-            self.exit_fullscreen().await
-        };
-        if let Err(e) = result {
-            // 失败回滚状态，避免 is_fullscreen 与窗口实际状态不一致
-            self.is_fullscreen.set(!is_fullscreen).await;
-            return Err(e);
-        }
-        // 布局无需在此处理：set_fullscreen 切换必触发 WM_SIZE → resize()，
-        // 由 resize 读取 is_fullscreen 统一收敛布局
-        Ok(())
-    }
-
-    /// 进入全屏：记录 was_maximized → 若最大化则先 unmaximize()
-    /// （清除 WS_MAXIMIZE，解除最大化工作区的客户区钳制，避免全屏底部漏出任务栏）
-    /// → 再 set_fullscreen(true)。webview 布局由 fullscreen_changed 按屏幕大小重算。
-    async fn enter_fullscreen(&self) -> Result<(), FrameworkError> {
-        let was_maximized = self.window.is_maximized()?;
-        self.was_maximized.set(was_maximized).await;
-        if was_maximized {
-            self.window.unmaximize()?;
-        }
-        self.window.set_fullscreen(true)?;
-        Ok(())
-    }
-
-    /// 退出全屏：set_fullscreen(false) 后若进入前是最大化，显式 maximize() 恢复。
-    /// 用持久化字段 was_maximized，避免"退出时重读 is_maximized 恒为 false"的缺陷。
-    async fn exit_fullscreen(&self) -> Result<(), FrameworkError> {
-        self.window.set_fullscreen(false)?;
-        if self.was_maximized.get().await {
-            self.window.maximize()?;
+    /// webview 元素（视频）全屏上报：窗口切换由 wry 原生处理并维护
+    /// 最大化快照（见 Fullscreen::webview_changed），此处只负责布局收敛。
+    pub async fn webview_fullscreen_changed(
+        &self,
+        is_fullscreen: bool,
+    ) -> Result<(), FrameworkError> {
+        self.fullscreen.webview_changed(is_fullscreen).await?;
+        // wry 的原生切换不产生我们的 WM_SIZE，显式收敛一次布局
+        // （StateError 是 FrameworkError 超集，无法向上传播，
+        // 有意 best-effort 吞错记日志）
+        if let Err(e) = self.resize().await {
+            error!("视频全屏后布局收敛失败：{e}");
         }
         Ok(())
     }

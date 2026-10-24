@@ -23,6 +23,7 @@ mod darkreader;
 mod database;
 mod download;
 mod error;
+mod fullscreen;
 mod history;
 mod hotkey;
 mod icon;
