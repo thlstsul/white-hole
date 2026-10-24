@@ -18,10 +18,10 @@ use crate::{
     floating_tab::{self, FloatingTab, FloatingTabState},
     fullscreen::Fullscreen,
     history::HistoryEvent,
-    icon::{clear_cache as clear_icon_cache, get_cached_icon, get_icon_data_url},
+    icon::{get_cached_icon, get_icon_data_url},
     log::{
-        NavigationLog, QueryLogResponse, clear_cache as clear_log_cache, get_id, get_url,
-        query_log, save_log, touch_log, update_log_star,
+        NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, touch_log,
+        update_log_star,
     },
     page::PageToken,
     public_suffix::get_public_suffix_cached,
@@ -48,7 +48,6 @@ pub struct Browser {
     /// 浮动 Tab 状态（数据与布局内聚在 floating_tab 模块）
     pub(crate) floating: FloatingTabState,
     is_focused: Boolean,
-    incognito: Boolean,
     is_client: Boolean,
     /// 全屏状态机（F11 窗口全屏 + webview 视频全屏的标志与窗口切换）
     fullscreen: Fullscreen,
@@ -90,7 +89,6 @@ impl Browser {
                 tabs: TabService::new(app.handle().clone()),
                 floating: FloatingTabState::default(),
                 is_focused: Boolean::default(),
-                incognito: Boolean::default(),
                 is_client: Boolean::default(),
                 fullscreen,
                 last_focus_changed: Mutex::new(Instant::now()),
@@ -108,9 +106,10 @@ impl Browser {
         self.db.get().await
     }
 
-    /// 供 TabService 查询无痕状态（历史落库的缓存隔离依赖此标志）
+    /// 供 TabService 查询无痕状态（历史落库的缓存隔离依赖此标志；
+    /// 无痕领域状态由 TabService 持有，内聚在 incognito 模块）
     pub(crate) async fn is_incognito(&self) -> bool {
-        self.incognito.get().await
+        self.tabs.incognito.is_active().await
     }
 
     /// 计算 webview 应占用的位置与尺寸，基于窗口客户区。
@@ -189,7 +188,7 @@ impl Browser {
     /// 以常规 Tab 方式打开 URL（不检测 Ctrl，供 promote 等需固定行为的路径复用）
     async fn open_tab_regular(&self, url: &Url) -> Result<(), TabError> {
         let pool = self.db.get().await;
-        let incognito = self.incognito.get().await;
+        let incognito = self.tabs.incognito.is_active().await;
         self.is_focused.set(false).await;
         if let Some(id) = get_id(&pool, incognito, url.as_str()).await
             && let Some((label, index)) = self.tabs.any_open(id, incognito).await
@@ -221,7 +220,7 @@ impl Browser {
 
     pub async fn open_tab(&self, id: i64) -> Result<(), TabError> {
         if self.ctrl_pressed() {
-            let incognito = self.incognito.get().await;
+            let incognito = self.tabs.incognito.is_active().await;
             if let Some(url) = get_url(self.db.get().await.as_ref(), incognito, id).await {
                 self.open_floating_tab(&Url::parse(&url)?).await?;
             }
@@ -229,7 +228,7 @@ impl Browser {
         }
 
         let pool = self.db.get().await;
-        let incognito = self.incognito.get().await;
+        let incognito = self.tabs.incognito.is_active().await;
         self.is_focused.set(false).await;
         if let Some((label, index)) = self.tabs.any_open(id, incognito).await {
             self.tabs.go_to(&label, index).await;
@@ -282,7 +281,7 @@ impl Browser {
         let (position, size) = floating_tab::layout(win_size);
 
         // 2. 构建 webview（无锁）
-        let incognito = self.incognito.get().await;
+        let incognito = self.tabs.incognito.is_active().await;
         let (label, builder) = floating_tab::webview_builder(&self.window, url, incognito)?;
         let webview = self.window.add_child(builder, position, size)?;
 
@@ -422,31 +421,22 @@ impl Browser {
     }
 
     pub async fn incognito(&self) -> Result<(), TabError> {
-        if self.incognito.get().await {
-            // 退出无痕模式：close_incognito 排空无痕 tab 的在途历史消费者，
-            // 确保内存库被关闭前无残留写入落回持久库
+        if self.tabs.incognito.is_active().await {
+            // 退出无痕模式：先收 UI（焦点、浮动 Tab），再由 Incognito::exit
+            // 按"排空消费者 → 关内存库 → 翻转标志 → 清缓存 → 恢复 tab"的顺序退出
             self.is_focused.set(false).await;
-            self.tabs.close_incognito().await?;
             self.close_floating_tab()
                 .await
                 .inspect_err(|e| error!("关闭浮动 Tab 失败：{e}"))
                 .ok();
-            self.db.close_memory().await?;
-            self.incognito.set(false).await;
-            // 翻转标志后再清空全局缓存：此后新调用均以普通侧 key 查询持久库，
-            // 不会把内存库结果写回 (true, …) 缓存条目（在途调用已由 close_incognito 排空）
-            clear_log_cache().await;
-            clear_icon_cache().await;
-            // 恢复进入无痕模式前的 tab（由 TabService 的 current 机制管理）
-            self.tabs.restore_previous_tab().await?;
+            self.tabs.incognito.exit(&self.db, &self.tabs).await?;
         } else {
-            // 进入无痕模式
-            self.incognito.set(true).await;
+            // 进入无痕模式：先收 UI（焦点、抬起主视图），再由 Incognito::enter
+            // 翻转标志并建立内存库
             self.is_focused.set(true).await;
             // 抬起主视图到 tab 之上，保持 is_focused ⇔ mainview 顶层不变量
             self.mainview.reparent(&self.window)?;
-            self.db.migrate_memory().await?;
-            self.tabs.enter_incognito().await;
+            self.tabs.incognito.enter(&self.db, &self.tabs).await?;
         }
         self.emit(None).await?;
         Ok(())
@@ -504,7 +494,7 @@ impl Browser {
 
         state.maximized = self.window.is_maximized()?;
         state.focus = self.is_focused.get().await;
-        state.incognito = self.incognito.get().await;
+        state.incognito = self.tabs.incognito.is_active().await;
         state.is_client = self.is_client.get().await;
 
         Ok(state)
@@ -623,19 +613,19 @@ impl Browser {
 
     async fn save_navigation_log(&self, log: NavigationLog) -> Result<i64, DatabaseError> {
         let pool = self.db.get().await;
-        let incognito = self.incognito.get().await;
+        let incognito = self.tabs.incognito.is_active().await;
         Ok(save_log(&pool, incognito, log).await?)
     }
 
     async fn get_icon_data_url(&self, icon_url: &str) -> Result<String, IconError> {
         let pool = self.db.get().await;
-        let incognito = self.incognito.get().await;
+        let incognito = self.tabs.incognito.is_active().await;
         get_icon_data_url(&pool, incognito, icon_url).await
     }
 
     async fn get_cached_icon(&self, url: &str) -> Option<String> {
         let pool = self.db.get().await;
-        let incognito = self.incognito.get().await;
+        let incognito = self.tabs.incognito.is_active().await;
         get_cached_icon(&pool, incognito, url).await
     }
 

@@ -28,6 +28,7 @@ mod fullscreen;
 mod history;
 mod hotkey;
 mod icon;
+mod incognito;
 mod log;
 mod macros;
 mod page;

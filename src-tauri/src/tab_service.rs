@@ -18,8 +18,9 @@ use crate::{
     darkreader, download,
     error::{DatabaseError, FrameworkError, StateError, TabError, TabNotFoundError},
     history::{HistoryEvent, HistorySnapshotEntry},
+    incognito::Incognito,
     log::{NavigationLog, save_log},
-    state::{Boolean, BrowserState},
+    state::BrowserState,
     tab::{Tab, TabId, TabIndex, TabMap},
 };
 use downloader::DownloadManager;
@@ -74,20 +75,17 @@ impl PendingEvents {
 /// 与 Browser 解耦：不直接持有窗口与数据库，需要基础设施（DB、UI 发射、窗口）时
 /// 经 AppHandle 回调 Browser（发射与落库仍收敛在 Browser）。
 ///
-/// 无痕模式与有痕模式的 Tab 分别存储在 `incognito_map` 和 `normal_map` 中，
-/// 避免切换时相互干扰（如快捷键切换 Tab 误切到另一模式的 Tab）。
+/// 无痕模式的全部领域状态（标志、无痕侧 Tab 存储、进入前 tab、进入/退出/路由）
+/// 内聚在 `incognito` 模块，由本服务持有；普通侧 Tab 存储在 `normal_map` 中。
 pub struct TabService {
     normal_map: TabMap,
-    incognito_map: TabMap,
-    current: TabIndex,
-    /// 是否处于无痕模式
-    is_incognito: Boolean,
-    /// 进入无痕模式前的当前 tab，退出时恢复（与 current 同属当前状态管理）
-    pre_incognito: Mutex<Option<TabId>>,
+    /// 无痕模式领域状态（数据与顺序不变量内聚在 incognito 模块）
+    pub(crate) incognito: Incognito,
+    pub(crate) current: TabIndex,
     /// 新 tab 注册窗口期（webview 已创建、TabMap 尚未插入）的历史事件暂存：
     /// create_tab 插入后补投，避免首个文档的快照/图标事件被丢弃
     pending_history: Mutex<PendingEvents>,
-    /// 每 tab 历史事件消费者的任务句柄：关闭无痕前等待其排空，
+    /// 每 tab 历史事件消费者的任务句柄：关闭 tab / 退出无痕前等待其排空，
     /// 防止在途事件在内存库被关闭后把无痕数据写进持久库
     consumers: Mutex<HashMap<TabId, async_runtime::JoinHandle<()>>>,
     app_handle: AppHandle,
@@ -97,10 +95,8 @@ impl TabService {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
             normal_map: TabMap::new(),
-            incognito_map: TabMap::new(),
+            incognito: Incognito::new(),
             current: TabIndex::new(),
-            is_incognito: Boolean::default(),
-            pre_incognito: Mutex::new(None),
             pending_history: Mutex::new(PendingEvents::new()),
             consumers: Mutex::new(HashMap::new()),
             app_handle,
@@ -139,48 +135,16 @@ impl TabService {
         self.current.get().await
     }
 
-    /// 进入无痕模式：记住当前 tab（退出时恢复），并清空当前指向
-    pub async fn enter_incognito(&self) {
-        *self.pre_incognito.lock().await = Some(self.current.get().await);
-        self.is_incognito.set(true).await;
-        self.current.clear().await;
-    }
-
-    /// 退出无痕模式：恢复进入无痕前的 tab（不存在则回退到相邻 tab）
-    pub async fn restore_previous_tab(&self) -> Result<(), TabError> {
-        self.is_incognito.set(false).await;
-        if let Some(prev) = self.pre_incognito.lock().await.take()
-            && !prev.is_empty()
-        {
-            if let Err(e) = self.switch_tab(&prev).await {
-                error!("恢复无痕前标签失败：{e}");
-            } else {
-                return Ok(());
-            }
-        }
-        self.next_tab().await
-    }
-
     // ============ 内部辅助 ============
 
-    /// 返回当前模式对应的 TabMap
+    /// 返回当前模式对应的 TabMap（路由委托给 incognito 模块）
     async fn current_map(&self) -> &TabMap {
-        if self.is_incognito.get().await {
-            &self.incognito_map
-        } else {
-            &self.normal_map
-        }
+        self.incognito.current_map(&self.normal_map).await
     }
 
-    /// 查找指定 label 所在的 TabMap
+    /// 查找指定 label 所在的 TabMap（路由委托给 incognito 模块）
     async fn map_for(&self, label: &str) -> Option<&TabMap> {
-        if self.normal_map.contains(label).await {
-            Some(&self.normal_map)
-        } else if self.incognito_map.contains(label).await {
-            Some(&self.incognito_map)
-        } else {
-            None
-        }
+        self.incognito.map_for(&self.normal_map, label).await
     }
 
     async fn map_for_or_not_found(&self, label: &str) -> Result<&TabMap, StateError> {
@@ -221,11 +185,7 @@ impl TabService {
         // 持锁完成"插入 + 补投"：与 enqueue_history 的"查表 + 暂存"串行化，
         // 注册窗口期的事件要么在补投前入暂存、要么在插入后直接发送——不丢失、不乱序
         let mut pending = self.pending_history.lock().await;
-        let map = if incognito {
-            &self.incognito_map
-        } else {
-            &self.normal_map
-        };
+        let map = self.incognito.map_for_mode(&self.normal_map, incognito);
         map.insert(label.clone(), tab).await;
         for event in pending.drain(&label) {
             // 新建队列为空，发送不会阻塞；持锁保证先于插入后到达的直接发送
@@ -256,24 +216,21 @@ impl TabService {
         Ok(())
     }
 
-    /// 关闭全部无痕 tab，并**排空**其历史消费者（等待在途事件处理完）后返回：
-    /// 调用方随后才关闭内存库，此时已无在途消费者会把无痕数据写进持久库
-    pub async fn close_incognito(&self) -> Result<(), FrameworkError> {
-        let removed = self.incognito_map.keys().await;
-        for label in &removed {
-            self.incognito_map.close(label).await?;
-        }
+    /// 清空指定 label 的暂存历史事件，并**排空**其历史消费者（等待在途事件
+    /// 处理完）后返回：调用方随后才关闭内存库时，已无在途消费者会把无痕数据
+    /// 写进持久库（退出无痕由 incognito 模块编排，经此方法排空）
+    pub(crate) async fn drain_consumers(&self, labels: &[TabId]) {
         {
             let mut pending = self.pending_history.lock().await;
-            for label in &removed {
+            for label in labels {
                 pending.clear(label);
             }
         }
-        // 等待无痕 tab 的消费者任务退出：通道已随 Tab 销毁关闭，
+        // 等待消费者任务退出：通道已随 Tab 销毁关闭，
         // 消费者处理完剩余事件后自然结束——确保内存库关闭前无在途写入
         let handles: Vec<_> = {
             let mut consumers = self.consumers.lock().await;
-            removed
+            labels
                 .iter()
                 .filter_map(|label| consumers.remove(label))
                 .collect()
@@ -281,7 +238,6 @@ impl TabService {
         for handle in handles {
             let _ = handle.await;
         }
-        Ok(())
     }
 
     pub async fn switch_tab(&self, label: &str) -> Result<(), FrameworkError> {
@@ -322,12 +278,9 @@ impl TabService {
     }
 
     pub async fn any_open(&self, id: i64, incognito: bool) -> Option<(TabId, usize)> {
-        let map = if incognito {
-            &self.incognito_map
-        } else {
-            &self.normal_map
-        };
-        map.any_open(id).await
+        self.incognito
+            .any_open(&self.normal_map, id, incognito)
+            .await
     }
 
     pub async fn go_to(&self, label: &str, index: usize) -> bool {
@@ -432,12 +385,12 @@ impl TabService {
 
     pub async fn set_size(&self, size: LogicalSize<f64>) {
         self.normal_map.set_size(size).await;
-        self.incognito_map.set_size(size).await;
+        self.incognito.tabs().set_size(size).await;
     }
 
     pub async fn set_position(&self, position: LogicalPosition<f64>) {
         self.normal_map.set_position(position).await;
-        self.incognito_map.set_position(position).await;
+        self.incognito.tabs().set_position(position).await;
     }
 
     pub async fn set_background_color(
