@@ -103,10 +103,10 @@ async fn devtools(app_handle: AppHandle) {
 #[hotkey(Modifiers::CONTROL, Code::KeyI)]
 async fn incognito(app_handle: AppHandle) {
     let browser = app_handle.browser();
-    if let Err(e) = browser.incognito().await {
-        error!("切换标签失败：{e}");
+    match browser.incognito().await {
+        Ok(_) => sync_focus(&browser).await,
+        Err(e) => error!("切换标签失败：{e}"),
     }
-    focus(app_handle).await;
 }
 
 #[hotkey(Modifiers::CONTROL, Code::KeyP)]
