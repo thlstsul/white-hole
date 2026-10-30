@@ -1,3 +1,7 @@
+//! 窗口编排 + 应用门面：持有窗口/主视图/数据库与标签领域服务。
+//!
+//! 发射与落库收敛在 Browser；标签领域逻辑全部收敛在 TabService。
+
 use std::sync::Arc;
 
 use hotkey::{Code, HotkeyManagerExt as _};
@@ -139,7 +143,7 @@ impl Browser {
 
     pub async fn resize(&self) -> Result<(), StateError> {
         let is_fullscreen = self.fullscreen.is_active().await;
-        // tab 始终跟随窗口尺寸（全屏时位 (0,0)，普通时减标题栏），
+        // tab 始终跟随窗口尺寸（全屏时位于 (0,0)，普通时减标题栏），
         // 不能因窗口小于初始尺寸而跳过——否则退出全屏后 tab 保持全屏尺寸盖住标题栏
         let (position, web_size) = self.webview_rect(is_fullscreen, true)?;
         if !self.tabs.current().await.is_empty() {

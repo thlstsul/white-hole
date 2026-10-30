@@ -1,3 +1,8 @@
+//! 单个标签页的领域模型：webview 句柄、乐观 URL、历史镜像及事件队列。
+//!
+//! 历史镜像以 Navigation API 快照对账（快照只是同源片段，见
+//! [`Tab::sync_snapshot`]），是 URL/标题落库与回退前进的权威来源。
+
 use std::collections::HashMap as StdHashMap;
 use std::ops::Deref;
 
@@ -53,8 +58,9 @@ pub struct Tab {
     /// Finished 已触发但 LoadFinished 历史校准尚未消费：跨文档加载完成瞬间的
     /// 标题变更应 defer（pending_title）而非直接落库，避免与校准重复写入
     load_finished_pending: bool,
-    /// 加载期间到达但被跳过落库的标题（loading 守卫防止标题错位）：
-    /// 待快照对账后用权威 URL 补写，避免同文档导航无 PageLoad Finished 事件而丢失
+    /// 加载中或 LoadFinished 校准在途时到达、被 defer 落库的标题：
+    /// 待校准（on_page_load_finished_history）或快照对账（sync_snapshot）后
+    /// 用权威 URL 补写，避免标题写进旧 URL 记录/同一行重复落库
     pending_title: Option<String>,
     /// 导航发起时乐观设置的 URL（按 tab 隔离），在真实导航追上之前，
     /// get_state 会使用此值覆盖 URL 与 loading，避免网络延迟时无反应。
@@ -371,7 +377,8 @@ impl Tab {
     /// key 作为条目身份：同 key 且 URL 未变的条目保留原 id；新 key 或同 key
     /// 但 URL 已变（replaceState 只改 URL 不改 key）置占位 -1 等待回填。
     /// 占位回填只覆盖**本次快照影响的片段区间**，不重复落库镜像中历史遗留的
-    /// 占位条目（save_log 对已存在行 title 非空时 times + 1，重复会虚增计数）。
+    /// 占位条目（save_log 对已存在行 title 非空且 icon 到位时 times + 1，重复会
+    /// 虚增计数）。
     /// 返回 (需要回填 id 的 (位置, url) 列表, 对账后当前条目在镜像中的位置)。
     pub fn sync_snapshot(
         &mut self,
@@ -471,7 +478,7 @@ impl Tab {
 
         // 占位条目（本次快照影响的片段内新 key / replaceState 改 URL）等待回填。
         // 只收集影响区间内的条目，避免每次快照重复落库镜像中历史遗留的占位条目
-        // （save_log 对已存在行 title 非空时 times + 1，会虚增访问计数）
+        // （save_log 对已存在行 title 非空且 icon 到位时 times + 1，会虚增访问计数）
         let needs_id = self.history[span.clone()]
             .iter()
             .enumerate()
@@ -550,7 +557,6 @@ impl TabMap {
         Ok(())
     }
 
-    /// 判断 label 是否存在
     pub async fn contains(&self, label: &str) -> bool {
         self.0.contains_sync(label)
     }
@@ -567,7 +573,7 @@ impl TabMap {
         labels
     }
 
-    /// return id 所在 (label, index)
+    /// 返回 id 所在的 (label, index)
     pub async fn any_open(&self, id: i64) -> Option<(TabId, usize)> {
         let mut label = None;
         self.0
@@ -625,7 +631,7 @@ impl TabMap {
         self.0.update_async(label, |_, tab| tab.title = title).await;
     }
 
-    /// 记录加载期间被跳过落库的标题，待快照对账后用权威 URL 补写
+    /// 记录加载中或校准在途时被 defer 的标题，待校准/快照对账后用权威 URL 补写
     pub async fn set_pending_title(&self, label: &str, title: String) {
         self.0
             .update_async(label, |_, tab| tab.pending_title = Some(title))

@@ -1,3 +1,5 @@
+//! 应用入口库：插件/日志/单实例初始化与窗口构建，启动流程见 [`run`]。
+
 use ::hotkey::HotkeyManagerExt as _;
 use ::log::LevelFilter;
 use ::log::error;
@@ -153,7 +155,7 @@ fn single_instance_init(app: &AppHandle, args: Vec<String>, _cwd: String) {
     let _ = window.show();
     let _ = window.set_focus();
     if args.len() < 2 {
-        // 命令不带参数
+        // 无参数启动（如再次点击图标）：仅唤醒窗口，不打开新链接
         return;
     }
 
@@ -186,11 +188,8 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
                     }
                 }
                 WindowEvent::Focused(true) => {
-                    // Webview::set_focus 后，会触发 WindowEvent::Focused 事件；所以 focus_changed 做了防抖
-                    // let browser = window.browser();
-                    // if let Err(e) = browser.focus_changed().await {
-                    //     error!("聚焦变更失败：{e}");
-                    // }
+                    // Webview::set_focus 会再触发 WindowEvent::Focused，防抖已收敛在
+                    // Browser::focus_changed 内，此处无需处理
                 }
                 WindowEvent::Focused(false) => {
                     // 窗口重新失焦时，清空残留已按下按键

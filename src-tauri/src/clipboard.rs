@@ -1799,7 +1799,7 @@ mod tests {
 
     /// decide_rewrite_cleanup 纯决策：破坏性阶段各早退路径的句柄记账——
     /// alloc 失败/代数不匹配/EmptyClipboard 失败 → Skipped/Busy + 释放全部
-    /// 预分配句柄（FreeAll）；SetClipboardData 全失败 → Skipped + 释放失败者
+    /// 预分配句柄（FreeAll）；SetClipboardData 全失败 → Busy + 释放失败者
     /// （FreeFailed）；至少一个成功 → Reowned + FreeFailed（成功者被系统接管）
     #[test]
     fn rewrite_cleanup_accounts_handles_on_every_early_return() {

@@ -16,7 +16,6 @@ fn main() {
 
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
 
-    // pnpm install tailwindcss daisyui
     run_command_safely(pnpm, &["install", "tailwindcss", "daisyui"], None)
         .expect("failed to execute pnpm");
 }

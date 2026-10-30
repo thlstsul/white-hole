@@ -1,3 +1,8 @@
+//! 导航历史落库与查询。
+//!
+//! 全局结果缓存（cached）以 incognito 参与 key，保证无痕内存库与普通库
+//! 结果互不可见；退出无痕时清除无痕侧缓存。
+
 use cached::proc_macro::cached;
 use log::error;
 use serde::Serialize;

@@ -39,7 +39,6 @@ pub struct Response {
 
 /// 核心 fetch 函数，返回一个支持序列化的 Response
 pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response, FetchError> {
-    // 构建请求
     let mut request_builder: RequestBuilder = match options.as_ref().and_then(|o| o.method.as_ref())
     {
         Some(method) => match method.to_uppercase().as_str() {
@@ -54,14 +53,12 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
         None => client().get(url),
     };
 
-    // 添加请求头
     if let Some(opts) = &options {
         if let Some(headers) = &opts.headers {
             for HttpHeader { key: name, value } in headers {
                 request_builder = request_builder.header(name.as_str(), value);
             }
         }
-        // 添加请求体
         if let Some(body) = &opts.body {
             // 仅当请求方已显式声明 JSON Content-Type 时才做 JSON 校验，
             // 避免误伤以 { 或 [ 开头的普通原始报文（YAML、JSON5、测试畸形数据等）
@@ -72,14 +69,12 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
         }
     }
 
-    // 发送请求并获得原始 reqwest::Response
     let done_date = OffsetDateTime::now_local()?;
     let raw_response = request_builder.send().await?;
 
-    // 提取所有数据，释放 reqwest::Response
     let status = raw_response.status().as_u16();
 
-    // 将头信息转换为简单的键值对列表（保留多值）
+    // 保留多值头（同名头多个值在 HTTP 中合法）
     let headers = raw_response
         .headers()
         .iter()
@@ -89,7 +84,6 @@ pub async fn fetch(url: &str, options: Option<FetchOptions>) -> Result<Response,
         })
         .collect();
 
-    // 读取完整响应体
     let body = raw_response.bytes().await?.to_vec();
 
     Ok(Response {

@@ -158,7 +158,7 @@ pub struct HttpRequest {
     pub options: Option<FetchOptions>,
 }
 
-/// fetch 函数的可选配置项，支持 JSON 序列化
+/// fetch 命令的请求体中 options 字段的可选配置项
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FetchOptions {
     pub method: Option<String>,

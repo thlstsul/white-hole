@@ -1,3 +1,8 @@
+//! 自建下载器接入：任务下发、事件监听与系统通知。
+//!
+//! 托盘（进度展示、任务操作入口）由 `crate::tray::setup` 独立初始化；
+//! 终止类通知统一在 [`event_listener_loop`] 处理，避免多处重复。
+
 use std::env::temp_dir;
 use std::path::PathBuf;
 

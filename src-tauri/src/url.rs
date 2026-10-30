@@ -1,3 +1,5 @@
+//! URL 处理：搜索关键词编码、历史记录的 URL 规范化（取 eTLD+1 等）。
+
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use publicsuffix::{List, Psl as _};
 use tokio::fs::try_exists;
@@ -21,7 +23,8 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
     if (input.contains("\\") || input.contains("/"))
         && let Ok(true) = try_exists(input).await
     {
-        // Windows 文件路径会被误解为URL
+        // 本地存在的路径若按普通 URL 解析，"C:\dir\a.html" 会得到 scheme="c"
+        // 的无效地址；先转成 file:/// URL
         return Url::parse(&format!("file:///{input}")).ok();
     }
 
@@ -62,7 +65,7 @@ pub async fn parse_keyword(public_suffix: Option<List>, keyword: &str) -> Option
     complete_search_url(input)
 }
 
-/// TODO 配置化
 fn complete_search_url(input: &str) -> Option<Url> {
+    // TODO: 搜索引擎与模板可配置化（当前硬编码 Bing）
     Url::parse_with_params("https://cn.bing.com/search", &[("q", input)]).ok()
 }

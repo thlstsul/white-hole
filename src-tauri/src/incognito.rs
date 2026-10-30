@@ -1,3 +1,8 @@
+//! 无痕模式领域状态（由 TabService 持有）。
+//!
+//! 进入/退出/路由的顺序不变量内聚于此模块；UI 编排（焦点、主视图、
+//! 浮动 Tab）由 Browser 门面负责，但必须遵守本模块文档中的调用顺序。
+
 use log::error;
 use tauri::async_runtime::Mutex;
 

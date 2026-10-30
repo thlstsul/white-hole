@@ -1,3 +1,5 @@
+//! 全局快捷键注册（hotkey 宏驱动，回调转 Browser 命令）。
+
 use hotkey::{Code, Modifiers, hotkey};
 use log::error;
 use tauri::AppHandle;
@@ -93,7 +95,7 @@ async fn fullscreen(app_handle: AppHandle) {
     }
 }
 
-/// ？使用惯用快捷键会触发 devtools 快捷键，所以只能自定义快捷键
+/// 不用惯用的 F12（WebView2 会优先触发其内置 devtools 快捷键），改用 Ctrl+D
 #[hotkey(Modifiers::CONTROL, Code::KeyD)]
 async fn devtools(app_handle: AppHandle) {
     let browser = app_handle.browser();

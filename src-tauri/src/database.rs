@@ -43,7 +43,9 @@ impl Database {
                 .find(|m| m.version == version)
                 .map(|m| m.checksum.clone())
             {
-                // 99999999999999_insert_public_suffix.sql 动态脚本
+                // 动态生成的迁移（如 99999999999999_insert_public_suffix.sql）内容
+                // 会随内置 PSL 列表更新，本地记录的旧 checksum 与新定义不符即触发
+                // VersionMismatch：重置为当前定义的 checksum 后重跑，避免误报篡改
                 if let Err(e) = query("update _sqlx_migrations set checksum = ? where version = ?")
                     .bind(checksum.into_owned())
                     .bind(version)

@@ -1,3 +1,8 @@
+//! 系统托盘：下载任务菜单与进度显示。
+//!
+//! 菜单只在"结构"变化时整体重建，进度变化走 `set_text` 原地更新——
+//! Windows 上 `set_menu()` 会关闭正在打开的菜单，原地修改则不会。
+
 use std::{collections::HashMap, path::Path};
 
 use log::error;

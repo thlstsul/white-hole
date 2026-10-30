@@ -1,3 +1,8 @@
+//! 站点图标抓取与缓存（data URL 解析、全局结果缓存）。
+//!
+//! 缓存以 incognito 参与 key：无痕内存库与普通库的结果互不可见，
+//! 退出无痕时清除无痕侧缓存。
+
 use std::sync::OnceLock;
 
 use cached::proc_macro::cached;

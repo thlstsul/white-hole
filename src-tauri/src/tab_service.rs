@@ -1,3 +1,8 @@
+//! 标签领域服务：标签生命周期、历史镜像同步与每 tab 命令的编排层。
+//!
+//! 核心不变量：每个 tab 的历史事件经独立 FIFO 队列串行应用，保证历史镜像
+//! 与浏览器会话历史一致；无痕数据只写内存库（排空消费者后才允许关闭）。
+
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -550,7 +555,8 @@ impl TabService {
         // 与下方校准重复写入同一行（重复 UPDATE、times 重复 +1），故需 defer
         map.set_load_finished_pending(label, true).await;
         // 先清除乐观 URL（避免 set_loading 后窗口期内 get_state 读到乐观 URL），
-        // 使用 try_clear 仅当导航序列号未变化时清除，防止 stale Finished 误清除新导航的乐观 URL
+        // 使用 try_clear 仅当乐观 URL 与 Started 时快照一致（期间无新导航）时清除，
+        // 防止 stale Finished 误清除新导航的乐观 URL
         map.try_clear_optimistic_url(label).await;
         map.set_loading(label, loading).await;
 

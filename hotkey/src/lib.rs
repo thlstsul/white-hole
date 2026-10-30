@@ -1,3 +1,10 @@
+//! 快捷键管理：自实现的 Tauri 插件（替代 tauri-plugin-global-shortcut）。
+//!
+//! 管理器维护"当前按下键集合"，组合命中已注册快捷键时触发回调；
+//! 注册经 [`inventory`](::inventory) 收集（[`hotkey!`] 宏生成
+//! [`HotkeyRegistrar`]），插件 setup 时一次性挂载，无需逐个手动注册。
+//! [`Hotkey`] 的字符串解析/显示兼容 tauri 格式（如 "Ctrl+Alt+K"）。
+
 use std::sync::Arc;
 use std::{borrow::Borrow, fmt::Display, str::FromStr};
 
@@ -7,7 +14,6 @@ use inventory::iter;
 pub use inventory::submit;
 use keyboard_types::Code::*;
 pub use keyboard_types::{Code, KeyState, Modifiers};
-// glob 导入会把 `Code::Fn` 键位带入作用域，显式导入 Fn trait 以覆盖它
 use log::error;
 use scc::{HashMap, HashSet};
 use std::fmt::{Formatter, Result as FmtResult};
@@ -17,6 +23,7 @@ use tauri::{AppHandle, Manager, Runtime, Wry};
 
 type HandlerFn<R> = Box<dyn Fn(AppHandle<R>) + Send + Sync + 'static>;
 
+/// 构建插件：创建管理器，并把 inventory 收集到的全部注册器挂载上去
 pub fn init() -> TauriPlugin<Wry> {
     PluginBuilder::new("hotkey-manager")
         .setup(move |app, _api| {
@@ -30,6 +37,8 @@ pub fn init() -> TauriPlugin<Wry> {
         .build()
 }
 
+/// 注册器：`hotkey!` 宏为每个快捷键回调生成实现，经 inventory 收集后
+/// 在插件 setup 时依次把注册项写进管理器（manager 按 `register` 返回值链式传递）
 pub trait HotkeyRegistrar: Send + Sync + 'static {
     fn register(&self, manager: HotkeyManager<Wry>) -> HotkeyManager<Wry>;
 }
@@ -45,6 +54,7 @@ macro_rules! submit_hotkey {
     };
 }
 
+/// 快捷键管理器：跟踪按下键集合并分发命中的快捷键回调
 pub struct HotkeyManager<R: Runtime> {
     app: AppHandle<R>,
     pressed_keys: HashSet<Code>,
@@ -122,35 +132,32 @@ impl<R: Runtime, T: Manager<R>> HotkeyManagerExt<R> for T {
     }
 }
 
-/// A keyboard shortcut that consists of an optional combination
-/// of modifier keys (provided by [`Modifiers`](crate::hotkey::Modifiers)) and
-/// one key ([`Code`](crate::hotkey::Code)).
+/// 一个快捷键组合：可选的修饰键（[`Modifiers`]）+ 一个主键（[`Code`]）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Hotkey {
-    /// The hotkey modifiers.
+    /// 修饰键组合
     pub mods: Modifiers,
-    /// The hotkey key.
+    /// 主键
     pub key: Code,
 }
 
 impl Hotkey {
-    /// Creates a new hotkey to define keyboard shortcuts throughout your application.
-    /// Only [`Modifiers::ALT`], [`Modifiers::SHIFT`], [`Modifiers::CONTROL`], and [`Modifiers::META`]
+    /// 创建快捷键组合
     pub fn new(mods: Modifiers, key: Code) -> Self {
         Self { mods, key }
     }
 
-    /// Returns `true` if this [`Code`] and [`Modifiers`] matches this hotkey.
+    /// 判断给定的修饰键与主键是否与自身匹配
     #[allow(dead_code)]
     pub fn matches(&self, modifiers: impl Borrow<Modifiers>, key: impl Borrow<Code>) -> bool {
-        // Should be a const but const bit_or doesn't work here.
+        // 不能写成 const：const 上下文里位或运算不可用
         let base_mods = Modifiers::SHIFT | Modifiers::CONTROL | Modifiers::ALT | Modifiers::META;
         let modifiers = modifiers.borrow();
         let key = key.borrow();
         self.mods == *modifiers & base_mods && self.key == *key
     }
 
-    /// Converts this hotkey into a string.
+    /// 转为 "shift+control+a" 风格的字符串（修饰键按固定顺序在前）
     pub fn into_string(self) -> String {
         let mut hotkey = String::new();
         for (m, s) in [
@@ -174,9 +181,7 @@ impl Display for Hotkey {
     }
 }
 
-// Hotkey::from_str is available to be backward
-// compatible with tauri and it also open the option
-// to generate hotkey from string
+// 提供 FromStr：与 tauri 的字符串快捷键格式向后兼容，也支持从字符串生成快捷键
 impl FromStr for Hotkey {
     type Err = HotkeyParseError;
     fn from_str(hotkey_string: &str) -> Result<Self, Self::Err> {

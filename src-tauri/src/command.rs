@@ -1,3 +1,5 @@
+//! IPC 命令层：前端 invoke 的入口，全部为对 Browser 门面的薄委托。
+
 use log::{error, info};
 use tauri::{State, Webview, Window, command};
 

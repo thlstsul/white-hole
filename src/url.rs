@@ -1,3 +1,10 @@
+//! 前端 URL 解码组件。
+//!
+//! `percent_decode` 系列函数从 `percent-encoding` crate 内联复制而来
+//! （避免仅为一个工具函数引入依赖）；对应上游 src/lib.rs 中的实现。
+//! 本地改动：新增 [`KEEP_ENCODED_CHAR`]，解码结果若落在该字符集会被
+//! 重新转义回 `%XX`，防止链接中的 `%3F` 等被过早还原。
+
 use std::{
     borrow::Cow,
     collections::VecDeque,
@@ -33,16 +40,15 @@ fn percent_decode_str(input: &str) -> PercentDecode<'_> {
 /// Any sequence of `%` followed by two hexadecimal digits is decoded.
 /// The return type:
 ///
-/// * Implements `Into<Cow<u8>>` borrowing `input` when it contains no percent-encoded sequence,
+/// * Implements `Into<Cow<u8>>` borrowing `input` when it contains no percent-encoded sequence
+///   that needs re-encoding (sequences decoding into `KEEP_ENCODED_CHAR` are re-encoded in place),
 /// * Implements `Iterator<Item = u8>` and therefore has a `.collect::<Vec<u8>>()` method,
 /// * Has `decode_utf8()` and `decode_utf8_lossy()` methods.
 ///
 /// # Examples
 ///
 /// ```
-/// use percent_encoding::percent_decode;
-///
-/// assert_eq!(percent_decode(b"foo%20bar%3f").decode_utf8().unwrap(), "foo bar?");
+/// assert_eq!(percent_decode(b"foo%20bar%3f").decode_utf8().unwrap(), "foo bar%3F");
 /// ```
 #[inline]
 fn percent_decode(input: &[u8]) -> PercentDecode<'_> {
@@ -158,7 +164,7 @@ impl<'a> PercentDecode<'a> {
 
 #[allow(dead_code)]
 fn decode_utf8_lossy(input: Cow<'_, [u8]>) -> Cow<'_, str> {
-    // Note: This function is duplicated in `form_urlencoded/src/query_encoding.rs`.
+    // Note: vendored from percent-encoding crate.
     match input {
         Cow::Borrowed(bytes) => String::from_utf8_lossy(bytes),
         Cow::Owned(bytes) => {
