@@ -66,7 +66,21 @@
     },
     false,
   );
-  window.addEventListener("pageshow", reportSnapshot, false);
+  // bfcache 恢复（pageshow persisted）复用的是冻结前的旧 JS 上下文：
+  // lastSnapshotKey 还是离开该条目前的旧签名，若会话历史在冻结期间被
+  // 其它导航改写又恰好回到原状，相同签名会被去重吞掉、镜像永远收不到
+  // "已回到该条目" 的上报（后退后 URL 不更新的又一诱因）——先清签名
+  // 强制重报
+  window.addEventListener(
+    "pageshow",
+    function (e) {
+      if (e.persisted) {
+        lastSnapshotKey = null;
+      }
+      reportSnapshot();
+    },
+    false,
+  );
 
   const wrapHistory = function (method) {
     const original = history[method];

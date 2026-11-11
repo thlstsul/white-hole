@@ -358,21 +358,85 @@ impl Tab {
         true // 插入了新条目（id 占位符为 -1）
     }
 
-    /// 以 Navigation API 上报的快照对账历史镜像。
+    /// 以 Navigation API 上报的快照对账历史镜像，核心逻辑见
+    /// [`Self::reconcile_snapshot`]。
+    pub fn sync_snapshot(
+        &mut self,
+        index: usize,
+        entries: Vec<HistorySnapshotEntry>,
+    ) -> (Vec<(usize, String)>, usize) {
+        let Self {
+            history,
+            index: mirror_index,
+            redirecting,
+            ..
+        } = self;
+        Self::reconcile_snapshot(history, mirror_index, redirecting, index, entries)
+    }
+
+    /// 条目同一性（用于非对齐锚定窗口核对）：双方均有 key 时必须 key 相等
+    /// （会话内唯一身份）——同 URL 的两次访问是不同 key 的不同条目，不得
+    /// 并为一条；仅镜像侧 keyless 占位条目按 URL 认领（容忍尾部斜杠差异，
+    /// 新 tab 首个快照原地补 key 的场景）
+    fn same_entry(m: &HistoryEntry, f: &HistoryEntry) -> bool {
+        if m.key.is_some() {
+            m.key == f.key
+        } else {
+            m.url.trim_end_matches('/') == f.url.trim_end_matches('/')
+        }
+    }
+
+    /// 原位采纳快照条目：key/URL 以快照为准。URL 未变且镜像 id 有效时保留
+    /// 原 id（keyless 占位原地补 key 的场景），避免已落库条目被置占位后重复
+    /// 落库；URL 已变（replaceState）才置占位等待回填
+    fn adopt_entry(m: &mut HistoryEntry, f: &HistoryEntry) {
+        if m.id <= 0 || f.id > 0 || m.url.trim_end_matches('/') != f.url.trim_end_matches('/') {
+            m.id = f.id;
+        }
+        m.url = f.url.clone();
+        m.key = f.key.clone();
+    }
+
+    /// 在镜像中按 key 顺序定位片段全部条目（严格递增子序列匹配）；
+    /// 任一条目 key 未命中则返回 None。用于同源片段不连续（条目间夹异源
+    /// 历史，entries() 过滤后未必连续）时的纯状态同步
+    fn locate_fragment_subsequence(
+        history: &[HistoryEntry],
+        fragment: &[HistoryEntry],
+    ) -> Option<Vec<usize>> {
+        if fragment.is_empty() {
+            return None;
+        }
+        let mut positions = Vec::with_capacity(fragment.len());
+        let mut from = 0usize;
+        for f in fragment {
+            let offset = history[from..]
+                .iter()
+                .position(|m| m.key.is_some() && m.key == f.key)?;
+            positions.push(from + offset);
+            from += offset + 1;
+        }
+        Some(positions)
+    }
+
+    /// 以 Navigation API 上报的快照对账历史镜像（不依赖 webview 的纯函数）。
     /// **快照只是"与当前源同源的连续片段"**（Navigation API 安全限制）：
-    /// 跨源导航后 entries() 不含异源历史，`index` 是该片段内的位置而非联合历史
-    /// 的全局位置——绝不能全量重建，否则跨源跳转后历史被抹成只剩片段
-    /// （"点击链接跳转页面后，Tab 历史重置了"的根因）。
+    /// 跨源导航后 entries() 不含异源历史，`snapshot_index` 是该片段内的位置
+    /// 而非联合历史的全局位置——绝不能全量重建，否则跨源跳转后历史被抹成
+    /// 只剩片段（"点击链接跳转页面后，Tab 历史重置了"的根因）。
     ///
     /// 对账规则：
-    /// - 首条目 key 命中镜像已有 key → 以快照替换从该位置起的镜像历史，
-    ///   修正 index 为片段内当前位置；key 作为条目身份，同 key 且 URL 未变的
-    ///   条目保留原 id，否则置占位 -1；
-    /// - 首条目 key 未命中 → 片段以新条目开头（跨源新导航 / bfcache 恢复 /
-    ///   replaceState）：在当前位置截断 forward 历史，整段追加，index 移到末尾；
-    ///   若当前条目是 keyless 占位且与片段首条同 URL，视为同一历史条目原地补
-    ///   key，避免"先入 keyless 占位 + 整段追加"产生同 URL 重复条目（新 tab 打开
-    ///   时首个快照必现）
+    /// - 首条目 key 命中镜像已有 key 且 key 序列对齐 → 以快照替换从该位置起
+    ///   的镜像历史，修正 index 为片段内当前位置；
+    /// - key 序列不对齐（后退返回祖先条目后又有新导航 / replaceState 换 key /
+    ///   跨源片段）→ 先尝试子序列定位（片段全部 key 在镜像中按序命中，覆盖
+    ///   同源片段不连续的场景），否则将片段锚定到以镜像当前条目或其祖先结尾
+    ///   的窗口（候选遍历 0..=片段当前位置），逐位核对 key/URL 后原位更新
+    ///   已有条目、只追加真正新增的尾部——盲目整段追加会把片段与镜像的共同
+    ///   前缀重复插入，并把 index 推到片段末尾（"后退成功但标题栏 URL 不更新、
+    ///   不能前进"的根因）；
+    /// - 子序列与锚定窗口均未命中（跨源片段首条即新 URL）→ 截断当前位置
+    ///   之后的 forward 历史后整段追加。
     ///
     /// key 作为条目身份：同 key 且 URL 未变的条目保留原 id；新 key 或同 key
     /// 但 URL 已变（replaceState 只改 URL 不改 key）置占位 -1 等待回填。
@@ -380,15 +444,16 @@ impl Tab {
     /// 占位条目（save_log 对已存在行 title 非空且 icon 到位时 times + 1，重复会
     /// 虚增计数）。
     /// 返回 (需要回填 id 的 (位置, url) 列表, 对账后当前条目在镜像中的位置)。
-    pub fn sync_snapshot(
-        &mut self,
-        index: usize,
+    fn reconcile_snapshot(
+        history: &mut Vec<HistoryEntry>,
+        index: &mut isize,
+        redirecting: &mut bool,
+        snapshot_index: usize,
         entries: Vec<HistorySnapshotEntry>,
     ) -> (Vec<(usize, String)>, usize) {
         // key 作为条目身份：同 key 且 URL 未变的条目保留原 id，
         // 新 key 或 URL 变更（replaceState）置占位 -1 等待回填
-        let id_by_key: StdHashMap<&str, (i64, &str)> = self
-            .history
+        let id_by_key: StdHashMap<&str, (i64, &str)> = history
             .iter()
             .filter_map(|entry| {
                 entry
@@ -412,8 +477,7 @@ impl Tab {
         let frag_len = fragment.len();
         // 片段内首条目的镜像位置；命中 = 片段是镜像已有子段，未命中 = 新片段
         let frag_start = match fragment.first().and_then(|e| e.key.as_deref()) {
-            Some(key) => self
-                .history
+            Some(key) => history
                 .iter()
                 .position(|entry| entry.key.as_deref() == Some(key)),
             None => None,
@@ -423,14 +487,11 @@ impl Tab {
         // 对齐规则：忽略镜像中 keyless 占位条目（sync_by_url 先插入的占位），
         // 有 key 的条目必须与片段逐一对齐，否则视为跨源片段回退到追加分支
         let aligned = frag_start.is_some_and(|start| {
-            self.history[start..]
-                .iter()
-                .zip(fragment.iter())
-                .all(|(m, f)| {
-                    // keyless 占位条目不参与对齐检查（sync_by_url 先插入的占位
-                    // 无 key，导致 aligned 误判为 false，回退到追加分支反复追加）
-                    m.key.is_none() || m.key.as_deref() == f.key.as_deref()
-                })
+            history[start..].iter().zip(fragment.iter()).all(|(m, f)| {
+                // keyless 占位条目不参与对齐检查（sync_by_url 先插入的占位
+                // 无 key，导致 aligned 误判为 false，回退到追加分支反复追加）
+                m.key.is_none() || m.key.as_deref() == f.key.as_deref()
+            })
         });
         // (对账后当前 index, 本次快照影响的镜像区间 [start, end)，用于限定回填范围)
         let (cur, span) = if let Some(start) = frag_start
@@ -439,47 +500,85 @@ impl Tab {
             // 片段首条 key 命中镜像已有条目且 key 序列对齐：以快照替换从 start
             // 位置起的镜像历史。使用 end = min(...) 安全处理片段超出历史长度的
             // 情况（keyless 占位条目导致历史较短）。
-            let end = (start + frag_len).min(self.history.len());
-            self.history.splice(start..end, fragment);
-            ((start + index) as isize, start..start + frag_len)
+            let end = (start + frag_len).min(history.len());
+            history.splice(start..end, fragment);
+            ((start + snapshot_index) as isize, start..start + frag_len)
         } else {
-            // 新片段（跨源导航/bfcache/replaceState）：截断当前位置之后的
-            // forward 历史，整段追加；防御 index 为 -1（空历史新 tab）导致的下溢
-            let at = self.index.max(0) as usize;
-            // keyless 占位条目与快照首条同 URL 时视为同一历史条目（新 tab 打开
-            // 时 insert_history / sync_by_url 已先入 keyless 条目）：原地补 key 保留
-            // 原 id，截断 forward 后追加片段其余部分，避免同 URL 重复条目、index 后移
-            if at < self.history.len()
-                && self.history[at].key.is_none()
-                && fragment.first().is_some_and(|f| {
-                    self.history[at].url.trim_end_matches('/') == f.url.trim_end_matches('/')
-                })
-            {
-                let mut rest = fragment.into_iter();
-                let first = rest.next().expect("已判 fragment.first() 为 Some");
-                self.history[at].url = first.url;
-                self.history[at].key = first.key;
-                self.history.truncate(at + 1);
-                self.history.extend(rest);
-                self.index = (self.history.len() - 1) as isize;
-                (self.index, at..self.history.len())
-            } else {
-                if at != self.history.len() {
-                    self.history.truncate(at + 1);
+            // key 序列不对齐：先尝试子序列定位（纯状态同步），失败再锚定合并。
+            // 防御 index 为 -1（空历史新 tab）导致的下溢
+            let at = (*index).max(0) as usize;
+
+            // ① 子序列定位：片段所有条目的 key 都能在镜像中按序找到（同源
+            // 片段不连续，条目间夹着快照看不到的异源历史，如 a.com → x.com
+            // → a.com）→ 结构不变，原位更新命中条目、index 重定位到片段
+            // 当前条目。绝不整段追加：共同条目重复插入正是"后退后 URL 不
+            // 更新、历史膨胀"的根因形态
+            if let Some(positions) = Self::locate_fragment_subsequence(history, &fragment) {
+                for (pos, f) in positions.iter().zip(&fragment) {
+                    Self::adopt_entry(&mut history[*pos], f);
                 }
-                let append_start = self.history.len();
-                self.history.extend(fragment);
-                self.index = self.history.len().saturating_sub(1) as isize;
-                (self.index, append_start..self.history.len())
+                let first = positions[0];
+                let last = positions[positions.len() - 1];
+                let cur = positions[snapshot_index.min(positions.len() - 1)] as isize;
+                *index = cur;
+                (cur, first..last + 1)
+            } else {
+                // ② 锚定合并：把片段锚定到以镜像当前条目（或其某一祖先，候选
+                // 锚点遍历 0..=片段当前条目位置，覆盖多次新导航合并进同一快照
+                // 的场景）结尾的窗口上
+                let anchored = (0..=snapshot_index)
+                    .filter_map(|offset| at.checked_sub(offset))
+                    .map(|start| {
+                        let mut matched = 0usize;
+                        while matched < frag_len
+                            && start + matched < history.len()
+                            && Self::same_entry(&history[start + matched], &fragment[matched])
+                        {
+                            matched += 1;
+                        }
+                        (start, matched)
+                    })
+                    .max_by_key(|&(_, matched)| matched);
+                match anchored.filter(|&(_, matched)| matched > 0) {
+                    Some((start, matched)) => {
+                        // 已核对区间原位更新；keyless 占位按 URL 认领补 key
+                        for j in 0..matched {
+                            Self::adopt_entry(&mut history[start + j], &fragment[j]);
+                        }
+                        // 锚点窗口内核对不上的尾部条目已被新导航替换：截断后
+                        // 追加片段剩余部分（含片段当前条目与 forward 历史）
+                        history.truncate(start + matched);
+                        history.extend(fragment[matched..].iter().cloned());
+                        // 片段在镜像中占位连续：fragment[i] 落在 start + i
+                        *index = (start + snapshot_index).min(history.len() - 1) as isize;
+                        (*index, start..history.len())
+                    }
+                    None => {
+                        // 子序列与锚定窗口均未命中（如跨源片段首条即新 URL）：
+                        // 截断当前位置之后的 forward 历史，整段追加。
+                        // index 不能取"末尾"：无共同条目的片段可能带有 forward
+                        // 条目（snapshot_index < frag_len - 1），片段当前条目
+                        // 落在 append_start + snapshot_index 处
+                        if at != history.len() {
+                            history.truncate(at + 1);
+                        }
+                        let append_start = history.len();
+                        history.extend(fragment);
+                        *index = (append_start + snapshot_index)
+                            .min(history.len().saturating_sub(1))
+                            as isize;
+                        (*index, append_start..history.len())
+                    }
+                }
             }
         };
-        self.index = cur;
-        self.redirecting = false;
+        *index = cur;
+        *redirecting = false;
 
         // 占位条目（本次快照影响的片段内新 key / replaceState 改 URL）等待回填。
         // 只收集影响区间内的条目，避免每次快照重复落库镜像中历史遗留的占位条目
         // （save_log 对已存在行 title 非空且 icon 到位时 times + 1，会虚增访问计数）
-        let needs_id = self.history[span.clone()]
+        let needs_id = history[span.clone()]
             .iter()
             .enumerate()
             .filter(|(_, entry)| entry.id <= 0)
@@ -915,5 +1014,389 @@ impl TabMap {
             return Some(next);
         }
         self.next(label).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HistoryEntry, HistorySnapshotEntry, Tab};
+
+    fn entry(id: i64, url: &str, key: Option<&str>) -> HistoryEntry {
+        HistoryEntry {
+            id,
+            url: url.to_string(),
+            key: key.map(str::to_string),
+        }
+    }
+
+    fn snap(key: &str, url: &str) -> HistorySnapshotEntry {
+        HistorySnapshotEntry {
+            key: key.to_string(),
+            url: url.to_string(),
+        }
+    }
+
+    fn assert_entry(history: &[HistoryEntry], pos: usize, id: i64, url: &str) {
+        assert_eq!(history[pos].id, id, "位置 {pos} 的 id 不符");
+        assert_eq!(history[pos].url, url, "位置 {pos} 的 url 不符");
+    }
+
+    /// 回归："后退 → 浏览新页面 → 再后退"后标题栏 URL 不更新、不能前进。
+    /// 修复前：浏览 C 时非对齐分支整段追加，把片段与镜像的共同前缀 A 重复
+    /// 插入（镜像变 [A,A,C]），再次后退时对账失败、index 停在 C。
+    /// 修复后：锚定合并只追加新增尾部，镜像无重复、index 正确。
+    #[test]
+    fn back_after_new_navigation_keeps_mirror_consistent() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut index = 0isize;
+        let mut redirecting = false;
+
+        // 新 tab 打开 A：keyless 占位 + 首个快照原地补 key，id 保留
+        history.push(entry(1, "https://a.com/", None));
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("k1", "https://a.com/")],
+        );
+        assert_eq!(cur, 0);
+        assert!(needs.is_empty());
+        assert_entry(&history, 0, 1, "https://a.com/");
+
+        // 浏览 B（同源跨文档）：对齐替换，B 为占位待回填
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            1,
+            vec![snap("k1", "https://a.com/"), snap("k2", "https://a.com/b")],
+        );
+        assert_eq!(cur, 1);
+        assert_eq!(needs, vec![(1, "https://a.com/b".to_string())]);
+        // 模拟回填
+        history[1].id = 2;
+
+        // 后退到 A：对齐替换，index 修正为 0
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("k1", "https://a.com/"), snap("k2", "https://a.com/b")],
+        );
+        assert_eq!(cur, 0);
+        assert!(needs.is_empty());
+
+        // 浏览 C（同源、新 key）：片段 [A,C] 与镜像 [A,B] key 不对齐，
+        // 锚定合并应只追加 C，不得重复插入 A
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            1,
+            vec![snap("k1", "https://a.com/"), snap("k3", "https://a.com/c")],
+        );
+        assert_eq!(cur, 1);
+        assert_eq!(needs, vec![(1, "https://a.com/c".to_string())]);
+        history[1].id = 3;
+        assert_eq!(history.len(), 2, "不得产生重复条目");
+        assert_entry(&history, 0, 1, "https://a.com/");
+        assert_entry(&history, 1, 3, "https://a.com/c");
+
+        // 再后退到 A：这次对账必须成功——index 回 0、URL 为 A、可前进
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("k1", "https://a.com/"), snap("k3", "https://a.com/c")],
+        );
+        assert_eq!(cur, 0, "后退后 index 应回到 A");
+        assert!(needs.is_empty());
+        assert_eq!(history.len(), 2, "后退后镜像不得膨胀或重复");
+        assert_eq!(index, 0, "A 是历史首条目，后退后 index 应为 0");
+        assert!(
+            index < history.len() as isize - 1,
+            "C 仍在 forward 历史中，应可前进"
+        );
+    }
+
+    /// 跨源片段不回归：异源条目不在快照里，锚定/追加均不得抹掉镜像中
+    /// 的异源历史（"点击链接跳转页面后，Tab 历史重置了"的既有根因）
+    #[test]
+    fn cross_origin_fragment_preserves_out_of_fragment_history() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut redirecting = false;
+
+        history.push(entry(1, "https://a.com/", Some("k1")));
+        history.push(entry(2, "https://x.com/", Some("kx")));
+        let mut index = 1isize;
+
+        // 从 x.com 后退到 a.com：快照只含同源片段 [A]，index 为片段内位置 0
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("k1", "https://a.com/")],
+        );
+        assert_eq!(cur, 0);
+        assert!(needs.is_empty());
+        assert_eq!(history.len(), 2, "异源 forward 条目不得被抹掉");
+        assert_entry(&history, 0, 1, "https://a.com/");
+        assert_entry(&history, 1, 2, "https://x.com/");
+        assert!(
+            index < history.len() as isize - 1,
+            "异源 forward 条目应可前进"
+        );
+    }
+
+    /// 跨源新导航：片段与镜像无任何共同条目，走整段追加分支，
+    /// index 移到片段末尾（行为与修复前一致）
+    #[test]
+    fn disjoint_cross_origin_fragment_falls_back_to_append() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut redirecting = false;
+
+        history.push(entry(1, "https://a.com/", Some("k1")));
+        let mut index = 0isize;
+
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("kc", "https://c.com/")],
+        );
+        assert_eq!(cur, 1, "index 移到追加后的片段末尾");
+        assert_eq!(needs, vec![(1, "https://c.com/".to_string())]);
+        assert_eq!(history.len(), 2, "追加分支保留镜像当前条目再追加片段");
+        assert_entry(&history, 0, 1, "https://a.com/");
+        assert_entry(&history, 1, -1, "https://c.com/");
+        assert_eq!(index, 1);
+    }
+
+    /// replaceState 换 URL（key 不变）：对齐分支原位替换并置占位等待回填
+    #[test]
+    fn replace_state_updates_url_and_marks_placeholder() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        history.push(entry(1, "https://a.com/", Some("k1")));
+        history.push(entry(2, "https://a.com/b", Some("k2")));
+        let mut index = 1isize;
+        let mut redirecting = false;
+
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            1,
+            vec![
+                snap("k1", "https://a.com/"),
+                snap("k2", "https://a.com/b?q=1"),
+            ],
+        );
+        assert_eq!(cur, 1);
+        assert_eq!(needs, vec![(1, "https://a.com/b?q=1".to_string())]);
+        assert_entry(&history, 0, 1, "https://a.com/");
+        assert_eq!(history[1].id, -1, "URL 已变的条目应置占位");
+        assert_eq!(history[1].url, "https://a.com/b?q=1");
+    }
+
+    /// 空历史新 tab（index = -1）的首个快照：不得下溢，正常建条
+    #[test]
+    fn first_snapshot_on_empty_history() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut index: isize = -1;
+        let mut redirecting = false;
+
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("k1", "https://a.com/")],
+        );
+        assert_eq!(cur, 0);
+        assert_eq!(needs, vec![(0, "https://a.com/".to_string())]);
+        assert_eq!(history.len(), 1);
+        assert_entry(&history, 0, -1, "https://a.com/");
+        assert_eq!(index, 0);
+    }
+
+    /// 同一 URL 的两次访问是不同 key 的不同条目：核对时不得按 URL 并为
+    /// 一条（URL 兜底仅限 keyless 占位认领），否则两次访问会折叠、key 被
+    /// 覆写导致后续对齐漂移
+    #[test]
+    fn same_url_with_distinct_keys_stays_distinct() {
+        let keyed_first = entry(1, "https://a.com/", Some("k1"));
+        let keyed_second = entry(3, "https://a.com/", Some("k3"));
+        let keyless = entry(-1, "https://a.com/", None);
+
+        assert!(
+            Tab::same_entry(&keyed_first, &keyed_first),
+            "同 key 同一条目"
+        );
+        assert!(
+            !Tab::same_entry(&keyed_first, &keyed_second),
+            "同 URL 不同 key 是不同访问，不得视为同一条目"
+        );
+        assert!(
+            Tab::same_entry(&keyless, &keyed_second),
+            "keyless 占位条目按 URL 认领（新 tab 首个快照补 key）"
+        );
+    }
+
+    /// 非连续同源片段：条目间夹着快照看不到的异源历史（a.com → x.com →
+    /// a.com）时，子序列定位应纯状态同步——index 重定位、不重复插入共同
+    /// 条目、不抹掉夹在中间的异源条目
+    #[test]
+    fn non_contiguous_fragment_relocates_without_duplication() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut redirecting = false;
+
+        history.push(entry(1, "https://a.com/", Some("k1")));
+        history.push(entry(2, "https://x.com/", Some("kx")));
+        history.push(entry(3, "https://a.com/b", Some("k2")));
+        let mut index = 2isize;
+
+        // 从 a.com/b 后退到 a.com：快照为同源但不连续的 [A, B]
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("k1", "https://a.com/"), snap("k2", "https://a.com/b")],
+        );
+        assert_eq!(cur, 0, "后退后 index 重定位到片段当前条目 A");
+        assert!(needs.is_empty(), "命中条目 id 均有效，无需回填");
+        assert_eq!(history.len(), 3, "不得重复插入 A/B，不得抹掉异源 X");
+        assert_entry(&history, 0, 1, "https://a.com/");
+        assert_entry(&history, 1, 2, "https://x.com/");
+        assert_entry(&history, 2, 3, "https://a.com/b");
+        assert!(index < history.len() as isize - 1, "后退保留 forward 历史");
+    }
+
+    /// 后退后再前进：对齐分支把 index 推回片段当前条目，forward 恢复
+    #[test]
+    fn forward_after_back_restores_position() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut redirecting = false;
+
+        history.push(entry(1, "https://a.com/", Some("k1")));
+        history.push(entry(2, "https://a.com/c", Some("k3")));
+        let mut index = 0isize;
+
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            1,
+            vec![snap("k1", "https://a.com/"), snap("k3", "https://a.com/c")],
+        );
+        assert_eq!(cur, 1, "前进后 index 指向 C");
+        assert!(needs.is_empty(), "key + URL 均未变，id 保留无需回填");
+        assert_eq!(history.len(), 2);
+        assert_entry(&history, 1, 2, "https://a.com/c");
+        assert_eq!(index, 1);
+    }
+
+    /// 同 URL 重访：后退到 A 后再次导航到 C（新 key、旧 C 条目已被会话
+    /// 截断）——不得按 URL 兜底把新访问并进旧条目，新条目置占位等待回填
+    #[test]
+    fn revisit_same_url_creates_new_entry() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut redirecting = false;
+
+        history.push(entry(1, "https://a.com/", Some("k1")));
+        history.push(entry(3, "https://a.com/c", Some("k3")));
+        let mut index = 0isize;
+
+        // 从 A 再次导航到 C：片段 [A(k1), C(k4)]，镜像 [A(k1), C(k3)]
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            1,
+            vec![snap("k1", "https://a.com/"), snap("k4", "https://a.com/c")],
+        );
+        assert_eq!(cur, 1);
+        assert_eq!(
+            needs,
+            vec![(1, "https://a.com/c".to_string())],
+            "新 key 条目应置占位待回填"
+        );
+        assert_eq!(history.len(), 2, "不得重复条目");
+        assert_entry(&history, 0, 1, "https://a.com/");
+        assert_eq!(
+            history[1].key.as_deref(),
+            Some("k4"),
+            "新访问的 key 以快照为准"
+        );
+        assert_eq!(history[1].id, -1, "新访问是新记录，不得复用旧 id");
+    }
+
+    /// 多次新导航合并进同一快照（片段当前条目距镜像当前条目隔一个祖先）：
+    /// 锚点候选遍历 0..=snapshot_index，深层祖先窗口也能命中
+    #[test]
+    fn multi_navigation_snapshot_anchors_at_deeper_ancestor() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut redirecting = false;
+
+        history.push(entry(1, "https://a.com/", Some("k1")));
+        history.push(entry(2, "https://x.com/", Some("kx")));
+        let mut index = 0isize;
+
+        // 镜像在 A（后退态），期间连续导航 B、C 只上报最终快照 [A,B,C]，
+        // index 为片段内位置 2；异源 X 应被新导航的 forward 截断替换
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            2,
+            vec![
+                snap("k1", "https://a.com/"),
+                snap("k2", "https://a.com/b"),
+                snap("k3", "https://a.com/c"),
+            ],
+        );
+        assert_eq!(cur, 2, "index 指向片段当前条目 C");
+        assert_eq!(
+            needs,
+            vec![
+                (1, "https://a.com/b".to_string()),
+                (2, "https://a.com/c".to_string())
+            ]
+        );
+        assert_eq!(history.len(), 3, "X 被截断，追加 B、C");
+        assert_entry(&history, 0, 1, "https://a.com/");
+        assert_entry(&history, 1, -1, "https://a.com/b");
+        assert_entry(&history, 2, -1, "https://a.com/c");
+        assert_eq!(index, 2);
+    }
+
+    /// 无共同条目的片段带有 forward 条目（snapshot_index < frag_len - 1）：
+    /// 兜底追加后 index 落在 append_start + snapshot_index，而非片段末尾
+    #[test]
+    fn disjoint_fragment_with_forward_entries_keeps_current_position() {
+        let mut history: Vec<HistoryEntry> = Vec::new();
+        let mut redirecting = false;
+        let mut index: isize = -1;
+
+        // 镜像为空，片段为异源 [C, D] 且当前条目是 C（index 0，D 在 forward）
+        let (needs, cur) = Tab::reconcile_snapshot(
+            &mut history,
+            &mut index,
+            &mut redirecting,
+            0,
+            vec![snap("kc", "https://c.com/"), snap("kd", "https://c.com/d")],
+        );
+        assert_eq!(cur, 0, "当前条目 C 在追加后应位于 0，而非片段末尾");
+        assert_eq!(needs.len(), 2, "两条均为待回填占位");
+        assert_eq!(history.len(), 2);
+        assert_entry(&history, 0, -1, "https://c.com/");
+        assert_entry(&history, 1, -1, "https://c.com/d");
+        assert_eq!(index, 0);
+        assert!(index < history.len() as isize - 1, "D 在 forward 历史中");
     }
 }
