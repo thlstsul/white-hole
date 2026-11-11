@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
@@ -32,7 +32,7 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "lts/*"
           cache: "pnpm"
@@ -49,7 +49,7 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       - name: Install cargo-binstall
-        run: cargo install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.26.2
 
       - name: Dioxus
         run: cargo binstall dioxus-cli
@@ -67,7 +67,7 @@ jobs:
         run: echo > assets/tailwind.css
 
       - name: Build & Publish
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
@@ -80,7 +80,7 @@ jobs:
           prerelease: false
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: white-hole-latest
           path: latest.json
@@ -93,7 +93,7 @@ jobs:
     needs: publish-tauri # 等待所有平台的publish-tauri job完成
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: white-hole-latest
 
