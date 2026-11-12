@@ -19,6 +19,7 @@
           "http_client",
           "query_navigation_log",
           "update_star",
+          "delete_navigation_log",
           "minimize",
           "maximize",
           "unmaximize",

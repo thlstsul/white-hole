@@ -140,6 +140,14 @@ pub async fn update_star(browser: State<'_, Browser>, id: i64) -> Result<(), Dat
 }
 
 #[command]
+pub async fn delete_navigation_log(
+    browser: State<'_, Browser>,
+    id: i64,
+) -> Result<(), DatabaseError> {
+    browser.delete_log(id).await
+}
+
+#[command]
 pub async fn content_loaded(
     browser: State<'_, Browser>,
     webview: Webview,

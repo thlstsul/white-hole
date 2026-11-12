@@ -23,6 +23,10 @@ pub async fn update_star(id: i64) -> Result<(), Error> {
     invoke_result("update_star", &TouchLogRequest { id }).await
 }
 
+pub async fn delete_navigation_log(id: i64) -> Result<(), Error> {
+    invoke_result("delete_navigation_log", &TouchLogRequest { id }).await
+}
+
 pub async fn query_navigation_log(
     keyword: String,
     page_token: PageToken,

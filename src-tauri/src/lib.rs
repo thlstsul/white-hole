@@ -122,6 +122,7 @@ pub fn run() -> Result<(), SetupError> {
             http_client,
             query_navigation_log,
             update_star,
+            delete_navigation_log,
             content_loaded,
             history_snapshot,
             minimize,

@@ -202,6 +202,13 @@ pub async fn update_log_star(pool: &SqlitePool, id: i64) -> Result<(), Error> {
         .map(|_| ())
 }
 
+pub async fn delete_log(pool: &SqlitePool, id: i64) -> Result<(), Error> {
+    sqlx::query!("delete from navigation_log where id = ?", id)
+        .execute(pool)
+        .await
+        .map(|_| ())
+}
+
 pub async fn clear_log(pool: &SqlitePool) -> Result<(), Error> {
     sqlx::query!("delete from navigation_log where url = title or title is null or title = ''")
         .execute(pool)

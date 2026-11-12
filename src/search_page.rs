@@ -5,8 +5,8 @@ use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
     api::{
-        NavigationLog, NavigationLogStoreExt, PageToken, open_tab, query_navigation_log, search,
-        update_star,
+        NavigationLog, NavigationLogStoreExt, PageToken, delete_navigation_log, open_tab,
+        query_navigation_log, search, update_star,
     },
     app::use_browser,
     search_input::SearchInput,
@@ -29,6 +29,8 @@ pub fn SearchPage() -> Element {
     let mut main_element = use_signal::<Option<Rc<MountedData>>>(|| None);
     let mut logs = use_store(Vec::new);
     let mut focused_log = use_signal::<Option<FocusedLog>>(|| None);
+    // 右键进入"删除模式"的行：该条隐藏时间与星标、显示删除按钮
+    let mut deleting_id = use_signal(|| None::<i64>);
     let mut input_element = use_signal::<Option<Rc<MountedData>>>(|| None);
 
     use_effect(move || {
@@ -120,6 +122,13 @@ pub fn SearchPage() -> Element {
                     for log in logs.iter() {
                         LogItem {
                             log,
+                            deleting: deleting_id,
+                            oncontextmenu: move |e: MouseEvent| {
+                                e.prevent_default();
+                                let id = log().id;
+                                let cur = deleting_id();
+                                deleting_id.set(if cur == Some(id) { None } else { Some(id) });
+                            },
                             onfocus: move |_| {
                                 focused_log
                                     .set(
@@ -128,6 +137,20 @@ pub fn SearchPage() -> Element {
                                             url: log().url,
                                         }),
                                     )
+                            },
+                            ondelete: move |id| async move {
+                                delete_navigation_log(id).await?;
+                                let remaining: Vec<NavigationLog> = logs
+                                    .read()
+                                    .iter()
+                                    .filter(|log| log.id != id)
+                                    .cloned()
+                                    .collect();
+                                logs.set(remaining);
+                                if deleting_id() == Some(id) {
+                                    deleting_id.set(None);
+                                }
+                                Ok(())
                             },
                         }
                     }
@@ -138,7 +161,15 @@ pub fn SearchPage() -> Element {
 }
 
 #[component]
-fn LogItem(log: Store<NavigationLog>, onfocus: EventHandler<FocusEvent>) -> Element {
+fn LogItem(
+    log: Store<NavigationLog>,
+    deleting: Signal<Option<i64>>,
+    oncontextmenu: EventHandler<MouseEvent>,
+    onfocus: EventHandler<FocusEvent>,
+    ondelete: EventHandler<i64>,
+) -> Element {
+    let is_deleting = move || deleting() == Some(log().id);
+
     rsx! {
         li {
             tabindex: "0",
@@ -148,6 +179,7 @@ fn LogItem(log: Store<NavigationLog>, onfocus: EventHandler<FocusEvent>) -> Elem
                 open_tab(log().id).await?;
                 Ok(())
             },
+            oncontextmenu,
             onfocus,
 
             Icon { url: log.icon_url() }
@@ -156,9 +188,41 @@ fn LogItem(log: Store<NavigationLog>, onfocus: EventHandler<FocusEvent>) -> Elem
                 Url { url: log.url() }
             }
 
-            LogTime { last_time: log.last_time() }
+            if is_deleting() {
+                Delete { log_id: log.id(), ondelete }
+            } else {
+                LogTime { last_time: log.last_time() }
+                Star { log_id: log.id(), checked: log.star() }
+            }
+        }
+    }
+}
 
-            Star { log_id: log.id(), checked: log.star() }
+#[component]
+fn Delete(log_id: ReadStore<i64>, ondelete: EventHandler<i64>) -> Element {
+    rsx! {
+        button {
+            class: "btn btn-ghost btn-square btn-sm",
+            tabindex: "-1",
+            aria_label: "删除该条浏览记录",
+            onclick: move |e| {
+                e.stop_propagation();
+                ondelete(log_id());
+            },
+
+            svg {
+                xmlns: "http://www.w3.org/2000/svg",
+                fill: "none",
+                view_box: "0 0 24 24",
+                stroke_width: "1.5",
+                stroke: "currentColor",
+                class: "size-5",
+                path {
+                    stroke_linecap: "round",
+                    stroke_linejoin: "round",
+                    d: "M6 18 18 6M6 6l12 12",
+                }
+            }
         }
     }
 }

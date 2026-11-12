@@ -26,8 +26,8 @@ use crate::{
     history::HistoryEvent,
     icon::{get_cached_icon, get_icon_data_url},
     log::{
-        NavigationLog, QueryLogResponse, get_id, get_url, query_log, save_log, touch_log,
-        update_log_star,
+        NavigationLog, QueryLogResponse, delete_log, get_id, get_url, query_log, save_log,
+        touch_log, update_log_star,
     },
     page::PageToken,
     public_suffix::get_public_suffix_cached,
@@ -487,6 +487,11 @@ impl Browser {
     pub async fn update_star(&self, id: i64) -> Result<(), DatabaseError> {
         let pool = self.db.get().await;
         Ok(update_log_star(&pool, id).await?)
+    }
+
+    pub async fn delete_log(&self, id: i64) -> Result<(), DatabaseError> {
+        let pool = self.db.get().await;
+        Ok(delete_log(&pool, id).await?)
     }
 
     pub async fn get_state(&self, the_label: Option<&str>) -> Result<BrowserState, StateError> {
