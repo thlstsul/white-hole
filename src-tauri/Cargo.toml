@@ -35,7 +35,7 @@ features = ["async"]
 version = "4.0.0"
 
 [dependencies.downloader]
-rev = "20abc168b3739f35e5dbb66292ddf585ee357cc8"
+rev = "dda0d41704128b112420107f87fca3ff81e1899f"
 git = "https://github.com/thlstsul/downloader"
 
 [dependencies.fern]
@@ -50,27 +50,15 @@ version = "2.3.0"
 workspace = true
 
 [dependencies.sqlx]
-features = [
-    "runtime-tokio",
-    "sqlite",
-    "time",
-]
+features = ["runtime-tokio", "sqlite", "time"]
 version = "0.9.0"
 
 [dependencies.tauri]
-features = [
-    "devtools",
-    "tray-icon",
-    "unstable",
-]
+features = ["devtools", "tray-icon", "unstable"]
 version = "2.12.0"
 
 [dependencies.time]
-features = [
-    "macros",
-    "serde",
-    "std",
-]
+features = ["macros", "serde", "std"]
 workspace = true
 
 [dependencies.tokio]
@@ -78,19 +66,11 @@ features = ["fs", "time"]
 version = "1"
 
 [dependencies.uuid]
-features = [
-    "js",
-    "serde",
-    "v7",
-]
+features = ["js", "serde", "v7"]
 version = "1"
 
 [lib]
-crate-type = [
-    "cdylib",
-    "rlib",
-    "staticlib",
-]
+crate-type = ["cdylib", "rlib", "staticlib"]
 name = "white_hole_lib"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
@@ -103,4 +83,15 @@ path = "../hotkey"
 
 [target."cfg(windows)".dependencies]
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_DataExchange", "Win32_System_Diagnostics_ToolHelp", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Registry", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_DataExchange",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Registry",
+    "Win32_UI_Input",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
